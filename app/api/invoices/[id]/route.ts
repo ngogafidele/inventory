@@ -7,7 +7,7 @@ import { UpdateInvoiceSchema } from "@/lib/db/validators/invoice"
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -26,7 +26,7 @@ export async function GET(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const invoice = await Invoice.findOne({ _id: id, store })
@@ -49,7 +49,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -75,7 +75,7 @@ export async function PUT(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const payload = UpdateInvoiceSchema.parse(await request.json())
 
     await connectToDatabase()
@@ -85,7 +85,7 @@ export async function PUT(
         ...payload,
         dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
       },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     )
 
     if (!invoice) {
@@ -106,7 +106,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -125,7 +125,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const invoice = await Invoice.findOneAndDelete({ _id: id, store })

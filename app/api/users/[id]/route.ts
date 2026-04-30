@@ -7,7 +7,7 @@ import { hashPassword } from "@/lib/auth/hash"
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized } = await requireAdmin(request)
@@ -18,7 +18,7 @@ export async function GET(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const user = await User.findById(id).select("-password")
@@ -41,7 +41,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized } = await requireAdmin(request)
@@ -52,7 +52,7 @@ export async function PUT(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const body = UpdateUserSchema.parse(await request.json())
 
     if (body.role === "admin") {
@@ -73,7 +73,7 @@ export async function PUT(
     }
 
     const user = await User.findByIdAndUpdate(id, body, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     }).select("-password")
 
@@ -95,7 +95,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized } = await requireAdmin(request)
@@ -106,7 +106,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const user = await User.findById(id)

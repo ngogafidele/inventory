@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Alert } from "@/lib/db/models/Alert"
-import { requireAdmin } from "@/lib/auth/middleware"
+import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateAlertSchema } from "@/lib/db/validators/alert"
 

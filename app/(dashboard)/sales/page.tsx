@@ -1,51 +1,65 @@
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"
+import { Product } from "@/lib/db/models/Product"
+import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
-import { formatCurrency } from "@/lib/utils/format"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { SalesManager } from "@/components/sales/sales-manager"
 
 export default async function SalesPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
 
   await connectToDatabase()
-  const sales = await Sale.find({ store }).sort({ createdAt: -1 }).lean()
+  const sales = await Sale.find({ store })
+    .populate("createdBy", "name email")
+    .sort({ createdAt: -1 })
+    .lean()
+  const products = await Product.find({ store }).sort({ name: 1 }).lean()
+
+  const serializedSales = sales.map((sale) => ({
+    ...sale,
+    _id: sale._id.toString(),
+    createdAt: sale.createdAt?.toISOString(),
+    createdAtLabel: sale.createdAt
+      ? new Date(sale.createdAt).toLocaleString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        })
+      : "-",
+    updatedAt: sale.updatedAt?.toISOString(),
+    createdBy:
+      typeof sale.createdBy === "object" && sale.createdBy
+        ? sale.createdBy._id.toString()
+        : sale.createdBy?.toString(),
+    createdByName:
+      typeof sale.createdBy === "object" && sale.createdBy
+        ? sale.createdBy.name ?? sale.createdBy.email ?? "Unknown User"
+        : "Unknown User",
+    items: sale.items.map((item) => ({
+      ...item,
+      productId: item.productId.toString(),
+    })),
+  }))
+
+  const serializedProducts = products.map((product) => ({
+    _id: product._id.toString(),
+    name: product.name,
+    sku: product.sku,
+    unit: product.unit ?? "pcs",
+    quantity: product.quantity,
+    price: product.price,
+  }))
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Transactions
-        </p>
-        <h2 className="text-2xl font-semibold">Sales</h2>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Items</TableHead>
-            <TableHead>Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sales.map((sale) => (
-            <TableRow key={sale._id.toString()}>
-              <TableCell>
-                {new Date(sale.createdAt).toLocaleDateString()}
-              </TableCell>
-              <TableCell>{sale.items.length}</TableCell>
-              <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <SalesManager
+      initialSales={serializedSales}
+      products={serializedProducts}
+      currentUserLabel={session.email}
+    />
   )
 }

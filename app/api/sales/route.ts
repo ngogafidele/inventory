@@ -103,8 +103,9 @@ export async function POST(request: NextRequest) {
         productId: product._id,
         name: product.name,
         sku: product.sku,
+        unit: product.unit ?? "pcs",
         quantity: item.quantity,
-        basePrice: product.price,
+        basePrice: product.costPrice ?? product.price,
         sellingPrice: item.sellingPrice,
         lineTotal,
       }
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
           name: product.name,
           sku: product.sku,
           quantity: newQuantity,
+          threshold: product.lowStockThreshold ?? 10,
         })
       })
     )

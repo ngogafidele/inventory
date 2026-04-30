@@ -20,9 +20,11 @@ const storeLabels: Record<StoreKey, string> = {
 export function StoreSwitcher({
   currentStore,
   availableStores,
+  isAdmin,
 }: {
   currentStore: StoreKey
   availableStores: StoreKey[]
+  isAdmin: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -33,11 +35,16 @@ export function StoreSwitcher({
     if (store === currentStore) return
 
     startTransition(async () => {
-      await fetch("/api/auth/switch-store", {
+      const response = await fetch("/api/auth/switch-store", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ store }),
       })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        alert(body?.error ?? "Failed to switch store")
+        return
+      }
 
       router.refresh()
     })
@@ -45,7 +52,10 @@ export function StoreSwitcher({
 
   return (
     <Select value={currentStore} onValueChange={handleChange}>
-      <SelectTrigger size="sm" disabled={isPending}>
+      <SelectTrigger
+        size="sm"
+        disabled={isPending || !isAdmin || availableStores.length < 2}
+      >
         <SelectValue placeholder="Select store" />
       </SelectTrigger>
       <SelectContent>

@@ -5,6 +5,7 @@ const SaleItemSchema = new Schema(
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     name: { type: String, required: true },
     sku: { type: String, required: true },
+    unit: { type: String, required: true, default: "pcs" },
     quantity: { type: Number, required: true, min: 1 },
     basePrice: { type: Number, required: true, min: 0 },
     sellingPrice: { type: Number, required: true, min: 0 },

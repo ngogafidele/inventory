@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { KeyRound, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -63,13 +64,13 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-white to-zinc-100">
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_20%,_#d5f5e3_0,_transparent_45%),radial-gradient(circle_at_85%_10%,_#fef3c7_0,_transparent_40%),linear-gradient(to_bottom,_#f8fafc,_#f3f4f6)]">
+      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-14">
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             Multi-Store Inventory System
           </p>
-          <h1 className="text-4xl font-semibold">Sign in to Operations</h1>
+          <h1 className="text-3xl font-semibold sm:text-4xl">Sign in to Operations</h1>
           <p className="max-w-xl text-sm text-muted-foreground">
             Manage store-level products, sales, and inventory from a single hub.
             Admin setup is required only once.
@@ -82,9 +83,12 @@ export default function Home() {
           </div>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Login</h2>
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+          <section className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur sm:p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <KeyRound className="size-4 text-primary" />
+              <h2 className="text-lg font-semibold">Login</h2>
+            </div>
             <p className="text-sm text-muted-foreground">
               Access your assigned stores and daily operations.
             </p>
@@ -107,8 +111,11 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Admin Setup</h2>
+          <section className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur sm:p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldCheck className="size-4 text-primary" />
+              <h2 className="text-lg font-semibold">Admin Setup</h2>
+            </div>
             <p className="text-sm text-muted-foreground">
               Create the initial admin account (run once).
             </p>

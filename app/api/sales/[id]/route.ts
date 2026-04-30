@@ -8,7 +8,7 @@ import { syncLowStockAlert } from "@/lib/db/alerts"
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -27,7 +27,7 @@ export async function GET(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const sale = await Sale.findOne({ _id: id, store })
@@ -50,7 +50,7 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -69,7 +69,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const sale = await Sale.findOne({ _id: id, store })
@@ -107,6 +107,7 @@ export async function DELETE(
           name: product.name,
           sku: product.sku,
           quantity: newQuantity,
+          threshold: product.lowStockThreshold ?? 10,
         })
       })
     )

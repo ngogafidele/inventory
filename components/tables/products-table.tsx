@@ -4,6 +4,7 @@ export type ProductsTableRow = {
   id: string
   name: string
   sku: string
+  unit?: string
   quantity: number
 }
 
@@ -22,7 +23,9 @@ export function ProductsTable({ rows }: { rows: ProductsTableRow[] }) {
           <TableRow key={row.id}>
             <TableCell>{row.name}</TableCell>
             <TableCell>{row.sku}</TableCell>
-            <TableCell>{row.quantity}</TableCell>
+            <TableCell>
+              {row.quantity} {row.unit ?? "pcs"}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

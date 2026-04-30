@@ -1,5 +1,5 @@
 import { connectToDatabase } from "@/lib/db/connection"
-import { Alert } from "@/lib/db/models/Alert"
+import { Product } from "@/lib/db/models/Product"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import {
   Table,
@@ -15,36 +15,55 @@ export default async function AlertsPage() {
   const store = getCurrentStore(session)
 
   await connectToDatabase()
-  const alerts = await Alert.find({ store }).sort({ createdAt: -1 }).lean()
+  const lowStockProducts = await Product.find({
+    store,
+    $expr: { $lte: ["$quantity", "$lowStockThreshold"] },
+  })
+    .sort({ quantity: 1, name: 1 })
+    .lean()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Monitoring
         </p>
-        <h2 className="text-2xl font-semibold">Alerts</h2>
+        <h2 className="text-2xl font-semibold">Low Stock Alerts</h2>
       </div>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Type</TableHead>
-            <TableHead>Message</TableHead>
-            <TableHead>Severity</TableHead>
+            <TableHead>Product</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Quantity</TableHead>
+            <TableHead>Threshold</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {alerts.map((alert) => (
-            <TableRow key={alert._id.toString()}>
-              <TableCell>{alert.type}</TableCell>
-              <TableCell>{alert.message}</TableCell>
-              <TableCell className="capitalize">{alert.severity}</TableCell>
-              <TableCell>
-                {alert.isResolved ? "Resolved" : "Open"}
+          {lowStockProducts.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={5} className="text-muted-foreground">
+                No low stock products right now.
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            lowStockProducts.map((product) => (
+              <TableRow key={product._id.toString()}>
+                <TableCell>{product.name}</TableCell>
+                <TableCell>{product.sku}</TableCell>
+                <TableCell>
+                  {product.quantity} {product.unit ?? "pcs"}
+                </TableCell>
+                <TableCell>
+                  {product.lowStockThreshold ?? 10} {product.unit ?? "pcs"}
+                </TableCell>
+                <TableCell>
+                  {product.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </div>

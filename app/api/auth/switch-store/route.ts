@@ -16,6 +16,12 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    if (!session.isAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Admin only" },
+        { status: 403 }
+      )
+    }
 
     const { store } = (await request.json()) as { store?: StoreKey }
     if (!store || !["store1", "store2"].includes(store)) {
@@ -25,7 +31,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const updatedSession = updateCurrentStore(session, store)
+    const allowedStores = session.isAdmin
+      ? (["store1", "store2"] as const)
+      : session.stores
+
+    if (!allowedStores.includes(store)) {
+      return NextResponse.json(
+        { success: false, error: "You do not have access to this store" },
+        { status: 403 }
+      )
+    }
+
+    const updatedSession = updateCurrentStore(
+      { ...session, stores: [...allowedStores] },
+      store
+    )
     const token = createToken(updatedSession)
 
     const response = NextResponse.json({ success: true, store })
@@ -39,8 +59,10 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to switch store"
     return NextResponse.json(
-      { success: false, error: "Failed to switch store" },
+      { success: false, error: message },
       { status: 400 }
     )
   }

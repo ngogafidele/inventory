@@ -1,6 +1,6 @@
 export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  const formatted = new Intl.NumberFormat("en-RW", {
+    maximumFractionDigits: 2,
   }).format(value)
+  return `${formatted} Rwf`
 }

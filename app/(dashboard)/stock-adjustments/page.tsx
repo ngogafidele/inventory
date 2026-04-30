@@ -1,54 +1,44 @@
 import { connectToDatabase } from "@/lib/db/connection"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
+import { Product } from "@/lib/db/models/Product"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { redirect } from "next/navigation"
+import { StockAdjustmentsManager } from "@/components/stock-adjustments/stock-adjustments-manager"
 
 export default async function StockAdjustmentsPage() {
   const session = await requireServerSession()
+  if (!session.isAdmin) {
+    redirect("/sales")
+  }
   const store = getCurrentStore(session)
 
   await connectToDatabase()
   const adjustments = await StockAdjustment.find({ store })
     .sort({ createdAt: -1 })
     .lean()
+  const products = await Product.find({ store }).sort({ name: 1 }).lean()
+
+  const serializedAdjustments = adjustments.map((adjustment) => ({
+    ...adjustment,
+    _id: adjustment._id.toString(),
+    productId: adjustment.productId.toString(),
+    adjustedBy: adjustment.adjustedBy.toString(),
+    createdAt: adjustment.createdAt?.toISOString(),
+    updatedAt: adjustment.updatedAt?.toISOString(),
+  }))
+
+  const serializedProducts = products.map((product) => ({
+    _id: product._id.toString(),
+    name: product.name,
+    sku: product.sku,
+    unit: product.unit ?? "pcs",
+    quantity: product.quantity,
+  }))
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Inventory Control
-        </p>
-        <h2 className="text-2xl font-semibold">Stock Adjustments</h2>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>SKU</TableHead>
-            <TableHead>Change</TableHead>
-            <TableHead>Reason</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {adjustments.map((adjustment) => (
-            <TableRow key={adjustment._id.toString()}>
-              <TableCell>
-                {new Date(adjustment.createdAt).toLocaleDateString()}
-              </TableCell>
-              <TableCell>{adjustment.sku}</TableCell>
-              <TableCell>{adjustment.quantityChange}</TableCell>
-              <TableCell>{adjustment.reason}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <StockAdjustmentsManager
+      initialAdjustments={serializedAdjustments}
+      products={serializedProducts}
+    />
   )
 }

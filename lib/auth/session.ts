@@ -22,7 +22,16 @@ export interface AuthSession {
 }
 
 export function createToken(session: AuthSession): string {
-  return jwt.sign(session, JWT_SECRET, { expiresIn: "7d" })
+  const payload: AuthSession = {
+    userId: session.userId,
+    email: session.email,
+    isAdmin: session.isAdmin,
+    role: session.role,
+    stores: session.stores,
+    currentStore: session.currentStore,
+  }
+
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" })
 }
 
 export function verifyToken(token: string): AuthSession | null {

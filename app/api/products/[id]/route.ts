@@ -9,7 +9,7 @@ import { syncLowStockAlert } from "@/lib/db/alerts"
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -28,7 +28,7 @@ export async function GET(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const product = await Product.findOne({ _id: id, store }).populate(
@@ -53,7 +53,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -64,7 +64,7 @@ export async function PUT(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const store = resolveStoreFromRequest(request, session)
     if (!store) {
       return NextResponse.json(
@@ -90,7 +90,7 @@ export async function PUT(
     const product = await Product.findOneAndUpdate(
       { _id: id, store },
       payload,
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     )
 
     if (!product) {
@@ -106,6 +106,7 @@ export async function PUT(
       name: product.name,
       sku: product.sku,
       quantity: product.quantity,
+      threshold: product.lowStockThreshold ?? 10,
     })
 
     return NextResponse.json({ success: true, data: product })
@@ -119,7 +120,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -130,7 +131,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const store = resolveStoreFromRequest(request, session)
 
     if (!store) {

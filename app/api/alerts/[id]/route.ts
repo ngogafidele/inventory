@@ -7,7 +7,7 @@ import { UpdateAlertSchema } from "@/lib/db/validators/alert"
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -26,7 +26,7 @@ export async function PUT(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const payload = UpdateAlertSchema.parse(await request.json())
 
     await connectToDatabase()
@@ -36,7 +36,7 @@ export async function PUT(
         ...payload,
         resolvedAt: payload.isResolved ? new Date() : undefined,
       },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     )
 
     if (!alert) {
@@ -57,7 +57,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -76,7 +76,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const alert = await Alert.findOneAndDelete({ _id: id, store })

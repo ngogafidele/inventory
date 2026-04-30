@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Category } from "@/lib/db/models/Category"
+import { Product } from "@/lib/db/models/Product"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateCategorySchema } from "@/lib/db/validators/category"
@@ -26,7 +27,7 @@ export async function GET(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     await connectToDatabase()
     const category = await Category.findOne({ _id: id, store })
@@ -60,7 +61,7 @@ export async function PUT(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
     const store = resolveStoreFromRequest(request, session)
     if (!store) {
       return NextResponse.json(
@@ -75,7 +76,7 @@ export async function PUT(
     const category = await Category.findOneAndUpdate(
       { _id: id, store },
       payload,
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     )
 
     if (!category) {
@@ -107,7 +108,7 @@ export async function DELETE(
       )
     }
 
-    const { id } = context.params
+    const { id } = await context.params
 
     const store = resolveStoreFromRequest(request, session)
     if (!store) {
@@ -118,6 +119,22 @@ export async function DELETE(
     }
 
     await connectToDatabase()
+    const productsInCategory = await Product.countDocuments({
+      store,
+      categoryId: id,
+    })
+
+    if (productsInCategory > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Cannot delete a category that still has products. Move or delete those products first.",
+        },
+        { status: 409 }
+      )
+    }
+
     const category = await Category.findOneAndDelete({ _id: id, store })
 
     if (!category) {

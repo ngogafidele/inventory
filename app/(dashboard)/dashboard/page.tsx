@@ -1,8 +1,12 @@
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
+import { redirect } from "next/navigation"
 
 export default async function DashboardPage() {
   const session = await requireServerSession()
+  if (!session.isAdmin) {
+    redirect("/sales")
+  }
   const store = getCurrentStore(session)
 
   return (
