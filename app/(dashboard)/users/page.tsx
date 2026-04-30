@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 
 export default async function UsersPage() {
-  const session = requireServerSession()
+  const session = await requireServerSession()
   if (!session.isAdmin) {
     redirect("/dashboard")
   }

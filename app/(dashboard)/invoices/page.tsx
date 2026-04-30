@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 
 export default async function InvoicesPage() {
-  const session = requireServerSession()
+  const session = await requireServerSession()
   const store = getCurrentStore(session)
 
   await connectToDatabase()

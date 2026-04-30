@@ -13,14 +13,14 @@ const navItems = [
 
 export function Sidebar() {
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-sidebar px-4 py-6">
+    <aside className="w-full shrink-0 rounded-2xl border border-border bg-sidebar px-4 py-6 md:w-64 md:rounded-none md:border-0 md:border-r">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Inventory Suite
         </p>
         <h2 className="text-xl font-semibold text-foreground">Control Center</h2>
       </div>
-      <nav className="flex flex-col gap-2">
+      <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-col">
         {navItems.map((item) => (
           <Link
             key={item.href}

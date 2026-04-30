@@ -1,8 +1,8 @@
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 
-export default function DashboardPage() {
-  const session = requireServerSession()
+export default async function DashboardPage() {
+  const session = await requireServerSession()
   const store = getCurrentStore(session)
 
   return (

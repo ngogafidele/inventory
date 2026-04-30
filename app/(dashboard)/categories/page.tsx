@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table"
 
 export default async function CategoriesPage() {
-  const session = requireServerSession()
+  const session = await requireServerSession()
   const store = getCurrentStore(session)
 
   await connectToDatabase()

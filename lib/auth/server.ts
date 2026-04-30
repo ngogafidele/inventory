@@ -2,8 +2,9 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { getSessionFromCookies, type AuthSession } from "@/lib/auth/session"
 
-export function requireServerSession(): AuthSession {
-  const session = getSessionFromCookies(cookies())
+export async function requireServerSession(): Promise<AuthSession> {
+  const cookieStore = await cookies()
+  const session = getSessionFromCookies(cookieStore)
   if (!session) {
     redirect("/")
   }
