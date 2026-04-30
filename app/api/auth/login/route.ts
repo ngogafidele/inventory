@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
+import { UserLoginLog } from "@/lib/db/models/UserLoginLog"
 import { LoginSchema } from "@/lib/db/validators/user"
 import { comparePassword } from "@/lib/auth/hash"
 import {
@@ -11,7 +12,8 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = LoginSchema.parse(await request.json())
+    const bodyData = await request.json()
+    const body = LoginSchema.parse(bodyData)
     await connectToDatabase()
 
     const user = await User.findOne({ email: body.email.toLowerCase() })
@@ -30,16 +32,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    user.lastLogin = new Date()
+    const loginAt = new Date()
+    user.lastLogin = loginAt
     await user.save()
+
+    const loginLog = await UserLoginLog.create({
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      loginAt,
+    })
 
     const session: AuthSession = {
       userId: user._id.toString(),
+      name: user.name,
       email: user.email,
       isAdmin: user.isAdmin,
       role: user.role,
       stores: user.stores,
       currentStore: user.stores[0],
+      loginLogId: loginLog._id.toString(),
     }
 
     const token = createToken(session)
@@ -66,8 +79,11 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to login"
+    console.error("[Login Error]", errorMessage)
     return NextResponse.json(
-      { success: false, error: "Failed to login" },
+      { success: false, error: errorMessage },
       { status: 400 }
     )
   }

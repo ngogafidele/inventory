@@ -106,7 +106,7 @@ export async function PUT(
       name: product.name,
       sku: product.sku,
       quantity: product.quantity,
-      threshold: product.lowStockThreshold ?? 10,
+      threshold: product.lowStockThreshold ?? 0,
     })
 
     return NextResponse.json({ success: true, data: product })

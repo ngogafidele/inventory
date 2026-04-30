@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
+import { UserLoginLog } from "@/lib/db/models/UserLoginLog"
 import { SetupAdminSchema } from "@/lib/db/validators/user"
 import { hashPassword } from "@/lib/auth/hash"
 import { AUTH_COOKIE, createToken, type AuthSession } from "@/lib/auth/session"
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(body.password)
 
+    const loginAt = new Date()
     const admin = await User.create({
       name: body.name,
       email: body.email,
@@ -29,15 +31,26 @@ export async function POST(request: NextRequest) {
       role: "admin",
       stores: ["store1", "store2"],
       isActive: true,
+      lastLogin: loginAt,
+    })
+
+    const loginLog = await UserLoginLog.create({
+      userId: admin._id,
+      name: admin.name,
+      email: admin.email,
+      role: admin.role,
+      loginAt,
     })
 
     const session: AuthSession = {
       userId: admin._id.toString(),
+      name: admin.name,
       email: admin.email,
       isAdmin: true,
       role: "admin",
       stores: ["store1", "store2"],
       currentStore: "store1",
+      loginLogId: loginLog._id.toString(),
     }
 
     const token = createToken(session)

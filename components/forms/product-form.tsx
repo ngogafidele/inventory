@@ -20,10 +20,6 @@ export function ProductForm() {
           <input className="rounded-md border border-border px-3 py-2" />
         </label>
         <label className="flex flex-col gap-2 text-sm">
-          SKU
-          <input className="rounded-md border border-border px-3 py-2" />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
           Quantity
           <input
             type="number"

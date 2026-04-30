@@ -3,16 +3,19 @@ import type { AuthSession } from "@/lib/auth/session"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StoreSwitcher } from "@/components/store-switcher"
 import { LogoutButton } from "@/components/auth/logout-button"
-import { Building2 } from "lucide-react"
+import { Building2, UserRound } from "lucide-react"
 
 export function AppShell({
   session,
+  userName,
   children,
 }: {
   session: AuthSession
+  userName?: string
   children: ReactNode
 }) {
   const currentStore = session.currentStore ?? session.stores[0]
+  const displayName = userName ?? session.name ?? session.email
 
   return (
     <div className="min-h-screen bg-background">
@@ -30,11 +33,26 @@ export function AppShell({
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
-            <StoreSwitcher
-              currentStore={currentStore}
-              availableStores={session.stores}
-              isAdmin={session.isAdmin}
-            />
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 shadow-sm">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <UserRound className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {displayName}
+                </p>
+                <p className="truncate text-xs capitalize text-muted-foreground">
+                  {session.role} - {session.email}
+                </p>
+              </div>
+            </div>
+            {session.isAdmin ? (
+              <StoreSwitcher
+                currentStore={currentStore}
+                availableStores={session.stores}
+                isAdmin={session.isAdmin}
+              />
+            ) : null}
             <LogoutButton />
           </div>
         </div>

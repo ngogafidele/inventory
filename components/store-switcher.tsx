@@ -29,6 +29,10 @@ export function StoreSwitcher({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
+  if (!isAdmin) {
+    return null
+  }
+
   const handleChange = (value: string) => {
     if (!Object.keys(storeLabels).includes(value)) return
     const store = value as StoreKey
@@ -53,14 +57,14 @@ export function StoreSwitcher({
   return (
     <Select value={currentStore} onValueChange={handleChange}>
       <SelectTrigger
-        size="sm"
-        disabled={isPending || !isAdmin || availableStores.length < 2}
+        className="h-12 min-w-40 border-primary/40 bg-primary/10 px-4 text-base font-semibold text-primary shadow-sm hover:bg-primary/15"
+        disabled={isPending || availableStores.length < 2}
       >
         <SelectValue placeholder="Select store" />
       </SelectTrigger>
       <SelectContent>
         {availableStores.map((store) => (
-          <SelectItem key={store} value={store}>
+          <SelectItem key={store} value={store} className="py-2 text-base">
             {storeLabels[store]}
           </SelectItem>
         ))}

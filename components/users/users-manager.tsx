@@ -30,15 +30,31 @@ import {
 
 type UserClient = Pick<
   UserDocument,
-  "name" | "email" | "role" | "stores" | "isActive" | "isAdmin"
+  | "name"
+  | "email"
+  | "role"
+  | "stores"
+  | "isActive"
+  | "isAdmin"
 > & {
   _id: string
   createdAt?: string
   updatedAt?: string
 }
 
+type LoginLogClient = {
+  _id: string
+  userId: string
+  name: string
+  email: string
+  role: "admin" | "manager" | "staff"
+  loginAt?: string
+  logoutAt?: string
+}
+
 export type UsersManagerProps = {
   initialUsers: UserClient[]
+  loginLogs: LoginLogClient[]
   currentUserId: string
 }
 
@@ -60,8 +76,24 @@ const emptyForm: FormState = {
   isActive: true,
 }
 
+function formatActivityDate(date: string | Date | undefined) {
+  if (!date) return "Never"
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).format(new Date(date))
+}
+
 export function UsersManager({
   initialUsers,
+  loginLogs,
   currentUserId,
 }: UsersManagerProps) {
   const [users, setUsers] = useState(initialUsers)
@@ -338,6 +370,50 @@ export function UsersManager({
           ))}
         </TableBody>
       </Table>
+
+      <section className="space-y-3 pt-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Activity
+          </p>
+          <h3 className="text-xl font-semibold">Logs</h3>
+          <p className="text-sm text-muted-foreground">
+            20 most recent logins.
+          </p>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Logged In</TableHead>
+              <TableHead>Logged Out</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loginLogs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-muted-foreground">
+                  No login logs yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              loginLogs.map((log) => (
+                <TableRow key={log._id}>
+                  <TableCell>{log.name}</TableCell>
+                  <TableCell>{log.email}</TableCell>
+                  <TableCell className="capitalize">{log.role}</TableCell>
+                  <TableCell>{formatActivityDate(log.loginAt)}</TableCell>
+                  <TableCell>
+                    {log.logoutAt ? formatActivityDate(log.logoutAt) : "Still logged in"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </section>
     </div>
   )
 }

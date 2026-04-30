@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
           name: product.name,
           sku: product.sku,
           quantity: newQuantity,
-          threshold: product.lowStockThreshold ?? 10,
+          threshold: product.lowStockThreshold ?? 0,
         })
       })
     )

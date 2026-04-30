@@ -6,9 +6,11 @@ import {
   Boxes,
   Coins,
   PackageSearch,
-  Loader2,
   ReceiptText,
+  TrendingUp,
+  Warehouse,
 } from "lucide-react"
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 import { formatCurrency } from "@/lib/utils/format"
 import {
   Table,
@@ -28,6 +30,10 @@ type StatsResponse = {
   lowStockCount: number
   salesCount: number
   revenue: number
+  salesToday: number
+  stockValue: number
+  revenueToday: number
+  grossProfitToday: number
   lowStockProducts: Array<{
     _id: string
     name: string
@@ -71,12 +77,7 @@ export function DashboardStats({ store }: DashboardStatsProps) {
   }, [store])
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Loading dashboard stats...
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   if (!stats) {
@@ -86,20 +87,34 @@ export function DashboardStats({ store }: DashboardStatsProps) {
   const cards = [
     { label: "Products", value: stats.productCount, icon: Boxes },
     { label: "Low Stock", value: stats.lowStockCount, icon: AlertTriangle },
-    { label: "Sales", value: stats.salesCount, icon: ReceiptText },
-    { label: "Revenue", value: formatCurrency(stats.revenue), icon: Coins },
+    {
+      label: "Total Stock Value",
+      value: formatCurrency(stats.stockValue),
+      icon: Warehouse,
+    },
+    { label: "Sales Today", value: stats.salesToday, icon: ReceiptText },
+    {
+      label: "Revenue Today",
+      value: formatCurrency(stats.revenueToday),
+      icon: Coins,
+    },
+    {
+      label: "Gross Profit Today",
+      value: formatCurrency(stats.grossProfitToday),
+      icon: TrendingUp,
+    },
   ]
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-14">
+      <div className="grid gap-x-5 gap-y-12 md:grid-cols-2 xl:grid-cols-6">
         {cards.map((card) => (
           <div
             key={card.label}
             className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="max-w-[9rem] text-xs uppercase leading-4 tracking-[0.12em] text-muted-foreground">
                 {card.label}
               </p>
               <card.icon className="size-4 text-primary" />
@@ -111,7 +126,7 @@ export function DashboardStats({ store }: DashboardStatsProps) {
         ))}
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-12">
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -155,7 +170,7 @@ export function DashboardStats({ store }: DashboardStatsProps) {
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-12">
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <div>

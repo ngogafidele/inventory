@@ -107,7 +107,7 @@ export async function DELETE(
           name: product.name,
           sku: product.sku,
           quantity: newQuantity,
-          threshold: product.lowStockThreshold ?? 10,
+          threshold: product.lowStockThreshold ?? 0,
         })
       })
     )

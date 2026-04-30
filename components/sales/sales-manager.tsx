@@ -1,16 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { ProductSearchSelect } from "@/components/products/product-search-select"
 import {
   Table,
   TableBody,
@@ -35,6 +29,7 @@ type SaleItemClient = {
   sku?: string
   unit?: string
   quantity: number
+  basePrice?: number
   sellingPrice: number
   lineTotal: number
 }
@@ -61,6 +56,8 @@ const emptyDraft: DraftItem = {
   sellingPrice: "",
 }
 
+const SALES_PER_PAGE = 20
+
 export function SalesManager({
   initialSales,
   products,
@@ -75,11 +72,25 @@ export function SalesManager({
   const [notes, setNotes] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const productMap = useMemo(
     () => new Map(products.map((product) => [product._id, product])),
     [products]
   )
+
+  const pageCount = Math.max(1, Math.ceil(sales.length / SALES_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, pageCount)
+  const pageStart = (safeCurrentPage - 1) * SALES_PER_PAGE
+  const paginatedSales = sales.slice(pageStart, pageStart + SALES_PER_PAGE)
+  const visibleStart = sales.length === 0 ? 0 : pageStart + 1
+  const visibleEnd = Math.min(pageStart + SALES_PER_PAGE, sales.length)
+
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount)
+    }
+  }, [currentPage, pageCount])
 
   const setDraftItem = (
     index: number,
@@ -111,22 +122,8 @@ export function SalesManager({
     setError(null)
   }
 
-  const formatSoldQuantities = (items: SaleItemClient[]) => {
-    const byUnit = new Map<string, number>()
-    for (const item of items) {
-      const unit = item.unit || "pcs"
-      const current = byUnit.get(unit) ?? 0
-      byUnit.set(unit, current + item.quantity)
-    }
-    return Array.from(byUnit.entries())
-      .map(([unit, quantity]) => `${quantity} ${unit}`)
-      .join(", ")
-  }
-
-  const formatItemNames = (items: SaleItemClient[]) => {
-    return items
-      .map((item) => item.name?.trim() || item.sku?.trim() || "Unnamed item")
-      .join(", ")
+  const getItemLabel = (item: SaleItemClient) => {
+    return item.name?.trim() || item.sku?.trim() || "Unnamed item"
   }
 
   const submitSale = async () => {
@@ -194,6 +191,7 @@ export function SalesManager({
 
       const createdSale = body.data as SaleClient
       setSales((current) => [createdSale, ...current])
+      setCurrentPage(1)
       resetForm()
     } catch {
       setError("Failed to record sale.")
@@ -228,7 +226,8 @@ export function SalesManager({
               >
                 <label className="grid gap-1 text-sm">
                   Product
-                  <Select
+                  <ProductSearchSelect
+                    products={products}
                     value={item.productId}
                     onValueChange={(value) => {
                       const product = productMap.get(value)
@@ -237,18 +236,7 @@ export function SalesManager({
                         setDraftItem(index, "sellingPrice", String(product.price))
                       }
                     }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product._id} value={product._id}>
-                          {product.name} ({product.sku}) - Stock {product.quantity} {product.unit}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </label>
 
                 <label className="grid gap-1 text-sm">
@@ -327,28 +315,103 @@ export function SalesManager({
             <TableHead>Time</TableHead>
             <TableHead>Items Sold</TableHead>
             <TableHead>Quantity Sold</TableHead>
+            <TableHead>Cost Price</TableHead>
+            <TableHead>Sold Price</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Logged By</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sales.map((sale) => (
-            <TableRow key={sale._id}>
-              <TableCell>
-                {sale.createdAtLabel ?? "-"}
+          {paginatedSales.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={7} className="text-muted-foreground">
+                No sales recorded yet.
               </TableCell>
-              <TableCell>
-                <span className="whitespace-normal break-words">
-                  {formatItemNames(sale.items)}
-                </span>
-              </TableCell>
-              <TableCell>{formatSoldQuantities(sale.items)}</TableCell>
-              <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
-              <TableCell>{sale.createdByName ?? "Unknown User"}</TableCell>
             </TableRow>
-          ))}
+          ) : (
+            paginatedSales.map((sale) => {
+              const items = sale.items.length
+                ? sale.items
+                : [
+                    {
+                      productId: `${sale._id}-empty`,
+                      quantity: 0,
+                      sellingPrice: 0,
+                      lineTotal: 0,
+                    },
+                  ]
+              const rowSpan = items.length
+
+              return (
+                <Fragment key={sale._id}>
+                  {items.map((item, itemIndex) => (
+                    <TableRow key={`${sale._id}-${item.productId}-${itemIndex}`}>
+                      {itemIndex === 0 ? (
+                        <TableCell rowSpan={rowSpan}>
+                          {sale.createdAtLabel ?? "-"}
+                        </TableCell>
+                      ) : null}
+                      <TableCell>
+                        <div className="whitespace-normal break-words">
+                          <p className="font-medium">{getItemLabel(item)}</p>
+                          {item.sku ? (
+                            <p className="text-xs text-muted-foreground">
+                              {item.sku}
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {item.quantity} {item.unit ?? "pcs"}
+                      </TableCell>
+                      <TableCell>{formatCurrency(item.basePrice ?? 0)}</TableCell>
+                      <TableCell>{formatCurrency(item.sellingPrice)}</TableCell>
+                      {itemIndex === 0 ? (
+                        <>
+                          <TableCell rowSpan={rowSpan}>
+                            {formatCurrency(sale.totalAmount)}
+                          </TableCell>
+                          <TableCell rowSpan={rowSpan}>
+                            {sale.createdByName ?? "Unknown User"}
+                          </TableCell>
+                        </>
+                      ) : null}
+                    </TableRow>
+                  ))}
+                </Fragment>
+              )
+            })
+          )}
         </TableBody>
       </Table>
+      <div className="flex flex-col gap-3 border-t border-border/80 pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          Showing {visibleStart}-{visibleEnd} of {sales.length} sales
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={safeCurrentPage === 1}
+          >
+            Previous
+          </Button>
+          <span className="min-w-20 text-center">
+            Page {safeCurrentPage} of {pageCount}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentPage((page) => Math.min(pageCount, page + 1))
+            }
+            disabled={safeCurrentPage === pageCount}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

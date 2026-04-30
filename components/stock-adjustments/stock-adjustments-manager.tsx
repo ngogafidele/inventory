@@ -4,13 +4,7 @@ import { useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { ProductSearchSelect } from "@/components/products/product-search-select"
 import {
   Table,
   TableBody,
@@ -126,18 +120,11 @@ export function StockAdjustmentsManager({
         <div className="grid gap-3 md:grid-cols-[1.5fr_0.9fr_1.4fr_auto]">
           <label className="grid gap-1 text-sm">
             Product
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select product" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map((product) => (
-                  <SelectItem key={product._id} value={product._id}>
-                    {product.name} ({product.sku}) - Stock {product.quantity} {product.unit}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProductSearchSelect
+              products={products}
+              value={productId}
+              onValueChange={setProductId}
+            />
           </label>
 
           <label className="grid gap-1 text-sm">
@@ -194,7 +181,12 @@ export function StockAdjustmentsManager({
               <TableRow key={adjustment._id}>
                 <TableCell>
                   {adjustment.createdAt
-                    ? new Date(adjustment.createdAt).toLocaleDateString()
+                    ? new Intl.DateTimeFormat("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "2-digit",
+                        timeZone: "UTC",
+                      }).format(new Date(adjustment.createdAt))
                     : "-"}
                 </TableCell>
                 <TableCell>{adjustment.sku}</TableCell>

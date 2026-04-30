@@ -7,6 +7,24 @@ import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 
+function getSkuBase(name: string) {
+  const normalized = name.toUpperCase().replace(/[^A-Z0-9]+/g, "")
+  return (normalized.slice(0, 6) || "PRD").padEnd(3, "X")
+}
+
+async function generateProductSku(store: string, name: string) {
+  const base = getSkuBase(name)
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
+    const sku = `${base}-${suffix}`
+    const existing = await Product.exists({ store, sku })
+    if (!existing) return sku
+  }
+
+  return `${base}-${Date.now().toString(36).toUpperCase()}`
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -69,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     const product = await Product.create({
       ...payload,
+      sku: await generateProductSku(store, payload.name),
       store,
     })
 
@@ -78,7 +97,7 @@ export async function POST(request: NextRequest) {
       name: product.name,
       sku: product.sku,
       quantity: product.quantity,
-      threshold: product.lowStockThreshold ?? 10,
+      threshold: product.lowStockThreshold ?? 0,
     })
 
     return NextResponse.json(

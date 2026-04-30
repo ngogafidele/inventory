@@ -1,6 +1,6 @@
 import { Alert } from "@/lib/db/models/Alert"
 
-export const LOW_STOCK_THRESHOLD = 10
+export const LOW_STOCK_THRESHOLD = 0
 
 export async function syncLowStockAlert(params: {
   store: "store1" | "store2"

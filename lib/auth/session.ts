@@ -14,21 +14,25 @@ if (!JWT_SECRET) {
 
 export interface AuthSession {
   userId: string
+  name?: string
   email: string
   isAdmin: boolean
   role: "admin" | "manager" | "staff"
   stores: StoreKey[]
   currentStore?: StoreKey
+  loginLogId?: string
 }
 
 export function createToken(session: AuthSession): string {
   const payload: AuthSession = {
     userId: session.userId,
+    name: session.name,
     email: session.email,
     isAdmin: session.isAdmin,
     role: session.role,
     stores: session.stores,
     currentStore: session.currentStore,
+    loginLogId: session.loginLogId,
   }
 
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" })

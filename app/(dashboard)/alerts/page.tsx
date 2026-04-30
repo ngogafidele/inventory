@@ -17,7 +17,7 @@ export default async function AlertsPage() {
   await connectToDatabase()
   const lowStockProducts = await Product.find({
     store,
-    $expr: { $lte: ["$quantity", "$lowStockThreshold"] },
+    $expr: { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
   })
     .sort({ quantity: 1, name: 1 })
     .lean()
@@ -56,7 +56,7 @@ export default async function AlertsPage() {
                   {product.quantity} {product.unit ?? "pcs"}
                 </TableCell>
                 <TableCell>
-                  {product.lowStockThreshold ?? 10} {product.unit ?? "pcs"}
+                  {product.lowStockThreshold ?? 0} {product.unit ?? "pcs"}
                 </TableCell>
                 <TableCell>
                   {product.quantity === 0 ? "Out of Stock" : "Low Stock"}

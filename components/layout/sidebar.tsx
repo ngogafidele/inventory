@@ -6,6 +6,7 @@ import type { AuthSession } from "@/lib/auth/session"
 import {
   Bell,
   Boxes,
+  ChartColumn,
   ClipboardList,
   LayoutDashboard,
   PackageSearch,
@@ -29,10 +30,14 @@ const commonNavItems = [
   { href: "/alerts", label: "Low Stock Alerts", icon: Bell },
 ]
 
+const bottomNavItems = [
+  { href: "/reports", label: "Reports", icon: ChartColumn },
+]
+
 export function Sidebar({ session }: { session: AuthSession }) {
   const pathname = usePathname()
   const navItems = session.isAdmin
-    ? [...adminOnlyNavItems, ...commonNavItems]
+    ? [...adminOnlyNavItems, ...commonNavItems, ...bottomNavItems]
     : commonNavItems
 
   return (
