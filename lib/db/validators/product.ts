@@ -1,0 +1,22 @@
+import { z } from "zod"
+import { objectIdSchema } from "@/lib/db/validators/shared"
+
+export const CreateProductSchema = z
+  .object({
+    name: z.string().min(1),
+    sku: z.string().min(1),
+    quantity: z.number().int().min(0),
+    price: z.number().min(0),
+    categoryId: objectIdSchema,
+  })
+  .strict()
+
+export const UpdateProductSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    sku: z.string().min(1).optional(),
+    quantity: z.number().int().min(0).optional(),
+    price: z.number().min(0).optional(),
+    categoryId: objectIdSchema.optional(),
+  })
+  .strict()
