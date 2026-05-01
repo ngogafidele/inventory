@@ -7,6 +7,17 @@ import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateInvoiceSchema } from "@/lib/db/validators/invoice"
 import { generateInvoiceNumber } from "@/lib/utils/invoice"
 
+const MAX_INVOICE_NUMBER_ATTEMPTS = 5
+
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === 11000
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -82,18 +93,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const invoice = await Invoice.create({
-      store,
-      saleId: sale._id,
-      invoiceNumber: generateInvoiceNumber(),
-      customerName: payload.customerName,
-      customerEmail: payload.customerEmail ?? "",
-      customerPhone: payload.customerPhone ?? "",
-      totalAmount: sale.totalAmount,
-      status: payload.status ?? "unpaid",
-      issuedAt: new Date(),
-      dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
-    })
+    let invoice = null
+    for (let attempt = 0; attempt < MAX_INVOICE_NUMBER_ATTEMPTS; attempt += 1) {
+      try {
+        invoice = await Invoice.create({
+          store,
+          saleId: sale._id,
+          invoiceNumber: generateInvoiceNumber(),
+          customerName: payload.customerName,
+          customerEmail: payload.customerEmail ?? "",
+          customerPhone: payload.customerPhone ?? "",
+          totalAmount: sale.totalAmount,
+          status: payload.status ?? "unpaid",
+          issuedAt: new Date(),
+          dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+        })
+        break
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) {
+          throw error
+        }
+
+        const duplicateInvoice = await Invoice.findOne({
+          saleId: sale._id,
+          store,
+        })
+        if (duplicateInvoice) {
+          return NextResponse.json(
+            { success: false, error: "Invoice already exists" },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    if (!invoice) {
+      return NextResponse.json(
+        { success: false, error: "Failed to generate invoice number" },
+        { status: 409 }
+      )
+    }
 
     return NextResponse.json({ success: true, data: invoice }, { status: 201 })
   } catch (error) {

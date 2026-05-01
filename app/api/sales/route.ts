@@ -111,14 +111,39 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    await Product.bulkWrite(
-      payload.items.map((item) => ({
-        updateOne: {
-          filter: { _id: item.productId, store },
-          update: { $inc: { quantity: -item.quantity } },
-        },
-      }))
-    )
+    const decrementedProducts: Array<{
+      productId: string
+      quantity: number
+    }> = []
+
+    for (const [productId, quantity] of requestedQuantities.entries()) {
+      const result = await Product.updateOne(
+        { _id: productId, store, quantity: { $gte: quantity } },
+        { $inc: { quantity: -quantity } }
+      )
+
+      if (result.modifiedCount !== 1) {
+        if (decrementedProducts.length > 0) {
+          await Product.bulkWrite(
+            decrementedProducts.map((entry) => ({
+              updateOne: {
+                filter: { _id: entry.productId, store },
+                update: { $inc: { quantity: entry.quantity } },
+              },
+            }))
+          )
+        }
+
+        const product = productMap.get(productId)
+        throw new Error(
+          product
+            ? `Insufficient stock for ${product.name}`
+            : "One or more products not found"
+        )
+      }
+
+      decrementedProducts.push({ productId, quantity })
+    }
 
     const sale = await Sale.create({
       store,
@@ -129,19 +154,21 @@ export async function POST(request: NextRequest) {
     })
 
     await Promise.all(
-      payload.items.map(async (item) => {
-        const product = productMap.get(item.productId)
-        if (!product) return
-        const newQuantity = product.quantity - item.quantity
-        await syncLowStockAlert({
-          store,
-          productId: product._id.toString(),
-          name: product.name,
-          sku: product.sku,
-          quantity: newQuantity,
-          threshold: product.lowStockThreshold ?? 0,
-        })
-      })
+      Array.from(requestedQuantities.entries()).map(
+        async ([productId, quantity]) => {
+          const product = productMap.get(productId)
+          if (!product) return
+          const newQuantity = product.quantity - quantity
+          await syncLowStockAlert({
+            store,
+            productId: product._id.toString(),
+            name: product.name,
+            sku: product.sku,
+            quantity: newQuantity,
+            threshold: product.lowStockThreshold ?? 0,
+          })
+        }
+      )
     )
 
     return NextResponse.json({ success: true, data: sale }, { status: 201 })

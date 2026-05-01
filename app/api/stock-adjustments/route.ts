@@ -67,21 +67,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const newQuantity = product.quantity + payload.quantityChange
-    if (newQuantity < 0) {
+    const updatedProduct = await Product.findOneAndUpdate(
+      {
+        _id: payload.productId,
+        store,
+        quantity: { $gte: Math.max(0, -payload.quantityChange) },
+      },
+      { $inc: { quantity: payload.quantityChange } },
+      { returnDocument: "after", runValidators: true }
+    )
+
+    if (!updatedProduct) {
       return NextResponse.json(
         { success: false, error: "Adjustment would make stock negative" },
         { status: 400 }
       )
     }
 
-    product.quantity = newQuantity
-    await product.save()
-
     const adjustment = await StockAdjustment.create({
       store,
-      productId: product._id,
-      sku: product.sku,
+      productId: updatedProduct._id,
+      sku: updatedProduct.sku,
       quantityChange: payload.quantityChange,
       reason: payload.reason,
       adjustedBy: session.userId,
@@ -89,11 +95,11 @@ export async function POST(request: NextRequest) {
 
     await syncLowStockAlert({
       store,
-      productId: product._id.toString(),
-      name: product.name,
-      sku: product.sku,
-      quantity: product.quantity,
-      threshold: product.lowStockThreshold ?? 0,
+      productId: updatedProduct._id.toString(),
+      name: updatedProduct.name,
+      sku: updatedProduct.sku,
+      quantity: updatedProduct.quantity,
+      threshold: updatedProduct.lowStockThreshold ?? 0,
     })
 
     return NextResponse.json(
