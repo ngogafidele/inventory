@@ -1,5 +1,7 @@
 import mongoose, { Schema } from "mongoose"
 
+const MAX_LOGIN_LOGS = 50
+
 const UserLoginLogSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -26,3 +28,17 @@ export type UserLoginLogDocument = mongoose.InferSchemaType<
 export const UserLoginLog =
   mongoose.models.UserLoginLog ||
   mongoose.model("UserLoginLog", UserLoginLogSchema)
+
+export async function pruneOldLoginLogs(limit = MAX_LOGIN_LOGS) {
+  const logsToRemove = await UserLoginLog.find()
+    .sort({ loginAt: -1, _id: -1 })
+    .skip(limit)
+    .select("_id")
+    .lean()
+
+  if (logsToRemove.length === 0) return
+
+  await UserLoginLog.deleteMany({
+    _id: { $in: logsToRemove.map((log) => log._id) },
+  })
+}

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
-import { UserLoginLog } from "@/lib/db/models/UserLoginLog"
+import {
+  pruneOldLoginLogs,
+  UserLoginLog,
+} from "@/lib/db/models/UserLoginLog"
 import { LoginSchema } from "@/lib/db/validators/user"
 import { comparePassword } from "@/lib/auth/hash"
 import {
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       loginAt,
     })
+    await pruneOldLoginLogs()
 
     const session: AuthSession = {
       userId: user._id.toString(),

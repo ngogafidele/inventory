@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
-import { UserLoginLog } from "@/lib/db/models/UserLoginLog"
+import {
+  pruneOldLoginLogs,
+  UserLoginLog,
+} from "@/lib/db/models/UserLoginLog"
 import { SetupAdminSchema } from "@/lib/db/validators/user"
 import { hashPassword } from "@/lib/auth/hash"
 import { AUTH_COOKIE, createToken, type AuthSession } from "@/lib/auth/session"
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
       role: admin.role,
       loginAt,
     })
+    await pruneOldLoginLogs()
 
     const session: AuthSession = {
       userId: admin._id.toString(),

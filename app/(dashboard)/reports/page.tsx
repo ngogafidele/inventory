@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { connection } from "next/server"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"
@@ -88,8 +89,6 @@ type RecentSale = {
     quantity: number
   }>
 }
-
-const stores: StoreKey[] = ["store1", "store2"]
 
 const storeLabels: Record<StoreKey, string> = {
   store1: "Store 1",
@@ -211,11 +210,13 @@ export default async function ReportsPage({
 }: {
   searchParams: SearchParams
 }) {
+  await connection()
   const session = await requireServerSession()
   if (!session.isAdmin) {
     redirect("/sales")
   }
 
+  const currentStore = getCurrentStore(session)
   const range = getReportRange(await searchParams)
   const periodFilter = {
     $gte: range.from,
@@ -233,6 +234,7 @@ export default async function ReportsPage({
     recentSales,
   ] = await Promise.all([
     Product.aggregate<ProductTotals>([
+      { $match: { store: currentStore } },
       {
         $group: {
           _id: "$store",
@@ -256,7 +258,7 @@ export default async function ReportsPage({
       },
     ]),
     Sale.aggregate<SaleTotals>([
-      { $match: { createdAt: periodFilter } },
+      { $match: { store: currentStore, createdAt: periodFilter } },
       { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
       {
         $group: {
@@ -284,7 +286,7 @@ export default async function ReportsPage({
       },
     ]),
     Invoice.aggregate<InvoiceTotals>([
-      { $match: { issuedAt: periodFilter } },
+      { $match: { store: currentStore, issuedAt: periodFilter } },
       {
         $group: {
           _id: "$store",
@@ -301,7 +303,7 @@ export default async function ReportsPage({
       },
     ]),
     StockAdjustment.aggregate<AdjustmentTotals>([
-      { $match: { createdAt: periodFilter } },
+      { $match: { store: currentStore, createdAt: periodFilter } },
       {
         $group: {
           _id: "$store",
@@ -310,7 +312,7 @@ export default async function ReportsPage({
       },
     ]),
     Sale.aggregate<TopMovingProduct>([
-      { $match: { createdAt: periodFilter } },
+      { $match: { store: currentStore, createdAt: periodFilter } },
       { $unwind: "$items" },
       {
         $group: {
@@ -345,7 +347,7 @@ export default async function ReportsPage({
         },
       },
     ]),
-    Sale.find({ createdAt: periodFilter })
+    Sale.find({ store: currentStore, createdAt: periodFilter })
       .select("store items totalAmount createdAt")
       .sort({ createdAt: -1 })
       .limit(8)
@@ -359,7 +361,7 @@ export default async function ReportsPage({
     adjustmentTotals.map((item) => [item._id, item])
   )
 
-  const storeReports = stores.map((store) => {
+  const storeReports = [currentStore].map((store) => {
     const products = productMap.get(store)
     const sales = saleMap.get(store)
     const invoices = invoiceMap.get(store)
@@ -382,7 +384,6 @@ export default async function ReportsPage({
   })
 
   const totals = sumReports(storeReports)
-  const currentStore = getCurrentStore(session)
 
   const cards = [
     { label: "Total Revenue", value: formatCurrency(totals.revenue) },
@@ -399,13 +400,12 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Business Overview
+          {storeLabels[currentStore]} Overview
         </p>
         <h2 className="text-2xl font-semibold">Reports</h2>
         <p className="text-sm text-muted-foreground">
-          Reports across Store 1 and Store 2 for {formatDateOnly(range.from)} to{" "}
-          {formatDateOnly(range.to)}. Current working store:{" "}
-          {storeLabels[currentStore]}.
+          Reports for {storeLabels[currentStore]} from{" "}
+          {formatDateOnly(range.from)} to {formatDateOnly(range.to)}.
         </p>
       </div>
 
@@ -447,9 +447,11 @@ export default async function ReportsPage({
       <section className="space-y-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            Store Comparison
+            Store Summary
           </p>
-          <h3 className="text-lg font-semibold">Performance by Store</h3>
+          <h3 className="text-lg font-semibold">
+            {storeLabels[currentStore]} Performance
+          </h3>
         </div>
         <Table>
           <TableHeader>

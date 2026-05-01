@@ -1,7 +1,6 @@
 "use client"
 
 import { useTransition } from "react"
-import { useRouter } from "next/navigation"
 import {
   Select,
   SelectContent,
@@ -26,7 +25,6 @@ export function StoreSwitcher({
   availableStores: StoreKey[]
   isAdmin: boolean
 }) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   if (!isAdmin) {
@@ -50,7 +48,7 @@ export function StoreSwitcher({
         return
       }
 
-      router.refresh()
+      window.location.reload()
     })
   }
 

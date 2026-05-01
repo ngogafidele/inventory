@@ -13,6 +13,7 @@ export default function Home() {
   const [setupName, setSetupName] = useState("")
   const [setupEmail, setSetupEmail] = useState("")
   const [setupPassword, setSetupPassword] = useState("")
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -41,6 +42,11 @@ export default function Home() {
 
   const handleSetup = () => {
     setMessage(null)
+    if (setupPassword !== setupConfirmPassword) {
+      setMessage("Admin setup passwords do not match")
+      return
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/auth/setup", {
         method: "POST",
@@ -135,6 +141,12 @@ export default function Home() {
                 placeholder="Admin password"
                 value={setupPassword}
                 onChange={(event) => setSetupPassword(event.target.value)}
+                type="password"
+              />
+              <Input
+                placeholder="Confirm admin password"
+                value={setupConfirmPassword}
+                onChange={(event) => setSetupConfirmPassword(event.target.value)}
                 type="password"
               />
               <Button variant="secondary" onClick={handleSetup} disabled={isPending}>

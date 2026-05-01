@@ -30,6 +30,19 @@ export const LoginSchema = z
   })
   .strict()
 
+export const ForgotPasswordSchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .strict()
+
+export const ResetPasswordSchema = z
+  .object({
+    token: z.string().min(20),
+    password: z.string().min(8),
+  })
+  .strict()
+
 export const SetupAdminSchema = z
   .object({
     name: z.string().min(2),

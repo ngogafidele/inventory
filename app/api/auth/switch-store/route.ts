@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath } from "next/cache"
 import { requireAuth } from "@/lib/auth/middleware"
 import {
   AUTH_COOKIE,
@@ -56,6 +57,8 @@ export async function POST(request: NextRequest) {
       maxAge: 7 * 24 * 60 * 60,
       path: "/",
     })
+
+    revalidatePath("/", "layout")
 
     return response
   } catch (error) {
