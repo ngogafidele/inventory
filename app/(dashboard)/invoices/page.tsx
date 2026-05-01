@@ -4,6 +4,22 @@ import { Sale } from "@/lib/db/models/Sale"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { InvoicesManager } from "@/components/invoices/invoices-manager"
 
+type InvoiceSaleItem = {
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  sellingPrice: number
+  lineTotal: number
+}
+
+type InvoiceSale = {
+  _id: { toString(): string }
+  createdAt?: Date
+  totalAmount: number
+  items: InvoiceSaleItem[]
+}
+
 export default async function InvoicesPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
@@ -14,7 +30,7 @@ export default async function InvoicesPage() {
     Sale.find({ store })
       .select("items totalAmount createdAt")
       .sort({ createdAt: -1 })
-      .lean(),
+      .lean<InvoiceSale[]>(),
   ])
 
   const serializedInvoices = invoices.map((invoice) => ({

@@ -5,6 +5,31 @@ import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
 
+type PopulatedSaleUser = {
+  _id: { toString(): string }
+  name?: string
+  email?: string
+}
+
+type SalesPageSaleItem = {
+  productId: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  basePrice: number
+  sellingPrice: number
+  lineTotal: number
+}
+
+type SalesPageSale = {
+  _id: { toString(): string }
+  createdAt?: Date
+  updatedAt?: Date
+  createdBy?: PopulatedSaleUser | { toString(): string }
+  items: SalesPageSaleItem[]
+}
+
 export default async function SalesPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
@@ -13,7 +38,7 @@ export default async function SalesPage() {
   const sales = await Sale.find({ store })
     .populate("createdBy", "name email")
     .sort({ createdAt: -1 })
-    .lean()
+    .lean<SalesPageSale[]>()
   const products = await Product.find({ store }).sort({ name: 1 }).lean()
 
   const serializedSales = sales.map((sale) => ({

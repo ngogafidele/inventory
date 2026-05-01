@@ -6,6 +6,18 @@ import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { Invoice } from "@/lib/db/models/Invoice"
 
+type DashboardSaleItem = {
+  quantity: number
+  unit?: string
+}
+
+type DashboardRecentSale = {
+  _id: { toString(): string }
+  createdAt?: Date
+  totalAmount: number
+  items: DashboardSaleItem[]
+}
+
 function getTodayRange() {
   const start = new Date()
   start.setHours(0, 0, 0, 0)
@@ -123,7 +135,7 @@ export async function GET(request: NextRequest) {
       .select("totalAmount items createdAt")
       .sort({ createdAt: -1 })
       .limit(6)
-      .lean()
+      .lean<DashboardRecentSale[]>()
 
     const topMoving = await Sale.aggregate([
       { $match: { store } },
