@@ -9,7 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-type StoreKey = "store1" | "store2"
+const STORE_KEYS = ["store1", "store2"] as const
+type StoreKey = (typeof STORE_KEYS)[number]
 
 const storeLabels: Record<StoreKey, string> = {
   store1: "Store 1",
@@ -32,7 +33,7 @@ export function StoreSwitcher({
   }
 
   const handleChange = (value: string) => {
-    if (!Object.keys(storeLabels).includes(value)) return
+    if (!STORE_KEYS.includes(value as StoreKey)) return
     const store = value as StoreKey
     if (store === currentStore) return
 

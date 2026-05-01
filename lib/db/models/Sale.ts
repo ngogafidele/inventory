@@ -33,4 +33,6 @@ SaleSchema.index({ store: 1 })
 
 export type SaleDocument = mongoose.InferSchemaType<typeof SaleSchema>
 
-export const Sale = mongoose.models.Sale || mongoose.model("Sale", SaleSchema)
+export const Sale =
+  (mongoose.models.Sale as mongoose.Model<SaleDocument>) ||
+  mongoose.model<SaleDocument>("Sale", SaleSchema)

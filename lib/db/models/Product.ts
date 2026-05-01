@@ -29,4 +29,5 @@ ProductSchema.index({ store: 1, sku: 1 }, { unique: true })
 export type ProductDocument = mongoose.InferSchemaType<typeof ProductSchema>
 
 export const Product =
-  mongoose.models.Product || mongoose.model("Product", ProductSchema)
+  (mongoose.models.Product as mongoose.Model<ProductDocument>) ||
+  mongoose.model<ProductDocument>("Product", ProductSchema)

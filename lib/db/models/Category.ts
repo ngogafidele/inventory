@@ -19,4 +19,5 @@ CategorySchema.index({ store: 1, name: 1 }, { unique: true })
 export type CategoryDocument = mongoose.InferSchemaType<typeof CategorySchema>
 
 export const Category =
-  mongoose.models.Category || mongoose.model("Category", CategorySchema)
+  (mongoose.models.Category as mongoose.Model<CategoryDocument>) ||
+  mongoose.model<CategoryDocument>("Category", CategorySchema)

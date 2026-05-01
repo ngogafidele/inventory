@@ -30,4 +30,6 @@ AlertSchema.index({ store: 1, productId: 1 })
 
 export type AlertDocument = mongoose.InferSchemaType<typeof AlertSchema>
 
-export const Alert = mongoose.models.Alert || mongoose.model("Alert", AlertSchema)
+export const Alert =
+  (mongoose.models.Alert as mongoose.Model<AlertDocument>) ||
+  mongoose.model<AlertDocument>("Alert", AlertSchema)

@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const allowedStores = session.isAdmin
-      ? (["store1", "store2"] as const)
+    const allowedStores: StoreKey[] = session.isAdmin
+      ? ["store1", "store2"]
       : session.stores
 
     if (!allowedStores.includes(store)) {

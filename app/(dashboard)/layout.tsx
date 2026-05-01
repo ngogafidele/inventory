@@ -4,6 +4,10 @@ import { requireServerSession } from "@/lib/auth/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
 
+type DashboardLayoutUser = {
+  name?: string
+}
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -14,7 +18,9 @@ export default async function DashboardLayout({
 
   if (!userName) {
     await connectToDatabase()
-    const user = await User.findById(session.userId).select("name").lean()
+    const user = await User.findById(session.userId)
+      .select("name")
+      .lean<DashboardLayoutUser | null>()
     userName = user?.name
   }
 

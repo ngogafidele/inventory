@@ -22,5 +22,8 @@ export type StockAdjustmentDocument =
   mongoose.InferSchemaType<typeof StockAdjustmentSchema>
 
 export const StockAdjustment =
-  mongoose.models.StockAdjustment ||
-  mongoose.model("StockAdjustment", StockAdjustmentSchema)
+  (mongoose.models.StockAdjustment as mongoose.Model<StockAdjustmentDocument>) ||
+  mongoose.model<StockAdjustmentDocument>(
+    "StockAdjustment",
+    StockAdjustmentSchema
+  )

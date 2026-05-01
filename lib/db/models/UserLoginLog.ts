@@ -30,8 +30,8 @@ type LoginLogIdOnly = {
 }
 
 export const UserLoginLog =
-  mongoose.models.UserLoginLog ||
-  mongoose.model("UserLoginLog", UserLoginLogSchema)
+  (mongoose.models.UserLoginLog as mongoose.Model<UserLoginLogDocument>) ||
+  mongoose.model<UserLoginLogDocument>("UserLoginLog", UserLoginLogSchema)
 
 export async function pruneOldLoginLogs(limit = MAX_LOGIN_LOGS) {
   const logsToRemove = await UserLoginLog.find()

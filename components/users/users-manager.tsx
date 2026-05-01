@@ -164,6 +164,7 @@ export function UsersManager({
         role: "manager" | "staff"
         stores: StoreKey[]
         isActive: boolean
+        isAdmin?: boolean
       }
 
       setUsers((current) => [
@@ -174,6 +175,7 @@ export function UsersManager({
           role: created.role,
           stores: created.stores,
           isActive: created.isActive,
+          isAdmin: created.isAdmin ?? false,
         },
         ...current,
       ])

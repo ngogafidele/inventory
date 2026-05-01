@@ -30,4 +30,5 @@ InvoiceSchema.index({ store: 1, invoiceNumber: 1 }, { unique: true })
 export type InvoiceDocument = mongoose.InferSchemaType<typeof InvoiceSchema>
 
 export const Invoice =
-  mongoose.models.Invoice || mongoose.model("Invoice", InvoiceSchema)
+  (mongoose.models.Invoice as mongoose.Model<InvoiceDocument>) ||
+  mongoose.model<InvoiceDocument>("Invoice", InvoiceSchema)

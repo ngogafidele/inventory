@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
           role: user.role,
           stores: user.stores,
           isActive: user.isActive,
+          isAdmin: user.isAdmin,
         },
       },
       { status: 201 }

@@ -18,5 +18,8 @@ export type PasswordResetTokenDocument = mongoose.InferSchemaType<
 >
 
 export const PasswordResetToken =
-  mongoose.models.PasswordResetToken ||
-  mongoose.model("PasswordResetToken", PasswordResetTokenSchema)
+  (mongoose.models.PasswordResetToken as mongoose.Model<PasswordResetTokenDocument>) ||
+  mongoose.model<PasswordResetTokenDocument>(
+    "PasswordResetToken",
+    PasswordResetTokenSchema
+  )
