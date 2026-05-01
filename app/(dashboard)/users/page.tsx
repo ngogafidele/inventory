@@ -5,6 +5,28 @@ import { redirect } from "next/navigation"
 import { requireServerSession } from "@/lib/auth/server"
 import { UsersManager } from "@/components/users/users-manager"
 
+type UsersPageUser = {
+  _id: { toString(): string }
+  name: string
+  email: string
+  role: "admin" | "manager" | "staff"
+  stores: Array<"store1" | "store2">
+  isActive: boolean
+  isAdmin: boolean
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+type UsersPageLoginLog = {
+  _id: { toString(): string }
+  userId: { toString(): string }
+  name: string
+  email: string
+  role: "admin" | "manager" | "staff"
+  loginAt?: Date
+  logoutAt?: Date
+}
+
 export default async function UsersPage() {
   const session = await requireServerSession()
   if (!session.isAdmin) {
@@ -13,8 +35,11 @@ export default async function UsersPage() {
   await connectToDatabase()
 
   const [users, loginLogs] = await Promise.all([
-    User.find().select("-password").lean(),
-    UserLoginLog.find().sort({ loginAt: -1 }).limit(20).lean(),
+    User.find().select("-password").lean<UsersPageUser[]>(),
+    UserLoginLog.find()
+      .sort({ loginAt: -1 })
+      .limit(20)
+      .lean<UsersPageLoginLog[]>(),
   ])
   const serializedUsers = users.map((user) => ({
     _id: user._id.toString(),

@@ -20,13 +20,26 @@ type InvoiceSale = {
   items: InvoiceSaleItem[]
 }
 
+type InvoicePageInvoice = {
+  _id: { toString(): string }
+  saleId: { toString(): string }
+  invoiceNumber: string
+  customerName: string
+  customerEmail?: string
+  customerPhone?: string
+  totalAmount: number
+  status: "unpaid" | "paid"
+  issuedAt?: Date
+  dueDate?: Date
+}
+
 export default async function InvoicesPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
 
   await connectToDatabase()
   const [invoices, sales] = await Promise.all([
-    Invoice.find({ store }).sort({ issuedAt: -1 }).lean(),
+    Invoice.find({ store }).sort({ issuedAt: -1 }).lean<InvoicePageInvoice[]>(),
     Sale.find({ store })
       .select("items totalAmount createdAt")
       .sort({ createdAt: -1 })

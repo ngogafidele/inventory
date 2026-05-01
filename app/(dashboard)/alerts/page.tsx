@@ -10,6 +10,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+type AlertsPageProduct = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  lowStockThreshold?: number
+}
+
 export default async function AlertsPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
@@ -20,7 +29,7 @@ export default async function AlertsPage() {
     $expr: { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
   })
     .sort({ quantity: 1, name: 1 })
-    .lean()
+    .lean<AlertsPageProduct[]>()
 
   return (
     <div className="space-y-5">

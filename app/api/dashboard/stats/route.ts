@@ -18,6 +18,15 @@ type DashboardRecentSale = {
   items: DashboardSaleItem[]
 }
 
+type DashboardLowStockProduct = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  lowStockThreshold?: number
+}
+
 function getTodayRange() {
   const start = new Date()
   start.setHours(0, 0, 0, 0)
@@ -129,7 +138,7 @@ export async function GET(request: NextRequest) {
       .select("name sku quantity unit lowStockThreshold")
       .sort({ quantity: 1, name: 1 })
       .limit(8)
-      .lean()
+      .lean<DashboardLowStockProduct[]>()
 
     const recentSales = await Sale.find({ store })
       .select("totalAmount items createdAt")

@@ -27,7 +27,18 @@ type SalesPageSale = {
   createdAt?: Date
   updatedAt?: Date
   createdBy?: PopulatedSaleUser | { toString(): string }
+  totalAmount: number
+  notes: string
   items: SalesPageSaleItem[]
+}
+
+type SalesPageProduct = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  price: number
 }
 
 function isPopulatedSaleUser(
@@ -49,7 +60,9 @@ export default async function SalesPage() {
     .populate("createdBy", "name email")
     .sort({ createdAt: -1 })
     .lean<SalesPageSale[]>()
-  const products = await Product.find({ store }).sort({ name: 1 }).lean()
+  const products = await Product.find({ store })
+    .sort({ name: 1 })
+    .lean<SalesPageProduct[]>()
 
   const serializedSales = sales.map((sale) => ({
     ...sale,
