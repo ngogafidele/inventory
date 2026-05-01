@@ -25,6 +25,10 @@ export type UserLoginLogDocument = mongoose.InferSchemaType<
   typeof UserLoginLogSchema
 >
 
+type LoginLogIdOnly = {
+  _id: mongoose.Types.ObjectId
+}
+
 export const UserLoginLog =
   mongoose.models.UserLoginLog ||
   mongoose.model("UserLoginLog", UserLoginLogSchema)
@@ -34,7 +38,7 @@ export async function pruneOldLoginLogs(limit = MAX_LOGIN_LOGS) {
     .sort({ loginAt: -1, _id: -1 })
     .skip(limit)
     .select("_id")
-    .lean()
+    .lean<LoginLogIdOnly[]>()
 
   if (logsToRemove.length === 0) return
 

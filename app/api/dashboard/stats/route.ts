@@ -27,6 +27,24 @@ type DashboardLowStockProduct = {
   lowStockThreshold?: number
 }
 
+type DashboardMoneyTotal = {
+  total: number
+}
+
+type DashboardRevenueTotal = {
+  revenue: number
+}
+
+type DashboardTopMovingProduct = {
+  _id: {
+    sku: string
+    name: string
+    unit?: string
+  }
+  soldQuantity: number
+  salesValue: number
+}
+
 function getTodayRange() {
   const start = new Date()
   start.setHours(0, 0, 0, 0)
@@ -76,12 +94,12 @@ export async function GET(request: NextRequest) {
       Invoice.countDocuments({ store, status: "unpaid" }),
     ])
 
-    const sales = await Sale.aggregate([
+    const sales = await Sale.aggregate<DashboardMoneyTotal>([
       { $match: { store } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ])
 
-    const stockValue = await Product.aggregate([
+    const stockValue = await Product.aggregate<DashboardMoneyTotal>([
       { $match: { store } },
       {
         $group: {
@@ -98,12 +116,12 @@ export async function GET(request: NextRequest) {
       },
     ])
 
-    const unpaidTotals = await Invoice.aggregate([
+    const unpaidTotals = await Invoice.aggregate<DashboardMoneyTotal>([
       { $match: { store, status: "unpaid" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ])
 
-    const todaySalesTotals = await Sale.aggregate([
+    const todaySalesTotals = await Sale.aggregate<DashboardRevenueTotal>([
       { $match: todayFilter },
       {
         $group: {
@@ -113,7 +131,7 @@ export async function GET(request: NextRequest) {
       },
     ])
 
-    const todayGrossProfit = await Sale.aggregate([
+    const todayGrossProfit = await Sale.aggregate<DashboardMoneyTotal>([
       { $match: todayFilter },
       { $unwind: "$items" },
       {
@@ -146,7 +164,7 @@ export async function GET(request: NextRequest) {
       .limit(6)
       .lean<DashboardRecentSale[]>()
 
-    const topMoving = await Sale.aggregate([
+    const topMoving = await Sale.aggregate<DashboardTopMovingProduct>([
       { $match: { store } },
       { $unwind: "$items" },
       {

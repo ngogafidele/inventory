@@ -6,6 +6,11 @@ import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 
+type SaleItemForRestock = {
+  productId: { toString(): string }
+  quantity: number
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -81,14 +86,15 @@ export async function DELETE(
       )
     }
 
-    const productIds = sale.items.map((item) => item.productId)
+    const saleItems = sale.items as SaleItemForRestock[]
+    const productIds = saleItems.map((item) => item.productId)
     const products = await Product.find({ _id: { $in: productIds }, store })
     const productMap = new Map(
       products.map((product) => [product._id.toString(), product])
     )
 
     await Product.bulkWrite(
-      sale.items.map((item) => ({
+      saleItems.map((item) => ({
         updateOne: {
           filter: { _id: item.productId, store },
           update: { $inc: { quantity: item.quantity } },
@@ -97,7 +103,7 @@ export async function DELETE(
     )
 
     await Promise.all(
-      sale.items.map(async (item) => {
+      saleItems.map(async (item) => {
         const product = productMap.get(item.productId.toString())
         if (!product) return
         const newQuantity = product.quantity + item.quantity
