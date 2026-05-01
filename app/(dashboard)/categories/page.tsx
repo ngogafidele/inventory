@@ -6,7 +6,7 @@ import { CategoriesManager } from "@/components/categories/categories-manager"
 type CategoriesPageCategory = {
   _id: { toString(): string }
   name: string
-  description?: string
+  description: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -21,6 +21,7 @@ export default async function CategoriesPage() {
   const serializedCategories = categories.map((category) => ({
     ...category,
     _id: category._id.toString(),
+    description: category.description ?? "",
     createdAt: category.createdAt?.toISOString(),
     updatedAt: category.updatedAt?.toISOString(),
   }))

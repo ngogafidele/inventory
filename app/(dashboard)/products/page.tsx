@@ -7,7 +7,7 @@ import { ProductsManager } from "@/components/products/products-manager"
 type ProductsPageCategory = {
   _id: { toString(): string }
   name: string
-  description?: string
+  description: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -53,6 +53,7 @@ export default async function ProductsPage() {
         ? {
             ...product.categoryId,
             _id: product.categoryId._id.toString(),
+            description: product.categoryId.description ?? "",
             createdAt: product.categoryId.createdAt?.toISOString(),
             updatedAt: product.categoryId.updatedAt?.toISOString(),
           }
@@ -62,6 +63,8 @@ export default async function ProductsPage() {
       ...product,
       _id: product._id.toString(),
       categoryId: category,
+      unit: product.unit ?? "pcs",
+      lowStockThreshold: product.lowStockThreshold ?? 0,
       createdAt: product.createdAt?.toISOString(),
       updatedAt: product.updatedAt?.toISOString(),
     }
@@ -70,6 +73,7 @@ export default async function ProductsPage() {
   const serializedCategories = categories.map((category) => ({
     ...category,
     _id: category._id.toString(),
+    description: category.description ?? "",
     createdAt: category.createdAt?.toISOString(),
     updatedAt: category.updatedAt?.toISOString(),
   }))
