@@ -8,7 +8,7 @@ import { UpdateCategorySchema } from "@/lib/db/validators/category"
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAuth(request)
@@ -50,7 +50,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
@@ -97,7 +97,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { authorized, session } = await requireAdmin(request)
