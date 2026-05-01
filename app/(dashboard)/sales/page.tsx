@@ -30,6 +30,16 @@ type SalesPageSale = {
   items: SalesPageSaleItem[]
 }
 
+function isPopulatedSaleUser(
+  value: SalesPageSale["createdBy"]
+): value is PopulatedSaleUser {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "_id" in value
+  )
+}
+
 export default async function SalesPage() {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
@@ -58,11 +68,11 @@ export default async function SalesPage() {
       : "-",
     updatedAt: sale.updatedAt?.toISOString(),
     createdBy:
-      typeof sale.createdBy === "object" && sale.createdBy
+      isPopulatedSaleUser(sale.createdBy)
         ? sale.createdBy._id.toString()
         : sale.createdBy?.toString(),
     createdByName:
-      typeof sale.createdBy === "object" && sale.createdBy
+      isPopulatedSaleUser(sale.createdBy)
         ? sale.createdBy.name ?? sale.createdBy.email ?? "Unknown User"
         : "Unknown User",
     items: sale.items.map((item) => ({
