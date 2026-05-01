@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import type { CategoryDocument } from "@/lib/db/models/Category"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -21,8 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type CategoryClient = Pick<CategoryDocument, "name" | "description"> & {
+type CategoryClient = {
   _id: string
+  name: string
+  description: string
   createdAt?: string
   updatedAt?: string
 }

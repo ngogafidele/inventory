@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import type { CategoryDocument } from "@/lib/db/models/Category"
-import type { ProductDocument } from "@/lib/db/models/Product"
 import { formatCurrency } from "@/lib/utils/format"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -31,20 +29,26 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type CategoryClient = Pick<CategoryDocument, "name" | "description"> & {
+type CategoryClient = {
   _id: string
+  name: string
+  description: string
   createdAt?: string
   updatedAt?: string
 }
 
-type ProductClient = Pick<
-  ProductDocument,
-  "name" | "sku" | "unit" | "quantity" | "lowStockThreshold" | "costPrice" | "price" | "categoryId"
-> & {
+type ProductClient = {
   _id: string
+  name: string
+  sku: string
+  unit: string
+  quantity: number
+  lowStockThreshold: number
+  costPrice: number
+  price: number
   createdAt?: string
   updatedAt?: string
-  categoryId: string | CategoryClient
+  categoryId?: string | CategoryClient
 }
 
 export type ProductsManagerProps = {
@@ -193,7 +197,7 @@ export function ProductsManager({
         return
       }
 
-      const updated = body.data as ProductDocument & { _id: string }
+      const updated = body.data as ProductClient
 
       setProducts((current) => {
         if (activeProductId) {

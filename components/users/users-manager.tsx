@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import type { UserDocument } from "@/lib/db/models/User"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -28,16 +27,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-type UserClient = Pick<
-  UserDocument,
-  | "name"
-  | "email"
-  | "role"
-  | "stores"
-  | "isActive"
-  | "isAdmin"
-> & {
+type StoreKey = "store1" | "store2"
+type UserRole = "admin" | "manager" | "staff"
+
+type UserClient = {
   _id: string
+  name: string
+  email: string
+  role: UserRole
+  stores: StoreKey[]
+  isActive: boolean
+  isAdmin: boolean
   createdAt?: string
   updatedAt?: string
 }
@@ -47,7 +47,7 @@ type LoginLogClient = {
   userId: string
   name: string
   email: string
-  role: "admin" | "manager" | "staff"
+  role: UserRole
   loginAt?: string
   logoutAt?: string
 }
@@ -63,7 +63,7 @@ type FormState = {
   email: string
   password: string
   role: "manager" | "staff"
-  stores: Array<"store1" | "store2">
+  stores: StoreKey[]
   isActive: boolean
 }
 
@@ -162,7 +162,7 @@ export function UsersManager({
         name: string
         email: string
         role: "manager" | "staff"
-        stores: Array<"store1" | "store2">
+        stores: StoreKey[]
         isActive: boolean
       }
 
