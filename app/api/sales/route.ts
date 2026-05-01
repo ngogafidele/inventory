@@ -145,31 +145,50 @@ export async function POST(request: NextRequest) {
       decrementedProducts.push({ productId, quantity })
     }
 
-    const sale = await Sale.create({
-      store,
-      items: saleItems,
-      totalAmount,
-      createdBy: session.userId,
-      notes: payload.notes ?? "",
-    })
+    let sale
+    try {
+      sale = await Sale.create({
+        store,
+        items: saleItems,
+        totalAmount,
+        createdBy: session.userId,
+        notes: payload.notes ?? "",
+      })
+    } catch (error) {
+      if (decrementedProducts.length > 0) {
+        await Product.bulkWrite(
+          decrementedProducts.map((entry) => ({
+            updateOne: {
+              filter: { _id: entry.productId, store },
+              update: { $inc: { quantity: entry.quantity } },
+            },
+          }))
+        )
+      }
+      throw error
+    }
 
-    await Promise.all(
-      Array.from(requestedQuantities.entries()).map(
-        async ([productId, quantity]) => {
-          const product = productMap.get(productId)
-          if (!product) return
-          const newQuantity = product.quantity - quantity
-          await syncLowStockAlert({
-            store,
-            productId: product._id.toString(),
-            name: product.name,
-            sku: product.sku,
-            quantity: newQuantity,
-            threshold: product.lowStockThreshold ?? 0,
-          })
-        }
+    try {
+      await Promise.all(
+        Array.from(requestedQuantities.entries()).map(
+          async ([productId, quantity]) => {
+            const product = productMap.get(productId)
+            if (!product) return
+            const newQuantity = product.quantity - quantity
+            await syncLowStockAlert({
+              store,
+              productId: product._id.toString(),
+              name: product.name,
+              sku: product.sku,
+              quantity: newQuantity,
+              threshold: product.lowStockThreshold ?? 0,
+            })
+          }
+        )
       )
-    )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
+    }
 
     return NextResponse.json({ success: true, data: sale }, { status: 201 })
   } catch (error) {

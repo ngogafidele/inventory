@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
+import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
@@ -86,6 +87,18 @@ export async function DELETE(
       )
     }
 
+    const invoice = await Invoice.findOne({ saleId: sale._id, store })
+    if (invoice) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Cannot delete a sale that already has an invoice. Delete the invoice first.",
+        },
+        { status: 409 }
+      )
+    }
+
     const saleItems = sale.items as SaleItemForRestock[]
     const productIds = saleItems.map((item) => item.productId)
     const products = await Product.find({ _id: { $in: productIds }, store })
@@ -93,32 +106,52 @@ export async function DELETE(
       products.map((product) => [product._id.toString(), product])
     )
 
-    await Product.bulkWrite(
-      saleItems.map((item) => ({
-        updateOne: {
-          filter: { _id: item.productId, store },
-          update: { $inc: { quantity: item.quantity } },
-        },
-      }))
-    )
+    if (saleItems.length > 0) {
+      await Product.bulkWrite(
+        saleItems.map((item) => ({
+          updateOne: {
+            filter: { _id: item.productId, store },
+            update: { $inc: { quantity: item.quantity } },
+          },
+        }))
+      )
+    }
 
-    await Promise.all(
-      saleItems.map(async (item) => {
-        const product = productMap.get(item.productId.toString())
-        if (!product) return
-        const newQuantity = product.quantity + item.quantity
-        await syncLowStockAlert({
-          store,
-          productId: product._id.toString(),
-          name: product.name,
-          sku: product.sku,
-          quantity: newQuantity,
-          threshold: product.lowStockThreshold ?? 0,
+    try {
+      await sale.deleteOne()
+    } catch (error) {
+      if (saleItems.length > 0) {
+        await Product.bulkWrite(
+          saleItems.map((item) => ({
+            updateOne: {
+              filter: { _id: item.productId, store },
+              update: { $inc: { quantity: -item.quantity } },
+            },
+          }))
+        )
+      }
+      throw error
+    }
+
+    try {
+      await Promise.all(
+        saleItems.map(async (item) => {
+          const product = productMap.get(item.productId.toString())
+          if (!product) return
+          const newQuantity = product.quantity + item.quantity
+          await syncLowStockAlert({
+            store,
+            productId: product._id.toString(),
+            name: product.name,
+            sku: product.sku,
+            quantity: newQuantity,
+            threshold: product.lowStockThreshold ?? 0,
+          })
         })
-      })
-    )
-
-    await sale.deleteOne()
+      )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
