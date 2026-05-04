@@ -3,6 +3,7 @@ import { Invoice } from "@/lib/db/models/Invoice"
 import { Sale } from "@/lib/db/models/Sale"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { InvoicesManager } from "@/components/invoices/invoices-manager"
+import { formatInKigali } from "@/lib/utils/time"
 
 type InvoiceSaleItem = {
   name: string
@@ -62,13 +63,13 @@ export default async function InvoicesPage() {
   const serializedSales = sales.map((sale) => ({
     _id: sale._id.toString(),
     label: sale.createdAt
-      ? new Intl.DateTimeFormat("en-US", {
+      ? formatInKigali(sale.createdAt, {
           month: "short",
           day: "2-digit",
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-        }).format(sale.createdAt)
+        })
       : sale._id.toString(),
     totalAmount: sale.totalAmount,
     items: sale.items.map((item) => ({

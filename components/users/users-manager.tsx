@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatInKigali } from "@/lib/utils/time"
 
 type StoreKey = "store1" | "store2"
 type UserRole = "admin" | "manager" | "staff"
@@ -79,7 +80,7 @@ const emptyForm: FormState = {
 function formatActivityDate(date: string | Date | undefined) {
   if (!date) return "Never"
 
-  return new Intl.DateTimeFormat("en-US", {
+  return formatInKigali(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -87,8 +88,7 @@ function formatActivityDate(date: string | Date | undefined) {
     minute: "2-digit",
     second: "2-digit",
     hour12: true,
-    timeZone: "UTC",
-  }).format(new Date(date))
+  })
 }
 
 export function UsersManager({

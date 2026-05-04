@@ -4,6 +4,7 @@ import { Product } from "@/lib/db/models/Product"
 import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
+import { formatInKigali } from "@/lib/utils/time"
 
 type PopulatedSaleUser = {
   _id: { toString(): string }
@@ -69,7 +70,7 @@ export default async function SalesPage() {
     _id: sale._id.toString(),
     createdAt: sale.createdAt?.toISOString(),
     createdAtLabel: sale.createdAt
-      ? new Date(sale.createdAt).toLocaleString("en-US", {
+      ? formatInKigali(sale.createdAt, {
           year: "numeric",
           month: "short",
           day: "2-digit",

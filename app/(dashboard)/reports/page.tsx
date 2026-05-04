@@ -7,6 +7,12 @@ import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { formatCurrency } from "@/lib/utils/format"
+import {
+  formatInKigali,
+  formatKigaliDateInput,
+  getKigaliDateParts,
+  parseKigaliDateInput,
+} from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -102,13 +108,13 @@ function formatNumber(value: number) {
 function formatDateTime(date: Date | undefined) {
   if (!date) return "-"
 
-  return new Intl.DateTimeFormat("en-US", {
+  return formatInKigali(date, {
     month: "short",
     day: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date)
+  })
 }
 
 function getSingleParam(value: string | string[] | undefined) {
@@ -116,16 +122,11 @@ function getSingleParam(value: string | string[] | undefined) {
 }
 
 function formatDateInput(date: Date) {
-  return date.toISOString().slice(0, 10)
+  return formatKigaliDateInput(date)
 }
 
 function parseDateInput(value: string | undefined) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return null
-  }
-
-  const date = new Date(`${value}T00:00:00.000Z`)
-  return Number.isNaN(date.getTime()) ? null : date
+  return parseKigaliDateInput(value)
 }
 
 function addDays(date: Date, days: number) {
@@ -136,12 +137,13 @@ function addDays(date: Date, days: number) {
 
 function getReportRange(params: Awaited<SearchParams>) {
   const now = new Date()
-  const today = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  )
-  const monthStart = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)
-  )
+  const nowParts = getKigaliDateParts(now)
+  const todayInput = `${nowParts.year}-${String(nowParts.month).padStart(2, "0")}-${String(
+    nowParts.day
+  ).padStart(2, "0")}`
+  const monthStartInput = `${nowParts.year}-${String(nowParts.month).padStart(2, "0")}-01`
+  const today = parseKigaliDateInput(todayInput) ?? now
+  const monthStart = parseKigaliDateInput(monthStartInput) ?? today
 
   const rawFrom = getSingleParam(params.from)
   const rawTo = getSingleParam(params.to)
@@ -167,11 +169,11 @@ function getReportRange(params: Awaited<SearchParams>) {
 }
 
 function formatDateOnly(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
+  return formatInKigali(date, {
     month: "short",
     day: "2-digit",
     year: "numeric",
-  }).format(date)
+  })
 }
 
 function sumReports(reports: StoreReport[]) {

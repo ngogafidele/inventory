@@ -27,6 +27,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  formatInKigali,
+  formatKigaliDateInput,
+  parseKigaliDateInput,
+} from "@/lib/utils/time"
 
 type InvoiceStatus = "unpaid" | "paid"
 
@@ -78,22 +83,21 @@ const emptyForm: FormState = {
 function formatInvoiceDate(date: string | undefined) {
   if (!date) return "-"
 
-  return new Intl.DateTimeFormat("en-US", {
+  return formatInKigali(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(date))
+  })
 }
 
 function toDateInputValue(date: string | undefined) {
-  if (!date) return ""
-  return new Date(date).toISOString().slice(0, 10)
+  return formatKigaliDateInput(date)
 }
 
 function toDateTimePayload(date: string) {
   if (!date) return undefined
-  return new Date(`${date}T00:00:00`).toISOString()
+  const parsed = parseKigaliDateInput(date)
+  return parsed ? parsed.toISOString() : undefined
 }
 
 function escapeHtml(value: string) {
@@ -264,13 +268,13 @@ export function InvoicesManager({
     }
 
     const sale = salesById.get(invoice.saleId)
-    const generatedAt = new Intl.DateTimeFormat("en-US", {
+    const generatedAt = formatInKigali(new Date(), {
       month: "short",
       day: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(new Date())
+    })
 
     const rows = sale?.items
       .map(

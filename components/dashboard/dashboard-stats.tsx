@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 import { formatCurrency } from "@/lib/utils/format"
+import { formatInKigali } from "@/lib/utils/time"
 import {
   Table,
   TableBody,
@@ -156,7 +157,11 @@ export function DashboardStats({ store }: DashboardStatsProps) {
                 stats.recentSales.map((sale) => (
                   <TableRow key={sale._id}>
                     <TableCell>
-                      {new Date(sale.createdAt).toLocaleDateString()}
+                      {formatInKigali(sale.createdAt, {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                      })}
                     </TableCell>
                     <TableCell>
                       {sale.quantitySold} {sale.units.join("/")}

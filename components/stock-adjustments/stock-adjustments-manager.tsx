@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatInKigali } from "@/lib/utils/time"
 
 type ProductOption = {
   _id: string
@@ -181,12 +182,11 @@ export function StockAdjustmentsManager({
               <TableRow key={adjustment._id}>
                 <TableCell>
                   {adjustment.createdAt
-                    ? new Intl.DateTimeFormat("en-US", {
+                    ? formatInKigali(adjustment.createdAt, {
                         year: "numeric",
                         month: "short",
                         day: "2-digit",
-                        timeZone: "UTC",
-                      }).format(new Date(adjustment.createdAt))
+                      })
                     : "-"}
                 </TableCell>
                 <TableCell>{adjustment.sku}</TableCell>

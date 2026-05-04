@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatInKigali } from "@/lib/utils/time"
 
 type CategoryClient = {
   _id: string
@@ -265,13 +266,13 @@ export function ProductsManager({
       return
     }
 
-    const generatedAt = new Intl.DateTimeFormat("en-US", {
+    const generatedAt = formatInKigali(new Date(), {
       month: "short",
       day: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(new Date())
+    })
 
     const rows = products
       .map((product, index) => {
