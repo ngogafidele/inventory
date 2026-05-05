@@ -100,10 +100,10 @@ export default function Home() {
             </p>
             <div className="mt-4 space-y-3">
               <Input
-                placeholder="Email"
+                placeholder="Email or username"
                 value={loginEmail}
                 onChange={(event) => setLoginEmail(event.target.value)}
-                type="email"
+                type="text"
               />
               <Input
                 placeholder="Password"

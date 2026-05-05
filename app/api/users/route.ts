@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       email: body.email.toLowerCase(),
       password: hashedPassword,
       role: body.role,
-      stores: body.stores,
+      stores: [body.stores],
       isActive: body.isActive ?? true,
       isAdmin: false,
     })

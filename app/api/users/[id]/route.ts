@@ -72,6 +72,10 @@ export async function PUT(
       body.email = body.email.toLowerCase()
     }
 
+    if (body.stores) {
+      body.stores = [body.stores]
+    }
+
     const user = await User.findByIdAndUpdate(id, body, {
       returnDocument: "after",
       runValidators: true,

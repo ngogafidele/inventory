@@ -64,7 +64,7 @@ type FormState = {
   email: string
   password: string
   role: "manager" | "staff"
-  stores: StoreKey[]
+  store: StoreKey
   isActive: boolean
 }
 
@@ -73,7 +73,7 @@ const emptyForm: FormState = {
   email: "",
   password: "",
   role: "staff",
-  stores: ["store1"],
+  store: "store1",
   isActive: true,
 }
 
@@ -107,28 +107,14 @@ export function UsersManager({
     setError(null)
   }
 
-  const toggleStore = (store: "store1" | "store2") => {
-    setFormState((prev) => {
-      if (prev.stores.includes(store)) {
-        return { ...prev, stores: prev.stores.filter((s) => s !== store) }
-      }
-      return { ...prev, stores: [...prev.stores, store] }
-    })
-  }
-
   const submitForm = async () => {
     if (!formState.name.trim() || !formState.email.trim()) {
-      setError("Please provide name and email.")
+      setError("Please provide name and email or username.")
       return
     }
 
     if (formState.password.length < 8) {
       setError("Password must be at least 8 characters.")
-      return
-    }
-
-    if (formState.stores.length === 0) {
-      setError("Select at least one store.")
       return
     }
 
@@ -140,7 +126,7 @@ export function UsersManager({
       email: formState.email.trim(),
       password: formState.password,
       role: formState.role,
-      stores: formState.stores,
+      stores: formState.store,
       isActive: formState.isActive,
     }
 
@@ -246,9 +232,9 @@ export function UsersManager({
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                Email
+                Email or username
                 <Input
-                  type="email"
+                  type="text"
                   value={formState.email}
                   onChange={(event) =>
                     setFormState((prev) => ({
@@ -291,25 +277,26 @@ export function UsersManager({
                   </SelectContent>
                 </Select>
               </label>
-              <div className="grid gap-2 text-sm">
-                Stores
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formState.stores.includes("store1")}
-                    onChange={() => toggleStore("store1")}
-                  />
-                  Store 1
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formState.stores.includes("store2")}
-                    onChange={() => toggleStore("store2")}
-                  />
-                  Store 2
-                </label>
-              </div>
+              <label className="grid gap-1 text-sm">
+                Store
+                <Select
+                  value={formState.store}
+                  onValueChange={(value) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      store: value as StoreKey,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="store1">Store 1</SelectItem>
+                    <SelectItem value="store2">Store 2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -341,7 +328,7 @@ export function UsersManager({
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
+            <TableHead>Email or username</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Stores</TableHead>
             <TableHead>Status</TableHead>
@@ -387,7 +374,7 @@ export function UsersManager({
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead>Email or username</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Logged In</TableHead>
               <TableHead>Logged Out</TableHead>
