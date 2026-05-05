@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,13 +14,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Table,
   TableBody,
   TableCell,
@@ -29,14 +22,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { formatInKigali } from "@/lib/utils/time"
-
-type CategoryClient = {
-  _id: string
-  name: string
-  description: string
-  createdAt?: string
-  updatedAt?: string
-}
 
 type ProductClient = {
   _id: string
@@ -49,12 +34,10 @@ type ProductClient = {
   price: number
   createdAt?: string
   updatedAt?: string
-  categoryId?: string | CategoryClient
 }
 
 export type ProductsManagerProps = {
   initialProducts: ProductClient[]
-  categories: CategoryClient[]
   isAdmin: boolean
 }
 
@@ -66,7 +49,6 @@ type FormState = {
   lowStockThreshold: string
   costPrice: string
   price: string
-  categoryId: string
 }
 
 const emptyForm: FormState = {
@@ -77,7 +59,6 @@ const emptyForm: FormState = {
   lowStockThreshold: "",
   costPrice: "",
   price: "",
-  categoryId: "",
 }
 
 const PRODUCTS_PER_PAGE = 20
@@ -93,7 +74,6 @@ function escapeHtml(value: string) {
 
 export function ProductsManager({
   initialProducts,
-  categories,
   isAdmin,
 }: ProductsManagerProps) {
   const [products, setProducts] = useState(initialProducts)
@@ -103,10 +83,6 @@ export function ProductsManager({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-
-  const categoryMap = useMemo(() => {
-    return new Map(categories.map((category) => [category._id, category]))
-  }, [categories])
 
   const pageCount = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE))
   const safeCurrentPage = Math.min(currentPage, pageCount)
@@ -127,7 +103,6 @@ export function ProductsManager({
   const resetForm = () => {
     setFormState({
       ...emptyForm,
-      categoryId: categories[0]?._id ?? "",
     })
     setActiveProductId(null)
     setError(null)
@@ -139,11 +114,6 @@ export function ProductsManager({
   }
 
   const openEdit = (product: ProductClient) => {
-    const categoryId =
-      typeof product.categoryId === "object" && product.categoryId
-        ? product.categoryId._id
-        : product.categoryId
-
     setFormState({
       name: product.name,
       sku: product.sku,
@@ -152,7 +122,6 @@ export function ProductsManager({
       lowStockThreshold: String(product.lowStockThreshold ?? 0),
       costPrice: String(product.costPrice ?? 0),
       price: String(product.price ?? 0),
-      categoryId: categoryId ?? categories[0]?._id ?? "",
     })
     setActiveProductId(product._id)
     setError(null)
@@ -160,11 +129,10 @@ export function ProductsManager({
   }
 
   const submitForm = async () => {
-    if (
-      !formState.name ||
-      !formState.unit ||
-      !formState.categoryId
-    ) {
+    const trimmedName = formState.name.trim()
+    const trimmedUnit = formState.unit.trim()
+
+    if (!trimmedName || !trimmedUnit) {
       setError("Please fill all required fields.")
       return
     }
@@ -173,13 +141,12 @@ export function ProductsManager({
     setError(null)
 
     const payload = {
-      name: formState.name.trim(),
-      unit: formState.unit.trim(),
+      name: trimmedName,
+      unit: trimmedUnit,
       quantity: Number(formState.quantity || 0),
       lowStockThreshold: Number(formState.lowStockThreshold || 0),
       costPrice: Number(formState.costPrice || 0),
       price: Number(formState.price || 0),
-      categoryId: formState.categoryId,
     }
 
     try {
@@ -247,18 +214,6 @@ export function ProductsManager({
     }
   }
 
-  const resolveCategoryName = (product: ProductClient) => {
-    if (typeof product.categoryId === "object" && product.categoryId) {
-      return product.categoryId.name
-    }
-
-    if (typeof product.categoryId === "string") {
-      return categoryMap.get(product.categoryId)?.name ?? "Unassigned"
-    }
-
-    return "Unassigned"
-  }
-
   const produceCatalogPdf = () => {
     const printWindow = window.open("", "_blank")
     if (!printWindow) {
@@ -276,7 +231,6 @@ export function ProductsManager({
 
     const rows = products
       .map((product, index) => {
-        const categoryName = resolveCategoryName(product)
         const stockStatus =
           product.quantity <= (product.lowStockThreshold ?? 0)
             ? "Low stock"
@@ -289,7 +243,6 @@ export function ProductsManager({
               <strong>${escapeHtml(product.name)}</strong>
               <span>${escapeHtml(product.sku)}</span>
             </td>
-            <td>${escapeHtml(categoryName)}</td>
             <td>${escapeHtml(String(product.quantity))} ${escapeHtml(product.unit ?? "pcs")}</td>
             <td>${escapeHtml(String(product.lowStockThreshold ?? 0))}</td>
             <td>${escapeHtml(formatCurrency(product.costPrice ?? 0))}</td>
@@ -387,7 +340,6 @@ export function ProductsManager({
               <tr>
                 <th>#</th>
                 <th>Product</th>
-                <th>Category</th>
                 <th>Quantity</th>
                 <th>Low Stock</th>
                 <th>Cost Price</th>
@@ -398,7 +350,7 @@ export function ProductsManager({
             <tbody>
               ${
                 rows ||
-                '<tr><td colspan="8">No products found.</td></tr>'
+                '<tr><td colspan="7">No products found.</td></tr>'
               }
             </tbody>
           </table>
@@ -451,14 +403,6 @@ export function ProductsManager({
                       }
                     />
                   </label>
-                  {activeProductId ? (
-                    <div className="grid gap-1 text-sm">
-                      SKU
-                      <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground">
-                        {formState.sku}
-                      </div>
-                    </div>
-                  ) : null}
                   <label className="grid gap-1 text-sm">
                     Unit
                     <Input
@@ -540,29 +484,6 @@ export function ProductsManager({
                       />
                     </label>
                   </div>
-                  <label className="grid gap-1 text-sm">
-                    Category
-                    <Select
-                      value={formState.categoryId}
-                      onValueChange={(value) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          categoryId: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((category) => (
-                          <SelectItem key={category._id} value={category._id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
                   ) : null}
@@ -593,7 +514,6 @@ export function ProductsManager({
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>SKU</TableHead>
-            <TableHead>Category</TableHead>
             <TableHead>Quantity</TableHead>
             <TableHead>Unit</TableHead>
             <TableHead>Low Stock Threshold</TableHead>
@@ -606,7 +526,7 @@ export function ProductsManager({
           {paginatedProducts.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isAdmin ? 9 : 8}
+                colSpan={isAdmin ? 8 : 7}
                 className="text-muted-foreground"
               >
                 No products found.
@@ -617,7 +537,6 @@ export function ProductsManager({
               <TableRow key={product._id.toString()}>
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
-                <TableCell>{resolveCategoryName(product)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span>{product.quantity}</span>

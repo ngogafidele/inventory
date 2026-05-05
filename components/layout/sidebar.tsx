@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import type { AuthSession } from "@/lib/auth/session"
 import {
   Bell,
-  Boxes,
   ChartColumn,
   ClipboardList,
   LayoutDashboard,
@@ -24,7 +23,6 @@ const adminOnlyNavItems = [
 
 const commonNavItems = [
   { href: "/products", label: "Products", icon: PackageSearch },
-  { href: "/categories", label: "Product Categories", icon: Boxes },
   { href: "/sales", label: "Sales", icon: ReceiptText },
   { href: "/invoices", label: "Invoices", icon: ClipboardList },
   { href: "/alerts", label: "Low Stock Alerts", icon: Bell },

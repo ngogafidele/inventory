@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
-import { Category } from "@/lib/db/models/Category"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { ZodError } from "zod"
 
 export async function GET(
   request: NextRequest,
@@ -31,9 +31,7 @@ export async function GET(
     const { id } = await context.params
 
     await connectToDatabase()
-    const product = await Product.findOne({ _id: id, store }).populate(
-      "categoryId"
-    )
+    const product = await Product.findOne({ _id: id, store })
 
     if (!product) {
       return NextResponse.json(
@@ -74,22 +72,13 @@ export async function PUT(
     }
 
     const payload = UpdateProductSchema.parse(await request.json())
+    const { categoryId: _categoryId, ...updateInput } = payload
 
     await connectToDatabase()
 
-    if (payload.categoryId) {
-      const category = await Category.findOne({ _id: payload.categoryId, store })
-      if (!category) {
-        return NextResponse.json(
-          { success: false, error: "Category not found" },
-          { status: 404 }
-        )
-      }
-    }
-
     const product = await Product.findOneAndUpdate(
       { _id: id, store },
-      payload,
+      updateInput,
       { returnDocument: "after", runValidators: true }
     )
 
@@ -111,6 +100,12 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: product })
   } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { success: false, error: error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
       { success: false, error: "Failed to update product" },
       { status: 400 }

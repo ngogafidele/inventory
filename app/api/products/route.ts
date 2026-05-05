@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
-import { Category } from "@/lib/db/models/Category"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { ZodError } from "zod"
 
 function getSkuBase(name: string) {
   const normalized = name.toUpperCase().replace(/[^A-Z0-9]+/g, "")
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     await connectToDatabase()
-    const products = await Product.find({ store }).populate("categoryId")
+    const products = await Product.find({ store })
 
     return NextResponse.json({ success: true, data: products })
   } catch (error) {
@@ -74,19 +74,12 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = CreateProductSchema.parse(await request.json())
+    const { categoryId: _categoryId, ...productInput } = payload
 
     await connectToDatabase()
 
-    const category = await Category.findOne({ _id: payload.categoryId, store })
-    if (!category) {
-      return NextResponse.json(
-        { success: false, error: "Category not found" },
-        { status: 404 }
-      )
-    }
-
     const product = await Product.create({
-      ...payload,
+      ...productInput,
       sku: await generateProductSku(store, payload.name),
       store,
     })
@@ -105,6 +98,12 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { success: false, error: error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      )
+    }
     return NextResponse.json(
       { success: false, error: "Failed to create product" },
       { status: 400 }
