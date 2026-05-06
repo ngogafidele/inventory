@@ -139,7 +139,7 @@ export function UsersManager({
 
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to create user.")
+        setError(body?.error ?? "Network Error")
         return
       }
 
@@ -169,7 +169,7 @@ export function UsersManager({
       setDialogOpen(false)
       resetForm()
     } catch (err) {
-      setError("Failed to create user.")
+      setError("Network error. Check your connection and try again.")
     } finally {
       setSubmitting(false)
     }
