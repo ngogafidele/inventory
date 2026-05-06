@@ -20,23 +20,27 @@ export default function Home() {
   const handleLogin = () => {
     setMessage(null)
     startTransition(async () => {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword,
-        }),
-      })
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: loginEmail,
+            password: loginPassword,
+          }),
+        })
 
-      const data = await response.json()
-      if (!response.ok) {
-        setMessage(data?.error ?? "Login failed")
-        return
+        const data = await response.json()
+        if (!response.ok) {
+          setMessage(data?.error ?? "Login failed")
+          return
+        }
+
+        router.push("/dashboard")
+        router.refresh()
+      } catch (error) {
+        setMessage("Network error. Check your connection and try again.")
       }
-
-      router.push("/dashboard")
-      router.refresh()
     })
   }
 
@@ -48,24 +52,28 @@ export default function Home() {
     }
 
     startTransition(async () => {
-      const response = await fetch("/api/auth/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: setupName,
-          email: setupEmail,
-          password: setupPassword,
-        }),
-      })
+      try {
+        const response = await fetch("/api/auth/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: setupName,
+            email: setupEmail,
+            password: setupPassword,
+          }),
+        })
 
-      const data = await response.json()
-      if (!response.ok) {
-        setMessage(data?.error ?? "Setup failed")
-        return
+        const data = await response.json()
+        if (!response.ok) {
+          setMessage(data?.error ?? "Setup failed")
+          return
+        }
+
+        router.push("/dashboard")
+        router.refresh()
+      } catch (error) {
+        setMessage("Network error. Check your connection and try again.")
       }
-
-      router.push("/dashboard")
-      router.refresh()
     })
   }
 

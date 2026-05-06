@@ -12,6 +12,7 @@ import {
   createToken,
   type AuthSession,
 } from "@/lib/auth/session"
+import { ZodError } from "zod"
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,8 +88,37 @@ export async function POST(request: NextRequest) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to login"
     console.error("[Login Error]", errorMessage)
+
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { success: false, error: "Invalid credentials" },
+        { status: 400 }
+      )
+    }
+
+    const normalizedMessage = errorMessage.toLowerCase()
+    const isNetworkError =
+      normalizedMessage.includes("querysrv etimeout") ||
+      normalizedMessage.includes("enotfound") ||
+      normalizedMessage.includes("econnrefused") ||
+      normalizedMessage.includes("network")
+
+    if (isNetworkError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Network problem. We cannot reach the database right now. Please try again.",
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      {
+        success: false,
+        error: "Login failed. Please try again.",
+      },
       { status: 400 }
     )
   }
