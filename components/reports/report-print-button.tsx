@@ -132,6 +132,8 @@ export function ReportPrintButton({
       hour: "2-digit",
       minute: "2-digit",
     })
+    const lowStockClass = totals.lowStock > 0 ? "metric danger" : "metric"
+    const outstandingClass = totals.outstanding > 0 ? "metric warning" : "metric"
 
     const summaryRows = reports
       .map(
@@ -193,79 +195,119 @@ export function ReportPrintButton({
             * { box-sizing: border-box; }
             body {
               margin: 0;
-              padding: 32px;
+              padding: 28px;
               color: #17201b;
               font-family: Arial, sans-serif;
               background: #ffffff;
             }
             header {
-              display: flex;
-              justify-content: space-between;
+              display: grid;
+              grid-template-columns: 1fr auto;
               gap: 24px;
-              border-bottom: 2px solid #1f8a5b;
-              padding-bottom: 16px;
-              margin-bottom: 24px;
+              align-items: start;
+              border-bottom: 3px solid #1f8a5b;
+              padding-bottom: 18px;
+              margin-bottom: 18px;
             }
             h1 {
               margin: 0 0 6px;
-              font-size: 28px;
+              font-size: 30px;
+              line-height: 1.1;
               letter-spacing: 0;
             }
             h2 {
               margin: 0 0 10px;
-              font-size: 16px;
+              font-size: 15px;
+              color: #173c2b;
             }
             p {
               margin: 0 0 4px;
               color: #53645b;
-              font-size: 13px;
+              font-size: 12px;
+            }
+            .eyebrow {
+              margin-bottom: 5px;
+              color: #1f8a5b;
+              font-size: 10px;
+              font-weight: 700;
+              letter-spacing: 0.16em;
+              text-transform: uppercase;
             }
             .summary {
+              min-width: 240px;
+              border: 1px solid #c8ded2;
+              padding: 12px;
+              background: #fbfdfc;
               text-align: right;
               white-space: nowrap;
+            }
+            .summary strong {
+              color: #173c2b;
             }
             .metrics {
               display: grid;
               grid-template-columns: repeat(4, 1fr);
               gap: 10px;
-              margin-bottom: 22px;
+              margin: 18px 0 22px;
             }
             .metric {
+              min-height: 70px;
               border: 1px solid #d8e3dc;
+              border-left: 4px solid #1f8a5b;
               padding: 10px;
               background: #fbfdfc;
+            }
+            .metric.warning {
+              border-left-color: #c27803;
+              background: #fffaf0;
+            }
+            .metric.danger {
+              border-left-color: #b42318;
+              background: #fff5f5;
             }
             .metric span {
               display: block;
               color: #53645b;
-              font-size: 10px;
+              font-size: 9px;
+              font-weight: 700;
               letter-spacing: 0.08em;
               text-transform: uppercase;
             }
             .metric strong {
               display: block;
-              margin-top: 5px;
+              margin-top: 7px;
               font-size: 16px;
+              line-height: 1.2;
+            }
+            .section-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              align-items: start;
             }
             section {
-              margin-top: 22px;
+              margin-top: 18px;
               break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            section.full {
+              grid-column: 1 / -1;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              font-size: 12px;
+              font-size: 11px;
             }
             th {
               background: #e9f6ef;
               color: #173c2b;
               text-align: left;
               border: 1px solid #c8ded2;
-              padding: 9px 8px;
+              padding: 8px 7px;
             }
             td {
               border: 1px solid #d8e3dc;
-              padding: 8px;
+              padding: 7px;
               vertical-align: top;
             }
             td span {
@@ -276,6 +318,20 @@ export function ReportPrintButton({
             }
             tr:nth-child(even) td {
               background: #fbfdfc;
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            .footer {
+              margin-top: 20px;
+              border-top: 1px solid #d8e3dc;
+              padding-top: 10px;
+              color: #66746c;
+              font-size: 10px;
             }
             @page {
               size: A4 landscape;
@@ -289,8 +345,9 @@ export function ReportPrintButton({
         <body>
           <header>
             <div>
-              <h1>${escapeHtml(storeName)} Report</h1>
-              <p>${escapeHtml(fromLabel)} to ${escapeHtml(toLabel)}</p>
+              <p class="eyebrow">Inventory Report</p>
+              <h1>${escapeHtml(storeName)}</h1>
+              <p>Period: ${escapeHtml(fromLabel)} to ${escapeHtml(toLabel)}</p>
             </div>
             <div class="summary">
               <p><strong>Multi-Store Inventory</strong></p>
@@ -305,64 +362,70 @@ export function ReportPrintButton({
             <div class="metric"><span>Inventory Retail</span><strong>${escapeHtml(formatCurrency(totals.inventoryRetail))}</strong></div>
             <div class="metric"><span>Sales Records</span><strong>${escapeHtml(formatNumber(totals.sales))}</strong></div>
             <div class="metric"><span>Products</span><strong>${escapeHtml(formatNumber(totals.products))}</strong></div>
-            <div class="metric"><span>Low Stock</span><strong>${escapeHtml(formatNumber(totals.lowStock))}</strong></div>
-            <div class="metric"><span>Outstanding</span><strong>${escapeHtml(formatCurrency(totals.outstanding))}</strong></div>
+            <div class="${lowStockClass}"><span>Low Stock</span><strong>${escapeHtml(formatNumber(totals.lowStock))}</strong></div>
+            <div class="${outstandingClass}"><span>Outstanding</span><strong>${escapeHtml(formatCurrency(totals.outstanding))}</strong></div>
           </div>
 
-          <section>
-            <h2>Store Summary</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Store</th>
-                  <th>Revenue</th>
-                  <th>Gross Profit</th>
-                  <th>Sales</th>
-                  <th>Products</th>
-                  <th>Low Stock</th>
-                  <th>Outstanding</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${summaryRows || '<tr><td colspan="7">No summary data found.</td></tr>'}
-              </tbody>
-            </table>
-          </section>
+          <div class="section-grid">
+            <section class="full">
+              <h2>Store Summary</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Store</th>
+                    <th>Revenue</th>
+                    <th>Gross Profit</th>
+                    <th>Sales</th>
+                    <th>Products</th>
+                    <th>Low Stock</th>
+                    <th>Outstanding</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${summaryRows || '<tr><td colspan="7">No summary data found.</td></tr>'}
+                </tbody>
+              </table>
+            </section>
 
-          <section>
-            <h2>Top Moving Products</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Product</th>
-                  <th>Sold</th>
-                  <th>Revenue</th>
-                  <th>Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${topMovingRows || '<tr><td colspan="5">No sales movement yet.</td></tr>'}
-              </tbody>
-            </table>
-          </section>
+            <section>
+              <h2>Top Moving Products</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Product</th>
+                    <th>Sold</th>
+                    <th>Revenue</th>
+                    <th>Profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${topMovingRows || '<tr><td colspan="5">No sales movement yet.</td></tr>'}
+                </tbody>
+              </table>
+            </section>
 
-          <section>
-            <h2>Recent Sales</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Store</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${recentSaleRows || '<tr><td colspan="4">No sales recorded yet.</td></tr>'}
-              </tbody>
-            </table>
-          </section>
+            <section>
+              <h2>Recent Sales</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Store</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recentSaleRows || '<tr><td colspan="4">No sales recorded yet.</td></tr>'}
+                </tbody>
+              </table>
+            </section>
+          </div>
+
+          <div class="footer">
+            This report is generated from the current inventory database and reflects transactions recorded for the selected date range.
+          </div>
 
           <script>
             window.addEventListener("load", () => {
