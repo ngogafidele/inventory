@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { STORE_LABELS } from "@/lib/utils/constants"
 import { formatInKigali } from "@/lib/utils/time"
 
 type StoreKey = "store1" | "store2"
@@ -292,8 +293,8 @@ export function UsersManager({
                     <SelectValue placeholder="Select store" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="store1">Store 1</SelectItem>
-                    <SelectItem value="store2">Store 2</SelectItem>
+                    <SelectItem value="store1">{STORE_LABELS.store1}</SelectItem>
+                    <SelectItem value="store2">{STORE_LABELS.store2}</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
@@ -341,7 +342,9 @@ export function UsersManager({
               <TableCell>{user.name}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell className="capitalize">{user.role}</TableCell>
-              <TableCell>{user.stores.join(", ")}</TableCell>
+              <TableCell>
+                {user.stores.map((store) => STORE_LABELS[store]).join(", ")}
+              </TableCell>
               <TableCell>{user.isActive ? "Active" : "Inactive"}</TableCell>
               <TableCell className="text-right">
                 <div className="flex flex-wrap justify-end gap-2">

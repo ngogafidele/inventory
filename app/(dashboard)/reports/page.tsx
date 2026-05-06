@@ -6,6 +6,7 @@ import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
+import { STORE_LABELS } from "@/lib/utils/constants"
 import { formatCurrency } from "@/lib/utils/format"
 import {
   formatInKigali,
@@ -94,11 +95,6 @@ type RecentSale = {
     unit: string
     quantity: number
   }>
-}
-
-const storeLabels: Record<StoreKey, string> = {
-  store1: "Store 1",
-  store2: "Store 2",
 }
 
 function formatNumber(value: number) {
@@ -402,11 +398,11 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          {storeLabels[currentStore]} Overview
+          {STORE_LABELS[currentStore]} Overview
         </p>
         <h2 className="text-2xl font-semibold">Reports</h2>
         <p className="text-sm text-muted-foreground">
-          Reports for {storeLabels[currentStore]} from{" "}
+          Reports for {STORE_LABELS[currentStore]} from{" "}
           {formatDateOnly(range.from)} to {formatDateOnly(range.to)}.
         </p>
       </div>
@@ -452,7 +448,7 @@ export default async function ReportsPage({
             Store Summary
           </p>
           <h3 className="text-lg font-semibold">
-            {storeLabels[currentStore]} Performance
+            {STORE_LABELS[currentStore]} Performance
           </h3>
         </div>
         <Table>
@@ -470,7 +466,7 @@ export default async function ReportsPage({
           <TableBody>
             {storeReports.map((report) => (
               <TableRow key={report.store}>
-                <TableCell>{storeLabels[report.store]}</TableCell>
+                <TableCell>{STORE_LABELS[report.store]}</TableCell>
                 <TableCell>{formatCurrency(report.revenue)}</TableCell>
                 <TableCell>{formatCurrency(report.grossProfit)}</TableCell>
                 <TableCell>{formatNumber(report.sales)}</TableCell>
@@ -556,7 +552,7 @@ export default async function ReportsPage({
                 recentSales.map((sale) => (
                   <TableRow key={sale._id.toString()}>
                     <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
-                    <TableCell>{storeLabels[sale.store]}</TableCell>
+                    <TableCell>{STORE_LABELS[sale.store]}</TableCell>
                     <TableCell>
                       <span className="whitespace-normal break-words">
                         {sale.items

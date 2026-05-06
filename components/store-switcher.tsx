@@ -8,14 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-const STORE_KEYS = ["store1", "store2"] as const
-type StoreKey = (typeof STORE_KEYS)[number]
-
-const storeLabels: Record<StoreKey, string> = {
-  store1: "Store 1",
-  store2: "Store 2",
-}
+import { STORE_KEYS, STORE_LABELS, type StoreKey } from "@/lib/utils/constants"
 
 export function StoreSwitcher({
   currentStore,
@@ -64,7 +57,7 @@ export function StoreSwitcher({
       <SelectContent>
         {availableStores.map((store) => (
           <SelectItem key={store} value={store} className="py-2 text-base">
-            {storeLabels[store]}
+            {STORE_LABELS[store]}
           </SelectItem>
         ))}
       </SelectContent>
