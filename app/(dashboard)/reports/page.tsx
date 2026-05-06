@@ -16,6 +16,7 @@ import {
 } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ReportPrintButton } from "@/components/reports/report-print-button"
 import {
   Table,
   TableBody,
@@ -382,6 +383,20 @@ export default async function ReportsPage({
   })
 
   const totals = sumReports(storeReports)
+  const fromLabel = formatDateOnly(range.from)
+  const toLabel = formatDateOnly(range.to)
+  const printableRecentSales = recentSales.map((sale) => ({
+    _id: sale._id.toString(),
+    store: sale.store,
+    createdAt: sale.createdAt?.toISOString(),
+    totalAmount: sale.totalAmount,
+    items: sale.items.map((item) => ({
+      name: item.name,
+      sku: item.sku,
+      unit: item.unit,
+      quantity: item.quantity,
+    })),
+  }))
 
   const cards = [
     { label: "Total Revenue", value: formatCurrency(totals.revenue) },
@@ -402,14 +417,14 @@ export default async function ReportsPage({
         </p>
         <h2 className="text-2xl font-semibold">Reports</h2>
         <p className="text-sm text-muted-foreground">
-          Reports for {STORE_LABELS[currentStore]} from{" "}
-          {formatDateOnly(range.from)} to {formatDateOnly(range.to)}.
+          Reports for {STORE_LABELS[currentStore]} from {fromLabel} to{" "}
+          {toLabel}.
         </p>
       </div>
 
       <form
         action="/reports"
-        className="grid gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]"
+        className="grid gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm md:grid-cols-[1fr_1fr_auto_auto]"
       >
         <label className="grid gap-1 text-sm">
           From
@@ -423,6 +438,16 @@ export default async function ReportsPage({
           <Button type="submit" className="w-full md:w-auto">
             Produce Report
           </Button>
+        </div>
+        <div className="flex items-end">
+          <ReportPrintButton
+            store={currentStore}
+            fromLabel={fromLabel}
+            toLabel={toLabel}
+            reports={storeReports}
+            topMovingProducts={topMovingProducts}
+            recentSales={printableRecentSales}
+          />
         </div>
       </form>
 
