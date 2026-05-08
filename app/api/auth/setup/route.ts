@@ -7,7 +7,12 @@ import {
 } from "@/lib/db/models/UserLoginLog"
 import { SetupAdminSchema } from "@/lib/db/validators/user"
 import { hashPassword } from "@/lib/auth/hash"
-import { AUTH_COOKIE, createToken, type AuthSession } from "@/lib/auth/session"
+import {
+  AUTH_COOKIE,
+  createToken,
+  getAuthCookieOptions,
+  type AuthSession,
+} from "@/lib/auth/session"
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +60,7 @@ export async function POST(request: NextRequest) {
       stores: ["store1", "store2"],
       currentStore: "store1",
       loginLogId: loginLog._id.toString(),
+      lastActivityAt: Date.now(),
     }
 
     const token = createToken(session)
@@ -70,13 +76,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    response.cookies.set(AUTH_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
-      path: "/",
-    })
+    response.cookies.set(AUTH_COOKIE, token, getAuthCookieOptions(session))
 
     return response
   } catch (error) {

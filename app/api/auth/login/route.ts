@@ -10,6 +10,7 @@ import { comparePassword } from "@/lib/auth/hash"
 import {
   AUTH_COOKIE,
   createToken,
+  getAuthCookieOptions,
   type AuthSession,
 } from "@/lib/auth/session"
 import { ZodError } from "zod"
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
       stores,
       currentStore: stores[0],
       loginLogId: loginLog._id.toString(),
+      lastActivityAt: Date.now(),
     }
 
     const token = createToken(session)
@@ -75,13 +77,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    response.cookies.set(AUTH_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
-      path: "/",
-    })
+    response.cookies.set(AUTH_COOKIE, token, getAuthCookieOptions(session))
 
     return response
   } catch (error) {

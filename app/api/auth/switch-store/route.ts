@@ -4,6 +4,8 @@ import { requireAuth } from "@/lib/auth/middleware"
 import {
   AUTH_COOKIE,
   createToken,
+  getAuthCookieOptions,
+  refreshSessionActivity,
   updateCurrentStore,
   type StoreKey,
 } from "@/lib/auth/session"
@@ -43,20 +45,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const updatedSession = updateCurrentStore(
-      { ...session, stores: [...allowedStores] },
-      store
+    const updatedSession = refreshSessionActivity(
+      updateCurrentStore({ ...session, stores: [...allowedStores] }, store)
     )
     const token = createToken(updatedSession)
 
     const response = NextResponse.json({ success: true, store })
-    response.cookies.set(AUTH_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
-      path: "/",
-    })
+    response.cookies.set(
+      AUTH_COOKIE,
+      token,
+      getAuthCookieOptions(updatedSession)
+    )
 
     revalidatePath("/", "layout")
 
