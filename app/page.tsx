@@ -82,7 +82,7 @@ export default function Home() {
       <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-14">
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Multi-Store Inventory System
+            B Ikaze Inventory System
           </p>
           <h1 className="text-3xl font-semibold sm:text-4xl">Sign in to Operations</h1>
           <p className="max-w-xl text-sm text-muted-foreground">
