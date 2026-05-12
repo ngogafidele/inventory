@@ -38,6 +38,7 @@ export default async function InvoicesPage() {
     <InvoicesPageClient
       storeId={store}
       sales={serializedSales}
+      canCreateInvoices={true}
       canManageInvoices={session.isAdmin || session.role === "manager"}
       canDeleteInvoices={session.isAdmin}
     />

@@ -100,13 +100,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!session.isAdmin && session.role === "staff") {
-      return NextResponse.json(
-        { success: false, error: "Insufficient permissions" },
-        { status: 403 }
-      )
-    }
-
     const store = resolveStoreFromRequest(request, session)
     if (!store) {
       return NextResponse.json(

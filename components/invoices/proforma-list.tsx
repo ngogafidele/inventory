@@ -101,11 +101,13 @@ function formatDate(date: string | undefined) {
 
 export function ProformaInvoicesList({
   storeId,
+  canCreateInvoices,
   canManageInvoices,
   canDeleteInvoices,
   newInvoiceSignal,
 }: {
   storeId: StoreKey
+  canCreateInvoices: boolean
   canManageInvoices: boolean
   canDeleteInvoices: boolean
   newInvoiceSignal: number
@@ -143,7 +145,7 @@ export function ProformaInvoicesList({
   useEffect(() => {
     if (
       newInvoiceSignal > lastNewInvoiceSignalRef.current &&
-      canManageInvoices
+      canCreateInvoices
     ) {
       setActiveProformaId(null)
       setFormState(createEmptyForm())
@@ -152,7 +154,7 @@ export function ProformaInvoicesList({
     }
 
     lastNewInvoiceSignalRef.current = newInvoiceSignal
-  }, [canManageInvoices, newInvoiceSignal])
+  }, [canCreateInvoices, newInvoiceSignal])
 
   const visibleProformas = useMemo(() => {
     const needle = search.trim().toLowerCase()

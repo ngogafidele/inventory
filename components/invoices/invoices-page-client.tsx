@@ -12,11 +12,13 @@ type ActiveTab = "sales" | "proforma"
 
 export function InvoicesPageClient({
   storeId,
+  canCreateInvoices,
   canManageInvoices,
   canDeleteInvoices,
   sales,
 }: {
   storeId: StoreKey
+  canCreateInvoices: boolean
   canManageInvoices: boolean
   canDeleteInvoices: boolean
   sales: SaleInvoiceSaleOption[]
@@ -39,7 +41,7 @@ export function InvoicesPageClient({
           </p>
           <h2 className="text-2xl font-semibold">Invoices</h2>
         </div>
-        {canManageInvoices ? (
+        {canCreateInvoices ? (
           <Button
             onClick={() => {
               if (activeTab === "sales") {
@@ -79,6 +81,7 @@ export function InvoicesPageClient({
         <SalesInvoicesList
           storeId={storeId}
           sales={sales}
+          canCreateInvoices={canCreateInvoices}
           canManageInvoices={canManageInvoices}
           canDeleteInvoices={canDeleteInvoices}
           newInvoiceSignal={newSalesInvoiceSignal}
@@ -86,6 +89,7 @@ export function InvoicesPageClient({
       ) : (
         <ProformaInvoicesList
           storeId={storeId}
+          canCreateInvoices={canCreateInvoices}
           canManageInvoices={canManageInvoices}
           canDeleteInvoices={canDeleteInvoices}
           newInvoiceSignal={newProformaSignal}

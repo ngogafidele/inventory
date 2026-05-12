@@ -93,12 +93,14 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 export function SalesInvoicesList({
   storeId,
   sales,
+  canCreateInvoices,
   canManageInvoices,
   canDeleteInvoices,
   newInvoiceSignal,
 }: {
   storeId: StoreKey
   sales: SaleInvoiceSaleOption[]
+  canCreateInvoices: boolean
   canManageInvoices: boolean
   canDeleteInvoices: boolean
   newInvoiceSignal: number
@@ -134,7 +136,7 @@ export function SalesInvoicesList({
   useEffect(() => {
     if (
       newInvoiceSignal > lastNewInvoiceSignalRef.current &&
-      canManageInvoices
+      canCreateInvoices
     ) {
       setActiveInvoiceId(null)
       setFormState(emptyForm)
@@ -143,7 +145,7 @@ export function SalesInvoicesList({
     }
 
     lastNewInvoiceSignalRef.current = newInvoiceSignal
-  }, [canManageInvoices, newInvoiceSignal])
+  }, [canCreateInvoices, newInvoiceSignal])
 
   const resetForm = () => {
     setActiveInvoiceId(null)
