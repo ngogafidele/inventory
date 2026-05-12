@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Multi-Store Inventory",
+  title: "B Ikaze Inventory",
   description: "Inventory management across two stores",
 };
 

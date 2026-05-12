@@ -27,7 +27,7 @@ export function AppShell({
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Multi-Store Inventory
+                B Ikaze Inventory
               </p>
               <h1 className="text-xl font-semibold sm:text-2xl">Operations Hub</h1>
             </div>

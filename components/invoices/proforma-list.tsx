@@ -5,6 +5,7 @@ import Image from "next/image"
 import {
   Download,
   Eye,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -115,6 +116,7 @@ export function ProformaInvoicesList({
   const [detailProforma, setDetailProforma] = useState<ProformaInvoice | null>(
     null
   )
+  const [activeProformaId, setActiveProformaId] = useState<string | null>(null)
   const [formState, setFormState] = useState<FormState>(() => createEmptyForm())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,6 +145,7 @@ export function ProformaInvoicesList({
       newInvoiceSignal > lastNewInvoiceSignalRef.current &&
       canManageInvoices
     ) {
+      setActiveProformaId(null)
       setFormState(createEmptyForm())
       setError(null)
       setDialogOpen(true)
@@ -195,6 +198,33 @@ export function ProformaInvoicesList({
     }))
   }
 
+  const resetForm = () => {
+    setActiveProformaId(null)
+    setFormState(createEmptyForm())
+    setError(null)
+  }
+
+  const openEdit = (proforma: ProformaInvoice) => {
+    setActiveProformaId(proforma._id)
+    setFormState({
+      customerName: proforma.customerName,
+      customerEmail: proforma.customerEmail ?? "",
+      customerPhone: proforma.customerPhone ?? "",
+      items:
+        proforma.items.length > 0
+          ? proforma.items.map((item) => ({
+              id: createItemId(),
+              description: item.description,
+              unit: item.unit ?? "pcs",
+              quantity: String(item.quantity),
+              unitPrice: String(item.unitPrice),
+            }))
+          : [createEmptyItem()],
+    })
+    setError(null)
+    setDialogOpen(true)
+  }
+
   const submitForm = async () => {
     const items = formState.items
       .map((item) => ({
@@ -228,27 +258,55 @@ export function ProformaInvoicesList({
     setError(null)
 
     try {
-      const response = await fetch(`/api/proformas?store=${storeId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: formState.customerName.trim(),
-          customerEmail: formState.customerEmail.trim() || undefined,
-          customerPhone: formState.customerPhone.trim() || undefined,
-          items,
-        }),
-      })
+      const response = await fetch(
+        activeProformaId
+          ? `/api/proformas/${activeProformaId}?store=${storeId}`
+          : `/api/proformas?store=${storeId}`,
+        {
+          method: activeProformaId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerName: formState.customerName.trim(),
+            customerEmail: formState.customerEmail.trim() || undefined,
+            customerPhone: formState.customerPhone.trim() || undefined,
+            items,
+          }),
+        }
+      )
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to create proforma invoice.")
+        setError(
+          body?.error ??
+            (activeProformaId
+              ? "Failed to update proforma invoice."
+              : "Failed to create proforma invoice.")
+        )
         return
       }
 
-      setProformas((current) => [body.data, ...current])
+      const savedProforma = {
+        ...body.data,
+        _id: body.data._id.toString(),
+      } as ProformaInvoice
+
+      setProformas((current) =>
+        activeProformaId
+          ? current.map((proforma) =>
+              proforma._id === activeProformaId ? savedProforma : proforma
+            )
+          : [savedProforma, ...current]
+      )
+      if (detailProforma?._id === activeProformaId) {
+        setDetailProforma(savedProforma)
+      }
       setDialogOpen(false)
-      setFormState(createEmptyForm())
+      resetForm()
     } catch {
-      setError("Failed to create proforma invoice.")
+      setError(
+        activeProformaId
+          ? "Failed to update proforma invoice."
+          : "Failed to create proforma invoice."
+      )
     } finally {
       setSubmitting(false)
     }
@@ -374,6 +432,17 @@ export function ProformaInvoicesList({
                       >
                         <Download className="size-4" />
                       </Button>
+                      {canManageInvoices ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEdit(proforma)}
+                          disabled={submitting}
+                        >
+                          <Pencil className="size-4" />
+                          Edit
+                        </Button>
+                      ) : null}
                       {canDeleteInvoices ? (
                         <Button
                           size="sm"
@@ -398,14 +467,15 @@ export function ProformaInvoicesList({
         onOpenChange={(open) => {
           setDialogOpen(open)
           if (!open) {
-            setFormState(createEmptyForm())
-            setError(null)
+            resetForm()
           }
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>New proforma invoice</DialogTitle>
+            <DialogTitle>
+              {activeProformaId ? "Edit proforma invoice" : "New proforma invoice"}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
@@ -531,7 +601,11 @@ export function ProformaInvoicesList({
               Cancel
             </Button>
             <Button onClick={submitForm} disabled={submitting}>
-              {submitting ? "Creating..." : "Create proforma"}
+              {submitting
+                ? "Saving..."
+                : activeProformaId
+                  ? "Save changes"
+                  : "Create proforma"}
             </Button>
           </DialogFooter>
         </DialogContent>

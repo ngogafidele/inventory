@@ -38,6 +38,16 @@ export const CreateProformaSchema = z
     message: "Provide saleId or at least one item",
   })
 
+export const UpdateProformaSchema = z
+  .object({
+    customerName: z.string().min(1),
+    customerEmail: optionalEmailSchema,
+    customerPhone: optionalTextSchema,
+    items: z.array(ProformaItemSchema).min(1),
+    expiresAt: z.string().datetime().optional(),
+  })
+  .strict()
+
 export const ProformaListQuerySchema = z.object({
   search: z.string().optional(),
   dateFrom: z.string().optional(),
