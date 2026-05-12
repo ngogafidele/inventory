@@ -5,7 +5,7 @@ import { Sale } from "@/lib/db/models/Sale"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateInvoiceSchema } from "@/lib/db/validators/invoice"
-import { generateInvoiceNumber } from "@/lib/utils/invoice"
+import { generateInvoiceNumber } from "@/lib/utils/number-generator"
 
 const MAX_INVOICE_NUMBER_ATTEMPTS = 5
 
@@ -99,10 +99,19 @@ export async function POST(request: NextRequest) {
         invoice = await Invoice.create({
           store,
           saleId: sale._id,
-          invoiceNumber: generateInvoiceNumber(),
+          sourceType: "sale",
+          invoiceNumber: await generateInvoiceNumber(store),
           customerName: payload.customerName,
           customerEmail: payload.customerEmail ?? "",
           customerPhone: payload.customerPhone ?? "",
+          items: sale.items.map((item) => ({
+            description: item.name,
+            sku: item.sku,
+            unit: item.unit ?? "pcs",
+            quantity: item.quantity,
+            unitPrice: item.sellingPrice,
+            lineTotal: item.lineTotal,
+          })),
           totalAmount: sale.totalAmount,
           status: payload.status ?? "unpaid",
           issuedAt: new Date(),
