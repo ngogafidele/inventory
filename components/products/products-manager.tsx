@@ -263,7 +263,7 @@ export function ProductsManager({
             body {
               margin: 0;
               padding: 32px;
-              color: #17201b;
+              color: #111827;
               font-family: Arial, sans-serif;
               background: #ffffff;
             }
@@ -271,7 +271,7 @@ export function ProductsManager({
               display: flex;
               justify-content: space-between;
               gap: 24px;
-              border-bottom: 2px solid #1f8a5b;
+              border-bottom: 2px solid #f08010;
               padding-bottom: 16px;
               margin-bottom: 24px;
             }
@@ -282,7 +282,7 @@ export function ProductsManager({
             }
             p {
               margin: 0;
-              color: #53645b;
+              color: #5f6673;
               font-size: 13px;
             }
             .summary {
@@ -295,25 +295,25 @@ export function ProductsManager({
               font-size: 12px;
             }
             th {
-              background: #e9f6ef;
-              color: #173c2b;
+              background: #eef3f8;
+              color: #00183d;
               text-align: left;
-              border: 1px solid #c8ded2;
+              border: 1px solid #cbd7e6;
               padding: 9px 8px;
             }
             td {
-              border: 1px solid #d8e3dc;
+              border: 1px solid #d8dee8;
               padding: 8px;
               vertical-align: top;
             }
             td span {
               display: block;
               margin-top: 3px;
-              color: #66746c;
+              color: #6b7280;
               font-size: 11px;
             }
             tr:nth-child(even) td {
-              background: #fbfdfc;
+              background: #fbfcfe;
             }
             @page {
               size: A4 landscape;

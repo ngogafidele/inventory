@@ -196,7 +196,7 @@ export function ReportPrintButton({
             body {
               margin: 0;
               padding: 28px;
-              color: #17201b;
+              color: #111827;
               font-family: Arial, sans-serif;
               background: #ffffff;
             }
@@ -205,7 +205,7 @@ export function ReportPrintButton({
               grid-template-columns: 1fr auto;
               gap: 24px;
               align-items: start;
-              border-bottom: 3px solid #1f8a5b;
+              border-bottom: 3px solid #f08010;
               padding-bottom: 18px;
               margin-bottom: 18px;
             }
@@ -218,16 +218,16 @@ export function ReportPrintButton({
             h2 {
               margin: 0 0 10px;
               font-size: 15px;
-              color: #173c2b;
+              color: #00183d;
             }
             p {
               margin: 0 0 4px;
-              color: #53645b;
+              color: #5f6673;
               font-size: 12px;
             }
             .eyebrow {
               margin-bottom: 5px;
-              color: #1f8a5b;
+              color: #002050;
               font-size: 10px;
               font-weight: 700;
               letter-spacing: 0.16em;
@@ -235,14 +235,14 @@ export function ReportPrintButton({
             }
             .summary {
               min-width: 240px;
-              border: 1px solid #c8ded2;
+              border: 1px solid #cbd7e6;
               padding: 12px;
-              background: #fbfdfc;
+              background: #fbfcfe;
               text-align: right;
               white-space: nowrap;
             }
             .summary strong {
-              color: #173c2b;
+              color: #00183d;
             }
             .metrics {
               display: grid;
@@ -252,10 +252,10 @@ export function ReportPrintButton({
             }
             .metric {
               min-height: 70px;
-              border: 1px solid #d8e3dc;
-              border-left: 4px solid #1f8a5b;
+              border: 1px solid #d8dee8;
+              border-left: 4px solid #002050;
               padding: 10px;
-              background: #fbfdfc;
+              background: #fbfcfe;
             }
             .metric.warning {
               border-left-color: #c27803;
@@ -267,7 +267,7 @@ export function ReportPrintButton({
             }
             .metric span {
               display: block;
-              color: #53645b;
+              color: #5f6673;
               font-size: 9px;
               font-weight: 700;
               letter-spacing: 0.08em;
@@ -299,25 +299,25 @@ export function ReportPrintButton({
               font-size: 11px;
             }
             th {
-              background: #e9f6ef;
-              color: #173c2b;
+              background: #eef3f8;
+              color: #00183d;
               text-align: left;
-              border: 1px solid #c8ded2;
+              border: 1px solid #cbd7e6;
               padding: 8px 7px;
             }
             td {
-              border: 1px solid #d8e3dc;
+              border: 1px solid #d8dee8;
               padding: 7px;
               vertical-align: top;
             }
             td span {
               display: block;
               margin-top: 3px;
-              color: #66746c;
+              color: #6b7280;
               font-size: 11px;
             }
             tr:nth-child(even) td {
-              background: #fbfdfc;
+              background: #fbfcfe;
             }
             thead {
               display: table-header-group;
@@ -328,9 +328,9 @@ export function ReportPrintButton({
             }
             .footer {
               margin-top: 20px;
-              border-top: 1px solid #d8e3dc;
+              border-top: 1px solid #d8dee8;
               padding-top: 10px;
-              color: #66746c;
+              color: #6b7280;
               font-size: 10px;
             }
             @page {

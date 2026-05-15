@@ -126,7 +126,7 @@ function drawLogo(doc: InvoicePdfDocument, storeInfo: StoreInfo) {
       })
       doc
         .fontSize(16)
-        .fillColor("#1f8a5b")
+    .fillColor("#002050")
         .text(storeInfo.name ?? "Inventory", 48, 72, { width: 150 })
     }
   }
@@ -169,11 +169,11 @@ function writeInvoicePdf(
   drawLogo(doc, storeInfo)
 
   doc
-    .fillColor("#17201b")
+    .fillColor("#111827")
     .fontSize(22)
     .text(title, 340, 58, { align: "right" })
     .fontSize(10)
-    .fillColor("#53645b")
+    .fillColor("#5f6673")
     .text(data.number, 340, 88, { align: "right" })
     .text(`Date: ${formatDate(data.date)}`, 340, 104, { align: "right" })
 
@@ -185,25 +185,25 @@ function writeInvoicePdf(
     .moveTo(48, 210)
     .lineTo(547, 210)
     .lineWidth(1.5)
-    .strokeColor("#1f8a5b")
+    .strokeColor("#f08010")
     .stroke()
 
   doc
     .fontSize(11)
-    .fillColor("#17201b")
+    .fillColor("#111827")
     .text(storeInfo.name ?? "Multi-Store Inventory", 48, 230)
     .fontSize(9)
-    .fillColor("#53645b")
+    .fillColor("#5f6673")
     .text(storeInfo.address ?? "", 48, 248)
     .text(storeInfo.phone ?? "", 48, 262)
     .text(storeInfo.email ?? "", 48, 276)
 
   doc
     .fontSize(11)
-    .fillColor("#17201b")
+    .fillColor("#111827")
     .text(recipientLabel, 330, 230)
     .fontSize(9)
-    .fillColor("#53645b")
+    .fillColor("#5f6673")
     .text(data.customerName, 330, 248)
     .text(data.customerEmail ?? "", 330, 262)
     .text(data.customerPhone ?? "", 330, 276)
@@ -218,9 +218,9 @@ function writeInvoicePdf(
 
   doc
     .rect(48, tableTop, 499, 24)
-    .fillColor("#e9f6ef")
+    .fillColor("#eef3f8")
     .fill()
-    .fillColor("#173c2b")
+    .fillColor("#00183d")
     .fontSize(9)
     .text("Item", columns.item, tableTop + 8)
     .text("Qty", columns.quantity, tableTop + 8)
@@ -235,16 +235,16 @@ function writeInvoicePdf(
     }
 
     doc
-      .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfdfc")
+      .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
       .rect(48, y - 7, 499, 34)
       .fill()
-      .fillColor("#17201b")
+      .fillColor("#111827")
       .fontSize(9)
       .text(item.description, columns.item, y, { width: 210 })
-      .fillColor("#66746c")
+      .fillColor("#6b7280")
       .fontSize(8)
       .text(item.sku ?? "", columns.item, y + 13, { width: 210 })
-      .fillColor("#17201b")
+      .fillColor("#111827")
       .fontSize(9)
       .text(`${item.quantity} ${item.unit ?? "pcs"}`, columns.quantity, y)
       .text(formatCurrency(item.unitPrice), columns.price, y, { width: 82 })
@@ -261,10 +261,10 @@ function writeInvoicePdf(
   doc
     .moveTo(48, y)
     .lineTo(547, y)
-    .strokeColor("#d8e3dc")
+    .strokeColor("#d8dee8")
     .stroke()
     .fontSize(14)
-    .fillColor("#17201b")
+    .fillColor("#111827")
     .text("Total", 355, y + 20)
     .text(formatCurrency(data.totalAmount), 448, y + 20, { width: 92 })
 
@@ -278,7 +278,7 @@ function writeInvoicePdf(
     doc
       .font("Helvetica-Bold")
       .fontSize(9)
-      .fillColor("#17201b")
+      .fillColor("#111827")
       .text(footerLines.join("\n"), 48, footerY, { width: 220 })
   }
 
