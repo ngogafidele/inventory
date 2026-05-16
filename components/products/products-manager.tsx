@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -82,23 +82,47 @@ export function ProductsManager({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
 
-  const pageCount = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE))
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return products
+
+    return products.filter((product) => {
+      return (
+        product.name.toLowerCase().includes(query) ||
+        product.sku.toLowerCase().includes(query) ||
+        (product.unit ?? "").toLowerCase().includes(query)
+      )
+    })
+  }, [products, search])
+
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  )
   const safeCurrentPage = Math.min(currentPage, pageCount)
   const pageStart = (safeCurrentPage - 1) * PRODUCTS_PER_PAGE
-  const paginatedProducts = products.slice(
+  const paginatedProducts = filteredProducts.slice(
     pageStart,
     pageStart + PRODUCTS_PER_PAGE
   )
-  const visibleStart = products.length === 0 ? 0 : pageStart + 1
-  const visibleEnd = Math.min(pageStart + PRODUCTS_PER_PAGE, products.length)
+  const visibleStart = filteredProducts.length === 0 ? 0 : pageStart + 1
+  const visibleEnd = Math.min(
+    pageStart + PRODUCTS_PER_PAGE,
+    filteredProducts.length
+  )
 
   useEffect(() => {
     if (currentPage > pageCount) {
       setCurrentPage(pageCount)
     }
   }, [currentPage, pageCount])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
 
   const resetForm = () => {
     setFormState({
@@ -375,6 +399,12 @@ export function ProductsManager({
           <h2 className="text-2xl font-semibold">Products</h2>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Input
+            placeholder="Search products"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full sm:w-56"
+          />
           <Button variant="outline" onClick={produceCatalogPdf}>
             <FileText className="size-4" />
             Catalog PDF
@@ -579,7 +609,7 @@ export function ProductsManager({
       </Table>
       <div className="flex flex-col gap-3 border-t border-border/80 pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>
-          Showing {visibleStart}-{visibleEnd} of {products.length} products
+          Showing {visibleStart}-{visibleEnd} of {filteredProducts.length} products
         </p>
         <div className="flex items-center gap-2">
           <Button

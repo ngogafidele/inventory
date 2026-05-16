@@ -40,7 +40,7 @@ export function StockAdjustmentsManager({
   products: ProductOption[]
 }) {
   const [adjustments, setAdjustments] = useState(initialAdjustments)
-  const [productId, setProductId] = useState(products[0]?._id ?? "")
+  const [productId, setProductId] = useState("")
   const [quantityChange, setQuantityChange] = useState("")
   const [reason, setReason] = useState("")
   const [error, setError] = useState<string | null>(null)

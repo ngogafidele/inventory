@@ -144,9 +144,61 @@
 
 @layer components {
   .brand-auth-surface {
+    color-scheme: dark;
+    --background: #0b1220;
+    --foreground: #e2e8f0;
+    --card: #0f172a;
+    --card-foreground: #e2e8f0;
+    --primary: #38bdf8;
+    --primary-foreground: #0b1220;
+    --secondary: #1f2a44;
+    --secondary-foreground: #e2e8f0;
+    --muted: #16213a;
+    --muted-foreground: #94a3b8;
+    --accent: #22d3ee;
+    --accent-foreground: #08101f;
+    --border: #1e293b;
+    --input: #1f2a44;
+    --ring: #38bdf8;
+
     background:
-      radial-gradient(circle at 16% 18%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 42%),
-      radial-gradient(circle at 86% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 38%),
-      linear-gradient(to bottom, #fbfcfe, var(--background));
+      radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 44%),
+      radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 42%),
+      linear-gradient(160deg, #0b1220 0%, #111b31 45%, #0b1220 100%);
+  }
+
+  .brand-auth-surface [data-slot="input"] {
+    color: var(--foreground) !important;
+    caret-color: var(--foreground);
+    background-color: color-mix(in srgb, var(--card) 88%, transparent);
+    color-scheme: dark;
+  }
+
+  .brand-auth-surface [data-slot="input"]::placeholder {
+    color: var(--muted-foreground) !important;
+  }
+
+  .brand-auth-surface [data-slot="input"]:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    box-shadow: 0 0 0px 1000px color-mix(in srgb, var(--card) 92%, transparent) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  .brand-auth-surface svg {
+    color: var(--foreground);
+  }
+
+  .brand-auth-surface input[type="password"]::-ms-reveal,
+  .brand-auth-surface input[type="password"]::-ms-clear {
+    filter: invert(1);
+  }
+
+  .brand-auth-surface input[type="password"]::-webkit-credentials-auto-fill-button {
+    filter: invert(1);
+  }
+
+  .brand-auth-surface input[type="password"]::-webkit-textfield-decoration-container {
+    filter: invert(1);
+    opacity: 0.85;
   }
 }
