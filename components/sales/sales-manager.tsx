@@ -3,8 +3,22 @@
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -50,6 +64,12 @@ type DraftItem = {
   sellingPrice: string
 }
 
+type OutstandingDraft = {
+  customerName: string
+  customerPhone: string
+  paymentDate: string
+}
+
 const emptyDraft: DraftItem = {
   productId: "",
   quantity: "",
@@ -70,6 +90,18 @@ export function SalesManager({
   const [sales, setSales] = useState(initialSales)
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraft])
   const [notes, setNotes] = useState("")
+  const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">(
+    "paid"
+  )
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "bank" | "mobile"
+  >("cash")
+  const [outstandingOpen, setOutstandingOpen] = useState(false)
+  const [outstandingDraft, setOutstandingDraft] = useState<OutstandingDraft>({
+    customerName: "",
+    customerPhone: "",
+    paymentDate: "",
+  })
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -119,6 +151,13 @@ export function SalesManager({
   const resetForm = () => {
     setDraftItems([emptyDraft])
     setNotes("")
+    setPaymentStatus("paid")
+    setPaymentMethod("cash")
+    setOutstandingDraft({
+      customerName: "",
+      customerPhone: "",
+      paymentDate: "",
+    })
     setError(null)
   }
 
@@ -126,7 +165,7 @@ export function SalesManager({
     return item.name?.trim() || item.sku?.trim() || "Unnamed item"
   }
 
-  const submitSale = async () => {
+  const submitSale = async (outstanding?: OutstandingDraft) => {
     setError(null)
 
     const payloadItems = draftItems.map((item) => ({
@@ -174,29 +213,72 @@ export function SalesManager({
     setSubmitting(true)
 
     try {
+      if (paymentStatus === "unpaid") {
+        if (!outstanding?.customerName.trim()) {
+          setError("Customer name is required for unpaid sales.")
+          return false
+        }
+        if (!outstanding?.customerPhone.trim()) {
+          setError("Customer phone is required for unpaid sales.")
+          return false
+        }
+        if (!outstanding?.paymentDate) {
+          setError("Payment date is required for unpaid sales.")
+          return false
+        }
+      }
+
       const response = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: payloadItems,
           notes: notes.trim(),
+          paymentStatus,
+          paymentMethod: paymentStatus === "paid" ? paymentMethod : undefined,
+          outstanding:
+            paymentStatus === "unpaid"
+              ? {
+                  customerName: outstanding?.customerName.trim(),
+                  customerPhone: outstanding?.customerPhone.trim(),
+                  paymentDate: outstanding?.paymentDate,
+                }
+              : undefined,
         }),
       })
 
       const body = await response.json()
       if (!response.ok || !body?.success) {
         setError(body?.error ?? "Failed to record sale.")
-        return
+        return false
       }
 
       const createdSale = body.data as SaleClient
       setSales((current) => [createdSale, ...current])
       setCurrentPage(1)
       resetForm()
+      return true
     } catch {
       setError("Failed to record sale.")
+      return false
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleRecordSale = () => {
+    if (paymentStatus === "unpaid") {
+      setOutstandingOpen(true)
+      return
+    }
+
+    submitSale()
+  }
+
+  const handleOutstandingSubmit = async () => {
+    const didSubmit = await submitSale(outstandingDraft)
+    if (didSubmit) {
+      setOutstandingOpen(false)
     }
   }
 
@@ -292,6 +374,47 @@ export function SalesManager({
           </Button>
         </div>
 
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1 text-sm">
+            Payment status
+            <Select
+              value={paymentStatus}
+              onValueChange={(value) =>
+                setPaymentStatus(value as "paid" | "unpaid")
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+
+          {paymentStatus === "paid" ? (
+            <label className="grid gap-1 text-sm">
+              Payment method
+              <Select
+                value={paymentMethod}
+                onValueChange={(value) =>
+                  setPaymentMethod(value as "cash" | "bank" | "mobile")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="mobile">Mobile Money</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+          ) : null}
+        </div>
+
         <label className="grid gap-1 text-sm">
           Notes (optional)
           <textarea
@@ -304,10 +427,77 @@ export function SalesManager({
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-        <Button onClick={submitSale} disabled={submitting || products.length === 0}>
+        <Button
+          onClick={handleRecordSale}
+          disabled={submitting || products.length === 0}
+        >
           {submitting ? "Recording..." : "Record Sale"}
         </Button>
       </section>
+
+      <Dialog open={outstandingOpen} onOpenChange={setOutstandingOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Outstanding payment details</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              Customer name
+              <Input
+                value={outstandingDraft.customerName}
+                onChange={(event) =>
+                  setOutstandingDraft((current) => ({
+                    ...current,
+                    customerName: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Customer phone
+              <Input
+                value={outstandingDraft.customerPhone}
+                onChange={(event) =>
+                  setOutstandingDraft((current) => ({
+                    ...current,
+                    customerPhone: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Payment date
+              <Input
+                type="date"
+                value={outstandingDraft.paymentDate}
+                onChange={(event) =>
+                  setOutstandingDraft((current) => ({
+                    ...current,
+                    paymentDate: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOutstandingOpen(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleOutstandingSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Recording..." : "Record Sale"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Table>
         <TableHeader>

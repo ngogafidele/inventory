@@ -7,7 +7,7 @@ import {
   verifyToken,
 } from "@/lib/auth/session"
 
-const PUBLIC_PATHS = ["/", "/reset-password"]
+const PUBLIC_PATHS = ["/", "/reset-password", "/setup-admin"]
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(

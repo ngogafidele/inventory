@@ -54,6 +54,62 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { authorized, session } = await requireAuth(request)
+    if (!authorized || !session) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const store = resolveStoreFromRequest(request, session)
+    if (!store) {
+      return NextResponse.json(
+        { success: false, error: "Access denied" },
+        { status: 403 }
+      )
+    }
+
+    const { id } = await context.params
+    const payload = (await request.json().catch(() => null)) as
+      | { paymentStatus?: "paid" | "unpaid" }
+      | null
+
+    if (!payload?.paymentStatus || payload.paymentStatus !== "paid") {
+      return NextResponse.json(
+        { success: false, error: "Only paymentStatus 'paid' is supported." },
+        { status: 400 }
+      )
+    }
+
+    await connectToDatabase()
+    const sale = await Sale.findOneAndUpdate(
+      { _id: id, store },
+      { paymentStatus: "paid", $unset: { outstanding: "" } },
+      { new: true }
+    )
+
+    if (!sale) {
+      return NextResponse.json(
+        { success: false, error: "Sale not found" },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ success: true, data: sale })
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: "Failed to update sale" },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }

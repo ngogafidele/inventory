@@ -9,12 +9,12 @@ import { formatInKigali } from "@/lib/utils/time"
 type StoreReport = {
   store: StoreKey
   products: number
-  lowStock: number
   inventoryCost: number
   inventoryRetail: number
   sales: number
   revenue: number
-  grossProfit: number
+  expenses: number
+  profit: number
   invoices: number
   unpaidInvoices: number
   outstanding: number
@@ -81,12 +81,12 @@ function sumReports(reports: StoreReport[]) {
   return reports.reduce(
     (total, report) => ({
       products: total.products + report.products,
-      lowStock: total.lowStock + report.lowStock,
       inventoryCost: total.inventoryCost + report.inventoryCost,
       inventoryRetail: total.inventoryRetail + report.inventoryRetail,
       sales: total.sales + report.sales,
       revenue: total.revenue + report.revenue,
-      grossProfit: total.grossProfit + report.grossProfit,
+      expenses: total.expenses + report.expenses,
+      profit: total.profit + report.profit,
       invoices: total.invoices + report.invoices,
       unpaidInvoices: total.unpaidInvoices + report.unpaidInvoices,
       outstanding: total.outstanding + report.outstanding,
@@ -94,12 +94,12 @@ function sumReports(reports: StoreReport[]) {
     }),
     {
       products: 0,
-      lowStock: 0,
       inventoryCost: 0,
       inventoryRetail: 0,
       sales: 0,
       revenue: 0,
-      grossProfit: 0,
+      expenses: 0,
+      profit: 0,
       invoices: 0,
       unpaidInvoices: 0,
       outstanding: 0,
@@ -132,7 +132,6 @@ export function ReportPrintButton({
       hour: "2-digit",
       minute: "2-digit",
     })
-    const lowStockClass = totals.lowStock > 0 ? "metric danger" : "metric"
     const outstandingClass = totals.outstanding > 0 ? "metric warning" : "metric"
 
     const summaryRows = reports
@@ -141,10 +140,10 @@ export function ReportPrintButton({
           <tr>
             <td>${escapeHtml(STORE_LABELS[report.store])}</td>
             <td>${escapeHtml(formatCurrency(report.revenue))}</td>
-            <td>${escapeHtml(formatCurrency(report.grossProfit))}</td>
+            <td>${escapeHtml(formatCurrency(report.expenses))}</td>
+            <td>${escapeHtml(formatCurrency(report.profit))}</td>
             <td>${escapeHtml(formatNumber(report.sales))}</td>
             <td>${escapeHtml(formatNumber(report.products))}</td>
-            <td>${escapeHtml(formatNumber(report.lowStock))}</td>
             <td>${escapeHtml(formatCurrency(report.outstanding))}</td>
           </tr>
         `
@@ -357,12 +356,12 @@ export function ReportPrintButton({
 
           <div class="metrics">
             <div class="metric"><span>Total Revenue</span><strong>${escapeHtml(formatCurrency(totals.revenue))}</strong></div>
-            <div class="metric"><span>Gross Profit</span><strong>${escapeHtml(formatCurrency(totals.grossProfit))}</strong></div>
+            <div class="metric"><span>Expenses</span><strong>${escapeHtml(formatCurrency(totals.expenses))}</strong></div>
+            <div class="metric"><span>Profit</span><strong>${escapeHtml(formatCurrency(totals.profit))}</strong></div>
             <div class="metric"><span>Inventory Cost</span><strong>${escapeHtml(formatCurrency(totals.inventoryCost))}</strong></div>
             <div class="metric"><span>Inventory Retail</span><strong>${escapeHtml(formatCurrency(totals.inventoryRetail))}</strong></div>
             <div class="metric"><span>Sales Records</span><strong>${escapeHtml(formatNumber(totals.sales))}</strong></div>
             <div class="metric"><span>Products</span><strong>${escapeHtml(formatNumber(totals.products))}</strong></div>
-            <div class="${lowStockClass}"><span>Low Stock</span><strong>${escapeHtml(formatNumber(totals.lowStock))}</strong></div>
             <div class="${outstandingClass}"><span>Outstanding</span><strong>${escapeHtml(formatCurrency(totals.outstanding))}</strong></div>
           </div>
 
@@ -374,10 +373,10 @@ export function ReportPrintButton({
                   <tr>
                     <th>Store</th>
                     <th>Revenue</th>
-                    <th>Gross Profit</th>
+                    <th>Expenses</th>
+                    <th>Profit</th>
                     <th>Sales</th>
                     <th>Products</th>
-                    <th>Low Stock</th>
                     <th>Outstanding</th>
                   </tr>
                 </thead>

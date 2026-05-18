@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react"
 import {
-  AlertTriangle,
   Boxes,
   Coins,
   PackageSearch,
   ReceiptText,
   TrendingUp,
   Warehouse,
+  Wallet,
 } from "lucide-react"
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 import { formatCurrency } from "@/lib/utils/format"
@@ -35,6 +35,8 @@ type StatsResponse = {
   stockValue: number
   revenueToday: number
   grossProfitToday: number
+  expensesToday: number
+  profitToday: number
   lowStockProducts: Array<{
     _id: string
     name: string
@@ -87,7 +89,6 @@ export function DashboardStats({ store }: DashboardStatsProps) {
 
   const cards = [
     { label: "Products", value: stats.productCount, icon: Boxes },
-    { label: "Low Stock", value: stats.lowStockCount, icon: AlertTriangle },
     {
       label: "Total Stock Value",
       value: formatCurrency(stats.stockValue),
@@ -100,8 +101,13 @@ export function DashboardStats({ store }: DashboardStatsProps) {
       icon: Coins,
     },
     {
-      label: "Gross Profit Today",
-      value: formatCurrency(stats.grossProfitToday),
+      label: "Expenses Today",
+      value: formatCurrency(stats.expensesToday),
+      icon: Wallet,
+    },
+    {
+      label: "Profit Today",
+      value: formatCurrency(stats.profitToday),
       icon: TrendingUp,
     },
   ]
@@ -115,7 +121,7 @@ export function DashboardStats({ store }: DashboardStatsProps) {
             className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <p className="max-w-[9rem] text-xs uppercase leading-4 tracking-[0.12em] text-muted-foreground">
+              <p className="max-w-36 text-xs uppercase leading-4 tracking-[0.12em] text-muted-foreground">
                 {card.label}
               </p>
               <card.icon className="size-4 text-primary" />

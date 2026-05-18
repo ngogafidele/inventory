@@ -5,6 +5,7 @@ import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { Invoice } from "@/lib/db/models/Invoice"
+import { Expense } from "@/lib/db/models/Expense"
 
 type DashboardSaleItem = {
   quantity: number
@@ -33,6 +34,10 @@ type DashboardMoneyTotal = {
 
 type DashboardRevenueTotal = {
   revenue: number
+}
+
+type DashboardExpenseTotal = {
+  total: number
 }
 
 type DashboardTopMovingProduct = {
@@ -131,6 +136,11 @@ export async function GET(request: NextRequest) {
       },
     ])
 
+    const todayExpenses = await Expense.aggregate<DashboardExpenseTotal>([
+      { $match: { store, date: { $gte: today.start, $lt: today.end } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ])
+
     const todayGrossProfit = await Sale.aggregate<DashboardMoneyTotal>([
       { $match: todayFilter },
       { $unwind: "$items" },
@@ -195,6 +205,10 @@ export async function GET(request: NextRequest) {
         revenue: sales[0]?.total || 0,
         revenueToday: todaySalesTotals[0]?.revenue || 0,
         grossProfitToday: todayGrossProfit[0]?.total || 0,
+        expensesToday: todayExpenses[0]?.total || 0,
+        profitToday:
+          (todayGrossProfit[0]?.total || 0) -
+          (todayExpenses[0]?.total || 0),
         outstandingAmount: unpaidTotals[0]?.total || 0,
         lowStockProducts: lowStockProducts.map((product) => ({
           _id: product._id.toString(),

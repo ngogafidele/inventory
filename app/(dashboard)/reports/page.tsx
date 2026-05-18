@@ -6,6 +6,7 @@ import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
+import { Expense } from "@/lib/db/models/Expense"
 import { STORE_LABELS } from "@/lib/utils/constants"
 import { formatCurrency } from "@/lib/utils/format"
 import {
@@ -31,12 +32,12 @@ type StoreKey = "store1" | "store2"
 type StoreReport = {
   store: StoreKey
   products: number
-  lowStock: number
   inventoryCost: number
   inventoryRetail: number
   sales: number
   revenue: number
-  grossProfit: number
+  expenses: number
+  profit: number
   invoices: number
   unpaidInvoices: number
   outstanding: number
@@ -54,7 +55,6 @@ type SaleTotals = {
 type ProductTotals = {
   _id: StoreKey
   products: number
-  lowStock: number
   inventoryCost: number
   inventoryRetail: number
 }
@@ -69,6 +69,16 @@ type InvoiceTotals = {
 type AdjustmentTotals = {
   _id: StoreKey
   adjustments: number
+}
+
+type ExpenseTotals = {
+  _id: StoreKey
+  expenses: number
+}
+
+type OutstandingSaleTotals = {
+  _id: StoreKey
+  outstanding: number
 }
 
 type SearchParams = Promise<{
@@ -177,12 +187,12 @@ function sumReports(reports: StoreReport[]) {
   return reports.reduce(
     (total, report) => ({
       products: total.products + report.products,
-      lowStock: total.lowStock + report.lowStock,
       inventoryCost: total.inventoryCost + report.inventoryCost,
       inventoryRetail: total.inventoryRetail + report.inventoryRetail,
       sales: total.sales + report.sales,
       revenue: total.revenue + report.revenue,
-      grossProfit: total.grossProfit + report.grossProfit,
+      expenses: total.expenses + report.expenses,
+      profit: total.profit + report.profit,
       invoices: total.invoices + report.invoices,
       unpaidInvoices: total.unpaidInvoices + report.unpaidInvoices,
       outstanding: total.outstanding + report.outstanding,
@@ -190,12 +200,12 @@ function sumReports(reports: StoreReport[]) {
     }),
     {
       products: 0,
-      lowStock: 0,
       inventoryCost: 0,
       inventoryRetail: 0,
       sales: 0,
       revenue: 0,
-      grossProfit: 0,
+      expenses: 0,
+      profit: 0,
       invoices: 0,
       unpaidInvoices: 0,
       outstanding: 0,
@@ -229,6 +239,8 @@ export default async function ReportsPage({
     saleTotals,
     invoiceTotals,
     adjustmentTotals,
+    expenseTotals,
+    outstandingSalesTotals,
     topMovingProducts,
     recentSales,
   ] = await Promise.all([
@@ -238,15 +250,6 @@ export default async function ReportsPage({
         $group: {
           _id: "$store",
           products: { $sum: 1 },
-          lowStock: {
-            $sum: {
-              $cond: [
-                { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
-                1,
-                0,
-              ],
-            },
-          },
           inventoryCost: {
             $sum: { $multiply: ["$quantity", "$costPrice"] },
           },
@@ -310,6 +313,30 @@ export default async function ReportsPage({
         },
       },
     ]),
+    Expense.aggregate<ExpenseTotals>([
+      { $match: { store: currentStore, date: periodFilter } },
+      {
+        $group: {
+          _id: "$store",
+          expenses: { $sum: "$amount" },
+        },
+      },
+    ]),
+    Sale.aggregate<OutstandingSaleTotals>([
+      {
+        $match: {
+          store: currentStore,
+          createdAt: periodFilter,
+          paymentStatus: "unpaid",
+        },
+      },
+      {
+        $group: {
+          _id: "$store",
+          outstanding: { $sum: "$totalAmount" },
+        },
+      },
+    ]),
     Sale.aggregate<TopMovingProduct>([
       { $match: { store: currentStore, createdAt: periodFilter } },
       { $unwind: "$items" },
@@ -359,25 +386,34 @@ export default async function ReportsPage({
   const adjustmentMap = new Map(
     adjustmentTotals.map((item) => [item._id, item])
   )
+  const expenseMap = new Map(expenseTotals.map((item) => [item._id, item]))
+  const outstandingSalesMap = new Map(
+    outstandingSalesTotals.map((item) => [item._id, item])
+  )
 
   const storeReports = [currentStore].map((store) => {
     const products = productMap.get(store)
     const sales = saleMap.get(store)
     const invoices = invoiceMap.get(store)
     const adjustments = adjustmentMap.get(store)
+    const expenses = expenseMap.get(store)
+    const outstandingSales = outstandingSalesMap.get(store)
+
+    const grossProfit = sales?.grossProfit ?? 0
+    const expenseTotal = expenses?.expenses ?? 0
 
     return {
       store,
       products: products?.products ?? 0,
-      lowStock: products?.lowStock ?? 0,
       inventoryCost: products?.inventoryCost ?? 0,
       inventoryRetail: products?.inventoryRetail ?? 0,
       sales: sales?.sales ?? 0,
       revenue: sales?.revenue ?? 0,
-      grossProfit: sales?.grossProfit ?? 0,
+      expenses: expenseTotal,
+      profit: grossProfit - expenseTotal,
       invoices: invoices?.invoices ?? 0,
       unpaidInvoices: invoices?.unpaidInvoices ?? 0,
-      outstanding: invoices?.outstanding ?? 0,
+      outstanding: outstandingSales?.outstanding ?? 0,
       adjustments: adjustments?.adjustments ?? 0,
     } satisfies StoreReport
   })
@@ -400,12 +436,12 @@ export default async function ReportsPage({
 
   const cards = [
     { label: "Total Revenue", value: formatCurrency(totals.revenue) },
-    { label: "Gross Profit", value: formatCurrency(totals.grossProfit) },
+    { label: "Expenses", value: formatCurrency(totals.expenses) },
+    { label: "Profit", value: formatCurrency(totals.profit) },
     { label: "Inventory Cost", value: formatCurrency(totals.inventoryCost) },
     { label: "Inventory Retail", value: formatCurrency(totals.inventoryRetail) },
     { label: "Sales Records", value: formatNumber(totals.sales) },
     { label: "Products", value: formatNumber(totals.products) },
-    { label: "Low Stock", value: formatNumber(totals.lowStock) },
     { label: "Outstanding", value: formatCurrency(totals.outstanding) },
   ]
 
@@ -481,10 +517,10 @@ export default async function ReportsPage({
             <TableRow>
               <TableHead>Store</TableHead>
               <TableHead>Revenue</TableHead>
-              <TableHead>Gross Profit</TableHead>
+              <TableHead>Expenses</TableHead>
+              <TableHead>Profit</TableHead>
               <TableHead>Sales</TableHead>
               <TableHead>Products</TableHead>
-              <TableHead>Low Stock</TableHead>
               <TableHead>Outstanding</TableHead>
             </TableRow>
           </TableHeader>
@@ -493,10 +529,10 @@ export default async function ReportsPage({
               <TableRow key={report.store}>
                 <TableCell>{STORE_LABELS[report.store]}</TableCell>
                 <TableCell>{formatCurrency(report.revenue)}</TableCell>
-                <TableCell>{formatCurrency(report.grossProfit)}</TableCell>
+                <TableCell>{formatCurrency(report.expenses)}</TableCell>
+                <TableCell>{formatCurrency(report.profit)}</TableCell>
                 <TableCell>{formatNumber(report.sales)}</TableCell>
                 <TableCell>{formatNumber(report.products)}</TableCell>
-                <TableCell>{formatNumber(report.lowStock)}</TableCell>
                 <TableCell>{formatCurrency(report.outstanding)}</TableCell>
               </TableRow>
             ))}

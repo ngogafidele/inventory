@@ -12,5 +12,12 @@ export type Sale = {
   store: "store1" | "store2"
   items: SaleItem[]
   totalAmount: number
+  paymentStatus?: "paid" | "unpaid"
+  paymentMethod?: "cash" | "bank" | "mobile"
+  outstanding?: {
+    customerName: string
+    customerPhone?: string
+    paymentDate?: string
+  }
   createdAt: string
 }

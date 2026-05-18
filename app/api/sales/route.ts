@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateSaleSchema } from "@/lib/db/validators/sale"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { parseKigaliDateInput } from "@/lib/utils/time"
 
 export async function GET(request: NextRequest) {
   try {
@@ -145,6 +146,29 @@ export async function POST(request: NextRequest) {
       decrementedProducts.push({ productId, quantity })
     }
 
+    const paymentStatus = payload.paymentStatus ?? "paid"
+    let outstanding: {
+      customerName: string
+      customerPhone?: string
+      paymentDate?: Date
+    } | null = null
+
+    if (paymentStatus === "unpaid") {
+      const paymentDate = parseKigaliDateInput(payload.outstanding?.paymentDate)
+      if (!paymentDate) {
+        return NextResponse.json(
+          { success: false, error: "Invalid payment date." },
+          { status: 400 }
+        )
+      }
+
+      outstanding = {
+        customerName: payload.outstanding?.customerName ?? "",
+        customerPhone: payload.outstanding?.customerPhone ?? "",
+        paymentDate,
+      }
+    }
+
     let sale
     try {
       sale = await Sale.create({
@@ -152,6 +176,10 @@ export async function POST(request: NextRequest) {
         items: saleItems,
         totalAmount,
         createdBy: session.userId,
+        paymentStatus,
+        paymentMethod:
+          paymentStatus === "paid" ? payload.paymentMethod : undefined,
+        outstanding: paymentStatus === "unpaid" ? outstanding : undefined,
         notes: payload.notes ?? "",
       })
     } catch (error) {

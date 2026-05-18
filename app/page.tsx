@@ -1,34 +1,30 @@
 "use client"
 
-import { useState, useTransition } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { KeyRound, ShieldCheck } from "lucide-react"
+import { ArrowRight, KeyRound, LockKeyhole, Mail, PackageCheck } from "lucide-react"
+import { type FormEvent, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export default function Home() {
   const router = useRouter()
-  const [loginEmail, setLoginEmail] = useState("")
-  const [loginPassword, setLoginPassword] = useState("")
-  const [setupName, setSetupName] = useState("")
-  const [setupEmail, setSetupEmail] = useState("")
-  const [setupPassword, setSetupPassword] = useState("")
-  const [setupConfirmPassword, setSetupConfirmPassword] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const handleLogin = () => {
+  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     setMessage(null)
+
     startTransition(async () => {
       try {
         const response = await fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: loginEmail,
-            password: loginPassword,
-          }),
+          body: JSON.stringify({ email, password }),
         })
 
         const data = await response.json()
@@ -45,137 +41,123 @@ export default function Home() {
     })
   }
 
-  const handleSetup = () => {
-    setMessage(null)
-    if (setupPassword !== setupConfirmPassword) {
-      setMessage("Admin setup passwords do not match")
-      return
-    }
-
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/auth/setup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: setupName,
-            email: setupEmail,
-            password: setupPassword,
-          }),
-        })
-
-        const data = await response.json()
-        if (!response.ok) {
-          setMessage(data?.error ?? "Setup failed")
-          return
-        }
-
-        router.push("/dashboard")
-        router.refresh()
-      } catch (error) {
-        setMessage("Network error. Check your connection and try again.")
-      }
-    })
-  }
-
   return (
     <div className="brand-auth-surface min-h-screen">
-      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-14">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm">
-            <Image
-              src="/images/logo.png"
-              alt="B Ikaze Inventory logo"
-              width={80}
-              height={80}
-              priority
-              className="h-full w-full object-contain p-2"
-            />
-          </div>
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              B Ikaze Inventory System
-            </p>
-            <h1 className="text-3xl font-semibold sm:text-4xl">Sign in to Operations</h1>
-            <p className="max-w-xl text-sm text-muted-foreground">
-              Manage store-level products, sales, and inventory from a single hub.
-              Admin setup is required only once.
-            </p>
-          </div>
-        </div>
-
-        {message ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {message}
-          </div>
-        ) : null}
-
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <KeyRound className="size-4 text-primary" />
-              <h2 className="text-lg font-semibold">Login</h2>
+      <main className="mx-auto grid min-h-screen max-w-6xl items-center gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-10">
+        <section className="order-2 space-y-8 lg:order-1">
+          <div className="flex items-center gap-4">
+            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/80 bg-white shadow-sm">
+              <Image
+                src="/images/logo.png"
+                alt="B Ikaze Hardware logo"
+                width={80}
+                height={80}
+                priority
+                className="h-full w-full object-contain p-2"
+              />
             </div>
+            <div>
+              <p className="text-sm font-semibold uppercase text-[var(--brand-orange-text)]">
+                B Ikaze Hardware
+              </p>
+              <h1 className="text-3xl font-semibold text-[var(--brand-navy)] sm:text-4xl">
+                Inventory control for every counter.
+              </h1>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              "Track stock across stores",
+              "Manage products and sales",
+              "Review invoices and alerts",
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-lg border border-border/80 bg-white/70 p-4 text-sm font-medium text-[var(--brand-navy)] shadow-sm"
+              >
+                <PackageCheck className="mb-3 size-5 text-[var(--brand-orange-text)]" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="order-1 rounded-xl border border-border/80 bg-card p-5 shadow-xl sm:p-7 lg:order-2">
+          <div className="mb-6">
+            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-[var(--brand-navy)] text-white">
+              <KeyRound className="size-5" />
+            </div>
+            <h2 className="text-2xl font-semibold text-[var(--brand-navy)]">
+              Sign in
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Use your staff or admin account to continue to the dashboard.
+            </p>
+          </div>
+
+          {message ? (
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {message}
+            </div>
+          ) : null}
+
+          <form className="space-y-4" onSubmit={handleLogin}>
+            <label className="block space-y-2 text-sm font-medium text-foreground">
+              Email or username
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="h-11 pl-9"
+                  placeholder="Email or username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="text"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+            </label>
+            <label className="block space-y-2 text-sm font-medium text-foreground">
+              Password
+              <div className="relative">
+                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="h-11 pl-9"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+            </label>
+
+            <Button
+              className="h-11 w-full bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-navy)]/90"
+              disabled={isPending}
+            >
+              {isPending ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
+
+          <div className="mt-6 border-t border-border pt-5">
             <p className="text-sm text-muted-foreground">
-              Access your assigned stores and daily operations.
+              Setting up the system for the first time?
             </p>
-            <div className="mt-4 space-y-3">
-              <Input
-                placeholder="Email or username"
-                value={loginEmail}
-                onChange={(event) => setLoginEmail(event.target.value)}
-                type="text"
-              />
-              <Input
-                placeholder="Password"
-                value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-                type="password"
-              />
-              <Button onClick={handleLogin} disabled={isPending}>
-                Sign in
-              </Button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-border/80 bg-card/95 p-5 shadow-sm backdrop-blur sm:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <ShieldCheck className="size-4 text-primary" />
-              <h2 className="text-lg font-semibold">Admin Setup</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Create the initial admin account (run once).
-            </p>
-            <div className="mt-4 space-y-3">
-              <Input
-                placeholder="Full name"
-                value={setupName}
-                onChange={(event) => setSetupName(event.target.value)}
-              />
-              <Input
-                placeholder="Admin email"
-                value={setupEmail}
-                onChange={(event) => setSetupEmail(event.target.value)}
-                type="email"
-              />
-              <Input
-                placeholder="Admin password"
-                value={setupPassword}
-                onChange={(event) => setSetupPassword(event.target.value)}
-                type="password"
-              />
-              <Input
-                placeholder="Confirm admin password"
-                value={setupConfirmPassword}
-                onChange={(event) => setSetupConfirmPassword(event.target.value)}
-                type="password"
-              />
-              <Button variant="secondary" onClick={handleSetup} disabled={isPending}>
-                Create admin
-              </Button>
-            </div>
-          </section>
-        </div>
+            <Button
+              asChild
+              variant="secondary"
+              className="mt-3 h-11 w-full border border-[var(--brand-orange)] bg-[var(--brand-orange)] font-semibold text-[var(--brand-navy)] hover:bg-[var(--brand-orange)]/90"
+            >
+              <Link href="/setup-admin">
+                Get Started
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
+        </section>
       </main>
     </div>
   )

@@ -7,6 +7,9 @@ import {
   Bell,
   ChartColumn,
   ClipboardList,
+  Clock,
+  RotateCcw,
+  Wallet,
   LayoutDashboard,
   PackageSearch,
   ReceiptText,
@@ -24,7 +27,10 @@ const adminOnlyNavItems = [
 const commonNavItems = [
   { href: "/products", label: "Products", icon: PackageSearch },
   { href: "/sales", label: "Sales", icon: ReceiptText },
+  { href: "/returns", label: "Returns", icon: RotateCcw },
   { href: "/invoices", label: "Invoices", icon: ClipboardList },
+  { href: "/expenses", label: "Expenses", icon: Wallet },
+  { href: "/outstanding", label: "Outstanding", icon: Clock },
   { href: "/alerts", label: "Low Stock Alerts", icon: Bell },
 ]
 
