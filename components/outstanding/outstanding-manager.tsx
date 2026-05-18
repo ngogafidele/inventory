@@ -161,9 +161,9 @@ export function OutstandingManager({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <StatsCard label="Matching" value={filteredSales.length} />
+        <StatsCard label="Outstanding Sales" value={filteredSales.length} />
         <StatsCard
-          label="Matching Total"
+          label="Outstanding Total"
           value={formatCurrency(totalOutstanding)}
         />
       </div>
