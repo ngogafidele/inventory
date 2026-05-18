@@ -61,6 +61,14 @@ export async function PUT(
 
     let items = existingReturn.items
     if (payload.items) {
+      items = payload.items.map((item: ReturnItemInput) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      }))
+    }
+
+    const shouldValidateItems = Boolean(payload.items || payload.saleId)
+    if (shouldValidateItems) {
       const sale = await Sale.findOne({ _id: saleId, store })
       if (!sale) {
         return NextResponse.json(
@@ -69,16 +77,35 @@ export async function PUT(
         )
       }
 
+      const existingReturns = await ReturnModel.find({
+        store,
+        saleId: sale._id,
+        _id: { $ne: id },
+      })
+        .select("items")
+        .lean()
+
+      const returnedMap = new Map<string, number>()
+      for (const entry of existingReturns) {
+        for (const item of entry.items ?? []) {
+          const productId = item.productId.toString()
+          returnedMap.set(productId, (returnedMap.get(productId) ?? 0) + item.quantity)
+        }
+      }
+
       const saleItemMap = new Map(
         sale.items.map((item) => [item.productId.toString(), item])
       )
 
-      items = payload.items.map((item: ReturnItemInput) => {
-        const saleItem = saleItemMap.get(item.productId)
+      items = items.map((item) => {
+        const saleItem = saleItemMap.get(item.productId.toString())
         if (!saleItem) {
           throw new Error("One or more return items are not in the sale")
         }
-        if (item.quantity > saleItem.quantity) {
+
+        const alreadyReturned = returnedMap.get(item.productId.toString()) ?? 0
+        const availableToReturn = saleItem.quantity - alreadyReturned
+        if (item.quantity > availableToReturn) {
           throw new Error("Return quantity exceeds sold quantity")
         }
 

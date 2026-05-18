@@ -3,14 +3,6 @@
 import { useMemo, useState } from "react"
 import { Pencil, Plus, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -128,7 +120,7 @@ export function ReturnsManager({
 }) {
   const [returns, setReturns] = useState(initialReturns)
   const [search, setSearch] = useState("")
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const [activeReturnId, setActiveReturnId] = useState<string | null>(null)
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
@@ -162,7 +154,7 @@ export function ReturnsManager({
 
   const openCreate = () => {
     resetForm()
-    setDialogOpen(true)
+    setFormOpen(true)
   }
 
   const openEdit = (entry: ReturnClient) => {
@@ -182,7 +174,7 @@ export function ReturnsManager({
     })
     setActiveReturnId(entry._id)
     setError(null)
-    setDialogOpen(true)
+    setFormOpen(true)
   }
 
   const updateItem = (index: number, field: keyof ReturnItemDraft, value: string) => {
@@ -303,7 +295,7 @@ export function ReturnsManager({
           : [normalized, ...current]
       )
 
-      setDialogOpen(false)
+      setFormOpen(false)
       resetForm()
     } catch {
       setError("Failed to save return.")
@@ -369,224 +361,244 @@ export function ReturnsManager({
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreate}>
-                <Plus className="size-4" />
-                Add Return
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {activeReturnId ? "Edit return" : "Add return"}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3">
-                <label className="grid gap-1 text-sm">
-                  Sale
-                  <Select
-                    value={formState.saleId}
-                    onValueChange={(value) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        saleId: value,
-                        items: [emptyItem],
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select sale" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {saleOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <label className="grid gap-1 text-sm">
-                  Reason
-                  <Input
-                    value={formState.reason}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        reason: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1 text-sm">
-                    Return date
-                    <Input
-                      type="date"
-                      value={formState.returnDate}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          returnDate: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    Refund amount
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={formState.refundAmount}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          refundAmount: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-
-                <label className="grid gap-1 text-sm">
-                  Refund method
-                  <Select
-                    value={formState.refundMethod}
-                    onValueChange={(value) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        refundMethod: value as FormState["refundMethod"],
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method.value} value={method.value}>
-                          {method.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1 text-sm">
-                    Customer name
-                    <Input
-                      value={formState.customerName}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          customerName: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    Customer phone
-                    <Input
-                      value={formState.customerPhone}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          customerPhone: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-
-                <label className="grid gap-1 text-sm">
-                  Items
-                  <div className="space-y-2">
-                    {formState.items.map((item, index) => (
-                      <div
-                        key={`${index}-${item.productId}`}
-                        className="grid gap-2 rounded-md border border-border/80 p-2 sm:grid-cols-[1.6fr_0.6fr_auto]"
-                      >
-                        <Select
-                          value={item.productId}
-                          onValueChange={(value) => updateItem(index, "productId", value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select item" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {saleItems.map((saleItem) => (
-                              <SelectItem key={saleItem.productId} value={saleItem.productId}>
-                                {saleItem.name} ({saleItem.quantity} {saleItem.unit ?? "pcs"})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(event) =>
-                            updateItem(index, "quantity", event.target.value)
-                          }
-                          placeholder="Qty"
-                        />
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => removeItem(index)}
-                          disabled={formState.items.length === 1}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </label>
-
-                <Button type="button" variant="outline" onClick={addItem}>
-                  Add Item
-                </Button>
-
-                <label className="grid gap-1 text-sm">
-                  Notes (optional)
-                  <textarea
-                    value={formState.notes}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        notes: event.target.value,
-                      }))
-                    }
-                    className="min-h-20 rounded-md border border-border px-3 py-2"
-                  />
-                </label>
-
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="button" onClick={submitForm} disabled={submitting}>
-                  {submitting ? "Saving..." : "Save"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={openCreate}>
+            <Plus className="size-4" />
+            Add Return
+          </Button>
         </div>
       </div>
+
+      {formOpen ? (
+        <div className="rounded-lg border border-border/80 bg-background p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                {activeReturnId ? "Editing" : "New"} return
+              </p>
+              <h3 className="text-lg font-semibold">
+                {activeReturnId ? "Edit return" : "Add return"}
+              </h3>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setFormOpen(false)
+                resetForm()
+              }}
+              disabled={submitting}
+            >
+              Close
+            </Button>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <label className="grid gap-1 text-sm">
+              Sale
+              <Select
+                value={formState.saleId}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    saleId: value,
+                    items: [emptyItem],
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select sale" />
+                </SelectTrigger>
+                <SelectContent>
+                  {saleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="grid gap-1 text-sm">
+              Reason
+              <Input
+                value={formState.reason}
+                onChange={(event) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    reason: event.target.value,
+                  }))
+                }
+              />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                Return date
+                <Input
+                  type="date"
+                  value={formState.returnDate}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      returnDate: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Refund amount
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formState.refundAmount}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      refundAmount: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-1 text-sm">
+              Refund method
+              <Select
+                value={formState.refundMethod}
+                onValueChange={(value) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    refundMethod: value as FormState["refundMethod"],
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((method) => (
+                    <SelectItem key={method.value} value={method.value}>
+                      {method.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                Customer name
+                <Input
+                  value={formState.customerName}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      customerName: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Customer phone
+                <Input
+                  value={formState.customerPhone}
+                  onChange={(event) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      customerPhone: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-1 text-sm">
+              Items
+              <div className="space-y-2">
+                {formState.items.map((item, index) => (
+                  <div
+                    key={`${index}-${item.productId}`}
+                    className="grid gap-2 rounded-md border border-border/80 p-2 sm:grid-cols-[1.6fr_0.6fr_auto]"
+                  >
+                    <Select
+                      value={item.productId}
+                      onValueChange={(value) => updateItem(index, "productId", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select item" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {saleItems.map((saleItem) => (
+                          <SelectItem key={saleItem.productId} value={saleItem.productId}>
+                            {saleItem.name} ({saleItem.quantity} {saleItem.unit ?? "pcs"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(event) =>
+                        updateItem(index, "quantity", event.target.value)
+                      }
+                      placeholder="Qty"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeItem(index)}
+                      disabled={formState.items.length === 1}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </label>
+
+            <Button type="button" variant="outline" onClick={addItem}>
+              Add Item
+            </Button>
+
+            <label className="grid gap-1 text-sm">
+              Notes (optional)
+              <textarea
+                value={formState.notes}
+                onChange={(event) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    notes: event.target.value,
+                  }))
+                }
+                className="min-h-20 rounded-md border border-border px-3 py-2"
+              />
+            </label>
+
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          </div>
+
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setFormOpen(false)
+                resetForm()
+              }}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitForm} disabled={submitting}>
+              {submitting ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatsCard label="Returns" value={filteredReturns.length} />

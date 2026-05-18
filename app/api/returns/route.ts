@@ -75,6 +75,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const existingReturns = await ReturnModel.find({
+      store,
+      saleId: sale._id,
+    })
+      .select("items")
+      .lean()
+
+    const returnedMap = new Map<string, number>()
+    for (const entry of existingReturns) {
+      for (const item of entry.items ?? []) {
+        const productId = item.productId.toString()
+        returnedMap.set(productId, (returnedMap.get(productId) ?? 0) + item.quantity)
+      }
+    }
+
     const saleItemMap = new Map(
       sale.items.map((item) => [item.productId.toString(), item])
     )
@@ -84,7 +99,9 @@ export async function POST(request: NextRequest) {
       if (!saleItem) {
         throw new Error("One or more return items are not in the sale")
       }
-      if (item.quantity > saleItem.quantity) {
+      const alreadyReturned = returnedMap.get(item.productId) ?? 0
+      const availableToReturn = saleItem.quantity - alreadyReturned
+      if (item.quantity > availableToReturn) {
         throw new Error("Return quantity exceeds sold quantity")
       }
 

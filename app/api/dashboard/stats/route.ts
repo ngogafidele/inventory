@@ -6,6 +6,7 @@ import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Expense } from "@/lib/db/models/Expense"
+import { formatKigaliDateInput, parseKigaliDateInput } from "@/lib/utils/time"
 
 type DashboardSaleItem = {
   quantity: number
@@ -50,9 +51,17 @@ type DashboardTopMovingProduct = {
   salesValue: number
 }
 
-function getTodayRange() {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
+function getKigaliTodayRange() {
+  const todayKigali = formatKigaliDateInput(new Date())
+  const start = parseKigaliDateInput(todayKigali)
+
+  if (!start) {
+    const fallback = new Date()
+    fallback.setHours(0, 0, 0, 0)
+    const end = new Date(fallback)
+    end.setDate(end.getDate() + 1)
+    return { start: fallback, end }
+  }
 
   const end = new Date(start)
   end.setDate(end.getDate() + 1)
@@ -74,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     await connectToDatabase()
 
-    const today = getTodayRange()
+    const today = getKigaliTodayRange()
     const todayFilter = {
       store,
       createdAt: { $gte: today.start, $lt: today.end },
@@ -137,7 +146,12 @@ export async function GET(request: NextRequest) {
     ])
 
     const todayExpenses = await Expense.aggregate<DashboardExpenseTotal>([
-      { $match: { store, date: { $gte: today.start, $lt: today.end } } },
+      {
+        $match: {
+          store,
+          date: { $gte: today.start, $lt: today.end },
+        },
+      },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ])
 
