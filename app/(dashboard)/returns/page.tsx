@@ -1,7 +1,7 @@
 import "@/lib/db/models/User"
 import { connectToDatabase } from "@/lib/db/connection"
 import { ReturnModel } from "@/lib/db/models/Return"
-import { Sale } from "@/lib/db/models/Sale"
+import { Product } from "@/lib/db/models/Product"
 import { ReturnsManager } from "@/components/returns/returns-manager"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { formatInKigali } from "@/lib/utils/time"
@@ -14,8 +14,7 @@ type PopulatedUser = {
 
 type ReturnPageReturn = {
   _id: { toString(): string }
-  saleId: { toString(): string }
-  items: Array<{
+  returnItems: Array<{
     productId: { toString(): string }
     name: string
     sku: string
@@ -24,29 +23,29 @@ type ReturnPageReturn = {
     unitPrice: number
     lineTotal: number
   }>
-  refundAmount: number
-  refundMethod: "cash" | "mobile-money" | "bank"
-  reason: string
-  returnDate?: Date
-  customerName: string
-  customerPhone: string
-  notes?: string
-  createdBy?: PopulatedUser | { toString(): string }
-  createdAt?: Date
-}
-
-type SaleOption = {
-  _id: { toString(): string }
-  createdAt?: Date
-  totalAmount: number
-  items: Array<{
+  replacementItems: Array<{
     productId: { toString(): string }
     name: string
     sku: string
     unit?: string
     quantity: number
-    sellingPrice: number
+    unitPrice: number
+    lineTotal: number
   }>
+  totalReturnAmount: number
+  totalReplacementAmount: number
+  notes?: string
+  createdBy?: PopulatedUser | { toString(): string }
+  createdAt?: Date
+}
+
+type ReturnPageProduct = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  price: number
 }
 
 function isPopulatedUser(value: ReturnPageReturn["createdBy"]): value is PopulatedUser {
@@ -58,21 +57,17 @@ export default async function ReturnsPage() {
   const store = getCurrentStore(session)
 
   await connectToDatabase()
-  const [returns, sales] = await Promise.all([
+  const [returns, products] = await Promise.all([
     ReturnModel.find({ store })
       .populate("createdBy", "name email")
-      .sort({ returnDate: -1, createdAt: -1 })
-      .lean<ReturnPageReturn[]>(),
-    Sale.find({ store })
-      .select("items totalAmount createdAt")
       .sort({ createdAt: -1 })
-      .lean<SaleOption[]>(),
+      .lean<ReturnPageReturn[]>(),
+    Product.find({ store }).sort({ name: 1 }).lean<ReturnPageProduct[]>(),
   ])
 
   const serializedReturns = returns.map((entry) => ({
     _id: entry._id.toString(),
-    saleId: entry.saleId.toString(),
-    items: entry.items.map((item) => ({
+    returnItems: (entry.returnItems ?? []).map((item) => ({
       productId: item.productId.toString(),
       name: item.name,
       sku: item.sku,
@@ -81,51 +76,49 @@ export default async function ReturnsPage() {
       unitPrice: item.unitPrice,
       lineTotal: item.lineTotal,
     })),
-    refundAmount: entry.refundAmount,
-    refundMethod: entry.refundMethod,
-    reason: entry.reason,
-    returnDate: entry.returnDate?.toISOString(),
-    returnDateLabel: entry.returnDate
-      ? formatInKigali(entry.returnDate, {
-          year: "numeric",
-          month: "short",
-          day: "2-digit",
-        })
-      : "-",
-    customerName: entry.customerName,
-    customerPhone: entry.customerPhone,
-    notes: entry.notes ?? "",
-    createdByName: isPopulatedUser(entry.createdBy)
-      ? entry.createdBy.name ?? entry.createdBy.email ?? "Unknown User"
-      : "Unknown User",
-  }))
-
-  const serializedSales = sales.map((sale) => ({
-    _id: sale._id.toString(),
-    label: sale.createdAt
-      ? formatInKigali(sale.createdAt, {
-          year: "numeric",
-          month: "short",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : sale._id.toString(),
-    totalAmount: sale.totalAmount,
-    items: sale.items.map((item) => ({
+    replacementItems: (entry.replacementItems ?? []).map((item) => ({
       productId: item.productId.toString(),
       name: item.name,
       sku: item.sku,
       unit: item.unit ?? "pcs",
       quantity: item.quantity,
-      sellingPrice: item.sellingPrice,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
     })),
+    totalReturnAmount: entry.totalReturnAmount,
+    totalReplacementAmount: entry.totalReplacementAmount,
+    notes: entry.notes ?? "",
+    createdByName: isPopulatedUser(entry.createdBy)
+      ? entry.createdBy.name ?? entry.createdBy.email ?? "Unknown User"
+      : "Unknown User",
+    createdAt: entry.createdAt?.toISOString(),
+    createdAtLabel: entry.createdAt
+      ? formatInKigali(entry.createdAt, {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        })
+      : "-",
+  }))
+
+  const serializedProducts = products.map((product) => ({
+    _id: product._id.toString(),
+    name: product.name,
+    sku: product.sku,
+    unit: product.unit ?? "pcs",
+    quantity: product.quantity,
+    price: product.price,
   }))
 
   return (
     <ReturnsManager
       initialReturns={serializedReturns}
-      sales={serializedSales}
+      products={serializedProducts}
+      currentUserLabel={session.email}
     />
   )
 }

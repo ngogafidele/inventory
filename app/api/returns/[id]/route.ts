@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
-import { ZodError } from "zod"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ReturnModel } from "@/lib/db/models/Return"
-import { Sale } from "@/lib/db/models/Sale"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateReturnSchema } from "@/lib/db/validators/return"
-import { parseKigaliDateInput } from "@/lib/utils/time"
+
+const TOTAL_TOLERANCE = 0.01
 
 type ReturnItemInput = {
   productId: string
+  quantity: number
+  unitPrice: number
+}
+
+type ProductDocumentLike = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
   quantity: number
 }
 
@@ -47,151 +55,166 @@ export async function PUT(
       )
     }
 
-    const saleId = payload.saleId ?? existingReturn.saleId?.toString()
-    const returnDate = payload.returnDate
-      ? parseKigaliDateInput(payload.returnDate)
-      : existingReturn.returnDate
+    const returnItemsInput = payload.returnItems
+      ? payload.returnItems.map((item: ReturnItemInput) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        }))
+      : existingReturn.returnItems.map((item) => ({
+          productId: item.productId.toString(),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        }))
 
-    if (payload.returnDate && !returnDate) {
+    const replacementItemsInput = payload.replacementItems
+      ? payload.replacementItems.map((item: ReturnItemInput) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        }))
+      : existingReturn.replacementItems.map((item) => ({
+          productId: item.productId.toString(),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        }))
+
+    const allProductIds = Array.from(
+      new Set(
+        [
+          ...existingReturn.returnItems.map((item) => item.productId.toString()),
+          ...existingReturn.replacementItems.map((item) => item.productId.toString()),
+          ...returnItemsInput.map((item) => item.productId),
+          ...replacementItemsInput.map((item) => item.productId),
+        ]
+      )
+    )
+
+    const products = await Product.find({
+      _id: { $in: allProductIds },
+      store,
+    })
+
+    if (products.length !== allProductIds.length) {
       return NextResponse.json(
-        { success: false, error: "Invalid return date." },
+        { success: false, error: "One or more products not found" },
+        { status: 404 }
+      )
+    }
+
+    const productMap = new Map(
+      products.map((product) => [product._id.toString(), product])
+    )
+
+    let totalReturnAmount = 0
+    const returnItems = returnItemsInput.map((item) => {
+      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+
+      const lineTotal = item.unitPrice * item.quantity
+      totalReturnAmount += lineTotal
+
+      return {
+        productId: product._id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit ?? "pcs",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal,
+      }
+    })
+
+    let totalReplacementAmount = 0
+    const replacementItems = replacementItemsInput.map((item) => {
+      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+
+      const lineTotal = item.unitPrice * item.quantity
+      totalReplacementAmount += lineTotal
+
+      return {
+        productId: product._id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit ?? "pcs",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal,
+      }
+    })
+
+    if (totalReplacementAmount - totalReturnAmount > TOTAL_TOLERANCE) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Replacement total cannot exceed the return total.",
+        },
         { status: 400 }
       )
     }
 
-    let items = existingReturn.items
-    if (payload.items) {
-      items = payload.items.map((item: ReturnItemInput) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-      }))
+    const oldNetMap = new Map<string, number>()
+    existingReturn.returnItems.forEach((item) => {
+      const current = oldNetMap.get(item.productId.toString()) ?? 0
+      oldNetMap.set(item.productId.toString(), current + item.quantity)
+    })
+    existingReturn.replacementItems.forEach((item) => {
+      const current = oldNetMap.get(item.productId.toString()) ?? 0
+      oldNetMap.set(item.productId.toString(), current - item.quantity)
+    })
+
+    const newNetMap = new Map<string, number>()
+    returnItems.forEach((item) => {
+      const current = newNetMap.get(item.productId.toString()) ?? 0
+      newNetMap.set(item.productId.toString(), current + item.quantity)
+    })
+    replacementItems.forEach((item) => {
+      const current = newNetMap.get(item.productId.toString()) ?? 0
+      newNetMap.set(item.productId.toString(), current - item.quantity)
+    })
+
+    const updates: Array<{ productId: string; delta: number }> = []
+    for (const productId of allProductIds) {
+      const oldNet = oldNetMap.get(productId) ?? 0
+      const newNet = newNetMap.get(productId) ?? 0
+      const delta = newNet - oldNet
+      if (delta === 0) continue
+
+      const product = productMap.get(productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+      if (product.quantity + delta < 0) {
+        return NextResponse.json(
+          { success: false, error: "Stock would go negative." },
+          { status: 400 }
+        )
+      }
+
+      updates.push({ productId, delta })
     }
 
-    const shouldValidateItems = Boolean(payload.items || payload.saleId)
-    if (shouldValidateItems) {
-      const sale = await Sale.findOne({ _id: saleId, store })
-      if (!sale) {
-        return NextResponse.json(
-          { success: false, error: "Sale not found" },
-          { status: 404 }
-        )
-      }
-
-      const existingReturns = await ReturnModel.find({
-        store,
-        saleId: sale._id,
-        _id: { $ne: id },
-      })
-        .select("items")
-        .lean()
-
-      const returnedMap = new Map<string, number>()
-      for (const entry of existingReturns) {
-        for (const item of entry.items ?? []) {
-          const productId = item.productId.toString()
-          returnedMap.set(productId, (returnedMap.get(productId) ?? 0) + item.quantity)
-        }
-      }
-
-      const saleItemMap = new Map(
-        sale.items.map((item) => [item.productId.toString(), item])
+    if (updates.length > 0) {
+      await Product.bulkWrite(
+        updates.map((entry) => ({
+          updateOne: {
+            filter: { _id: entry.productId, store },
+            update: { $inc: { quantity: entry.delta } },
+          },
+        }))
       )
-
-      items = items.map((item) => {
-        const saleItem = saleItemMap.get(item.productId.toString())
-        if (!saleItem) {
-          throw new Error("One or more return items are not in the sale")
-        }
-
-        const alreadyReturned = returnedMap.get(item.productId.toString()) ?? 0
-        const availableToReturn = saleItem.quantity - alreadyReturned
-        if (item.quantity > availableToReturn) {
-          throw new Error("Return quantity exceeds sold quantity")
-        }
-
-        const lineTotal = saleItem.sellingPrice * item.quantity
-
-        return {
-          productId: saleItem.productId,
-          name: saleItem.name,
-          sku: saleItem.sku,
-          unit: saleItem.unit ?? "pcs",
-          quantity: item.quantity,
-          unitPrice: saleItem.sellingPrice,
-          lineTotal,
-        }
-      })
-    }
-
-    if (payload.items) {
-      const oldItems = existingReturn.items
-      const allProductIds = new Set([
-        ...oldItems.map((item) => item.productId.toString()),
-        ...items.map((item) => item.productId.toString()),
-      ])
-
-      const products = await Product.find({
-        _id: { $in: Array.from(allProductIds) },
-        store,
-      })
-
-      if (products.length !== allProductIds.size) {
-        return NextResponse.json(
-          { success: false, error: "One or more products not found" },
-          { status: 404 }
-        )
-      }
-
-      const currentStock = new Map(
-        products.map((product) => [product._id.toString(), product.quantity])
-      )
-
-      const oldMap = new Map(
-        oldItems.map((item) => [item.productId.toString(), item.quantity])
-      )
-      const newMap = new Map(
-        items.map((item) => [item.productId.toString(), item.quantity])
-      )
-
-      const updates: Array<{ productId: string; delta: number }> = []
-      for (const productId of allProductIds) {
-        const oldQty = oldMap.get(productId) ?? 0
-        const newQty = newMap.get(productId) ?? 0
-        const delta = newQty - oldQty
-        if (delta === 0) continue
-
-        const available = currentStock.get(productId) ?? 0
-        if (delta < 0 && available + delta < 0) {
-          return NextResponse.json(
-            { success: false, error: "Stock would go negative." },
-            { status: 400 }
-          )
-        }
-
-        updates.push({ productId, delta })
-      }
-
-      if (updates.length > 0) {
-        await Product.bulkWrite(
-          updates.map((entry) => ({
-            updateOne: {
-              filter: { _id: entry.productId, store },
-              update: { $inc: { quantity: entry.delta } },
-            },
-          }))
-        )
-      }
     }
 
     const updateInput: Record<string, unknown> = {
-      saleId,
-      items,
-      refundAmount: payload.refundAmount ?? existingReturn.refundAmount,
-      refundMethod: payload.refundMethod ?? existingReturn.refundMethod,
-      reason: payload.reason?.trim() ?? existingReturn.reason,
-      returnDate,
-      customerName: payload.customerName?.trim() ?? existingReturn.customerName,
-      customerPhone: payload.customerPhone?.trim() ?? existingReturn.customerPhone,
+      returnItems,
+      replacementItems,
+      totalReturnAmount,
+      totalReplacementAmount,
       notes:
         typeof payload.notes === "string"
           ? payload.notes.trim()
@@ -213,12 +236,6 @@ export async function PUT(
 
     return NextResponse.json({ success: true, data: updatedReturn })
   } catch (error) {
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { success: false, error: error.issues[0]?.message ?? "Invalid input" },
-        { status: 400 }
-      )
-    }
     const message = error instanceof Error ? error.message : "Failed to update return"
     return NextResponse.json(
       { success: false, error: message },
@@ -260,7 +277,12 @@ export async function DELETE(
       )
     }
 
-    const productIds = existingReturn.items.map((item) => item.productId)
+    const productIds = Array.from(
+      new Set([
+        ...existingReturn.returnItems.map((item) => item.productId.toString()),
+        ...existingReturn.replacementItems.map((item) => item.productId.toString()),
+      ])
+    )
     const products = await Product.find({ _id: { $in: productIds }, store })
 
     if (products.length !== productIds.length) {
@@ -274,9 +296,20 @@ export async function DELETE(
       products.map((product) => [product._id.toString(), product.quantity])
     )
 
-    for (const item of existingReturn.items) {
-      const available = productMap.get(item.productId.toString()) ?? 0
-      if (available - item.quantity < 0) {
+    const netChanges = new Map<string, number>()
+    existingReturn.returnItems.forEach((item) => {
+      const current = netChanges.get(item.productId.toString()) ?? 0
+      netChanges.set(item.productId.toString(), current + item.quantity)
+    })
+    existingReturn.replacementItems.forEach((item) => {
+      const current = netChanges.get(item.productId.toString()) ?? 0
+      netChanges.set(item.productId.toString(), current - item.quantity)
+    })
+
+    for (const [productId, change] of netChanges.entries()) {
+      const available = productMap.get(productId) ?? 0
+      const delta = -change
+      if (available + delta < 0) {
         return NextResponse.json(
           { success: false, error: "Stock would go negative." },
           { status: 400 }
@@ -285,10 +318,10 @@ export async function DELETE(
     }
 
     await Product.bulkWrite(
-      existingReturn.items.map((item) => ({
+      Array.from(netChanges.entries()).map(([productId, change]) => ({
         updateOne: {
-          filter: { _id: item.productId, store },
-          update: { $inc: { quantity: -item.quantity } },
+          filter: { _id: productId, store },
+          update: { $inc: { quantity: -change } },
         },
       }))
     )

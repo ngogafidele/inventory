@@ -20,26 +20,17 @@ const ReturnSchema = new Schema(
       enum: ["store1", "store2"],
       required: true,
     },
-    saleId: { type: Schema.Types.ObjectId, ref: "Sale", required: true },
-    items: { type: [ReturnItemSchema], required: true },
-    refundAmount: { type: Number, required: true, min: 0 },
-    refundMethod: {
-      type: String,
-      enum: ["cash", "mobile-money", "bank"],
-      required: true,
-    },
-    reason: { type: String, required: true, trim: true },
-    returnDate: { type: Date, required: true },
-    customerName: { type: String, required: true, trim: true },
-    customerPhone: { type: String, required: true, trim: true },
+    returnItems: { type: [ReturnItemSchema], required: true },
+    replacementItems: { type: [ReturnItemSchema], required: true },
+    totalReturnAmount: { type: Number, required: true, min: 0 },
+    totalReplacementAmount: { type: Number, required: true, min: 0 },
     notes: { type: String, default: "", trim: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }
 )
 
-ReturnSchema.index({ store: 1, returnDate: -1 })
-ReturnSchema.index({ store: 1, saleId: 1 })
+ReturnSchema.index({ store: 1, createdAt: -1 })
 
 export type ReturnDocument = mongoose.InferSchemaType<typeof ReturnSchema>
 

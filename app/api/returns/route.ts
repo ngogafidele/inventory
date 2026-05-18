@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
-import { ZodError } from "zod"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ReturnModel } from "@/lib/db/models/Return"
-import { Sale } from "@/lib/db/models/Sale"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateReturnSchema } from "@/lib/db/validators/return"
-import { parseKigaliDateInput } from "@/lib/utils/time"
+
+const TOTAL_TOLERANCE = 0.01
+
+type ProductDocumentLike = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  price: number
+  costPrice?: number
+  lowStockThreshold?: number
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     await connectToDatabase()
-    const returns = await ReturnModel.find({ store }).sort({ returnDate: -1 })
+    const returns = await ReturnModel.find({ store }).sort({ createdAt: -1 })
 
     return NextResponse.json({ success: true, data: returns })
   } catch (error) {
@@ -58,69 +68,18 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = CreateReturnSchema.parse(await request.json())
-    const returnDate = parseKigaliDateInput(payload.returnDate)
-    if (!returnDate) {
-      return NextResponse.json(
-        { success: false, error: "Invalid return date." },
-        { status: 400 }
-      )
-    }
 
     await connectToDatabase()
-    const sale = await Sale.findOne({ _id: payload.saleId, store })
-    if (!sale) {
-      return NextResponse.json(
-        { success: false, error: "Sale not found" },
-        { status: 404 }
+
+    const productIds = Array.from(
+      new Set(
+        [...payload.returnItems, ...payload.replacementItems].map(
+          (item) => item.productId
+        )
       )
-    }
-
-    const existingReturns = await ReturnModel.find({
-      store,
-      saleId: sale._id,
-    })
-      .select("items")
-      .lean()
-
-    const returnedMap = new Map<string, number>()
-    for (const entry of existingReturns) {
-      for (const item of entry.items ?? []) {
-        const productId = item.productId.toString()
-        returnedMap.set(productId, (returnedMap.get(productId) ?? 0) + item.quantity)
-      }
-    }
-
-    const saleItemMap = new Map(
-      sale.items.map((item) => [item.productId.toString(), item])
     )
 
-    const items = payload.items.map((item) => {
-      const saleItem = saleItemMap.get(item.productId)
-      if (!saleItem) {
-        throw new Error("One or more return items are not in the sale")
-      }
-      const alreadyReturned = returnedMap.get(item.productId) ?? 0
-      const availableToReturn = saleItem.quantity - alreadyReturned
-      if (item.quantity > availableToReturn) {
-        throw new Error("Return quantity exceeds sold quantity")
-      }
-
-      const lineTotal = saleItem.sellingPrice * item.quantity
-
-      return {
-        productId: saleItem.productId,
-        name: saleItem.name,
-        sku: saleItem.sku,
-        unit: saleItem.unit ?? "pcs",
-        quantity: item.quantity,
-        unitPrice: saleItem.sellingPrice,
-        lineTotal,
-      }
-    })
-
-    const productIds = items.map((item) => item.productId)
     const products = await Product.find({ _id: { $in: productIds }, store })
-
     if (products.length !== productIds.length) {
       return NextResponse.json(
         { success: false, error: "One or more products not found" },
@@ -128,27 +87,101 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const productMap = new Map(
+      products.map((product) => [product._id.toString(), product])
+    )
+
+    let totalReturnAmount = 0
+    const returnItems = payload.returnItems.map((item) => {
+      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+
+      const lineTotal = item.unitPrice * item.quantity
+      totalReturnAmount += lineTotal
+
+      return {
+        productId: product._id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit ?? "pcs",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal,
+      }
+    })
+
+    let totalReplacementAmount = 0
+    const replacementItems = payload.replacementItems.map((item) => {
+      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+
+      const lineTotal = item.unitPrice * item.quantity
+      totalReplacementAmount += lineTotal
+
+      return {
+        productId: product._id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit ?? "pcs",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal,
+      }
+    })
+
+    if (totalReplacementAmount - totalReturnAmount > TOTAL_TOLERANCE) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Replacement total cannot exceed the return total.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const netChanges = new Map<string, number>()
+
+    payload.returnItems.forEach((item) => {
+      const current = netChanges.get(item.productId) ?? 0
+      netChanges.set(item.productId, current + item.quantity)
+    })
+
+    payload.replacementItems.forEach((item) => {
+      const current = netChanges.get(item.productId) ?? 0
+      netChanges.set(item.productId, current - item.quantity)
+    })
+
+    for (const [productId, change] of netChanges.entries()) {
+      const product = productMap.get(productId) as ProductDocumentLike | undefined
+      if (!product) {
+        throw new Error("Product not found")
+      }
+      if (product.quantity + change < 0) {
+        throw new Error(`Insufficient stock for ${product.name}`)
+      }
+    }
+
     await Product.bulkWrite(
-      items.map((item) => ({
+      Array.from(netChanges.entries()).map(([productId, change]) => ({
         updateOne: {
-          filter: { _id: item.productId, store },
-          update: { $inc: { quantity: item.quantity } },
+          filter: { _id: productId, store },
+          update: { $inc: { quantity: change } },
         },
       }))
     )
 
     const createdReturn = await ReturnModel.create({
       store,
-      saleId: sale._id,
-      items,
-      refundAmount: payload.refundAmount,
-      refundMethod: payload.refundMethod,
-      reason: payload.reason.trim(),
-      returnDate,
-      customerName: payload.customerName.trim(),
-      customerPhone: payload.customerPhone.trim(),
-      notes: payload.notes?.trim() ?? "",
+      returnItems,
+      replacementItems,
+      totalReturnAmount,
+      totalReplacementAmount,
       createdBy: session.userId,
+      notes: payload.notes?.trim() ?? "",
     })
 
     return NextResponse.json(
@@ -156,12 +189,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { success: false, error: error.issues[0]?.message ?? "Invalid input" },
-        { status: 400 }
-      )
-    }
     const message = error instanceof Error ? error.message : "Failed to create return"
     return NextResponse.json(
       { success: false, error: message },

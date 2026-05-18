@@ -11,14 +11,10 @@ export type ReturnItem = {
 export type Return = {
   id: string
   store: "store1" | "store2"
-  saleId: string
-  items: ReturnItem[]
-  refundAmount: number
-  refundMethod: "cash" | "mobile-money" | "bank"
-  reason: string
-  returnDate: string
-  customerName: string
-  customerPhone: string
+  returnItems: ReturnItem[]
+  replacementItems: ReturnItem[]
+  totalReturnAmount: number
+  totalReplacementAmount: number
   notes?: string
   createdBy?: string
   createdAt?: string

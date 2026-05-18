@@ -1,16 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Pencil, Plus, Search, Trash2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Pencil, Plus, Trash2 } from "lucide-react"
+import { formatCurrency } from "@/lib/utils/format"
+import { formatInKigali } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { ProductSearchSelect } from "@/components/products/product-search-select"
 import {
   Table,
   TableBody,
@@ -19,36 +15,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { StatsCard } from "@/components/dashboard/stats-card"
-import { formatCurrency } from "@/lib/utils/format"
-import { formatInKigali } from "@/lib/utils/time"
 
-const PAYMENT_METHODS: Array<{ value: "cash" | "mobile-money" | "bank"; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "bank", label: "Bank" },
-  { value: "mobile-money", label: "Mobile Money" },
-]
+const TOTAL_TOLERANCE = 0.01
+const RETURNS_PER_PAGE = 20
 
-type SaleItemOption = {
-  productId: string
+type ProductOption = {
+  _id: string
   name: string
   sku: string
   unit: string
+  price: number
   quantity: number
-  sellingPrice: number
-}
-
-type SaleOption = {
-  _id: string
-  label: string
-  totalAmount: number
-  items: SaleItemOption[]
 }
 
 type ReturnItemClient = {
   productId: string
-  name: string
-  sku: string
+  name?: string
+  sku?: string
   unit?: string
   quantity: number
   unitPrice: number
@@ -57,99 +40,123 @@ type ReturnItemClient = {
 
 type ReturnClient = {
   _id: string
-  saleId: string
-  items: ReturnItemClient[]
-  refundAmount: number
-  refundMethod: "cash" | "mobile-money" | "bank"
-  reason: string
-  returnDate?: string
-  returnDateLabel?: string
-  customerName: string
-  customerPhone: string
+  returnItems: ReturnItemClient[]
+  replacementItems: ReturnItemClient[]
+  totalReturnAmount: number
+  totalReplacementAmount: number
   notes?: string
   createdByName?: string
+  createdAtLabel?: string
+  createdAt?: string
 }
 
-type ReturnItemDraft = {
+type DraftItem = {
   productId: string
   quantity: string
+  unitPrice: string
 }
 
-type FormState = {
-  saleId: string
-  reason: string
-  returnDate: string
-  refundAmount: string
-  refundMethod: "cash" | "mobile-money" | "bank"
-  customerName: string
-  customerPhone: string
-  notes: string
-  items: ReturnItemDraft[]
-}
-
-const emptyItem: ReturnItemDraft = {
+const emptyDraft: DraftItem = {
   productId: "",
   quantity: "",
+  unitPrice: "",
 }
 
-const emptyForm: FormState = {
-  saleId: "",
-  reason: "",
-  returnDate: "",
-  refundAmount: "",
-  refundMethod: "cash",
-  customerName: "",
-  customerPhone: "",
-  notes: "",
-  items: [emptyItem],
+function computeTotal(items: DraftItem[]) {
+  return items.reduce((sum, item) => {
+    const quantity = Number(item.quantity)
+    const unitPrice = Number(item.unitPrice)
+    if (Number.isNaN(quantity) || Number.isNaN(unitPrice)) {
+      return sum
+    }
+    return sum + quantity * unitPrice
+  }, 0)
 }
 
-function summarizeItems(items: ReturnItemClient[]) {
-  if (!items.length) return "-"
-  return items
-    .map((item) => `${item.name} (${item.quantity} ${item.unit ?? "pcs"})`)
-    .join(", ")
+function buildNetMap(returnItems: ReturnItemClient[], replacementItems: ReturnItemClient[]) {
+  const netChanges = new Map<string, number>()
+  returnItems.forEach((item) => {
+    const current = netChanges.get(item.productId) ?? 0
+    netChanges.set(item.productId, current + item.quantity)
+  })
+  replacementItems.forEach((item) => {
+    const current = netChanges.get(item.productId) ?? 0
+    netChanges.set(item.productId, current - item.quantity)
+  })
+  return netChanges
 }
 
 export function ReturnsManager({
   initialReturns,
-  sales,
+  products,
+  currentUserLabel,
 }: {
   initialReturns: ReturnClient[]
-  sales: SaleOption[]
+  products: ProductOption[]
+  currentUserLabel: string
 }) {
   const [returns, setReturns] = useState(initialReturns)
-  const [search, setSearch] = useState("")
+  const [returnDraftItems, setReturnDraftItems] = useState<DraftItem[]>([emptyDraft])
+  const [replacementDraftItems, setReplacementDraftItems] = useState<DraftItem[]>([
+    emptyDraft,
+  ])
+  const [notes, setNotes] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [activeReturnId, setActiveReturnId] = useState<string | null>(null)
-  const [formState, setFormState] = useState<FormState>(emptyForm)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const salesMap = useMemo(
-    () => new Map(sales.map((sale) => [sale._id, sale])),
-    [sales]
+  const productMap = useMemo(
+    () => new Map(products.map((product) => [product._id, product])),
+    [products]
   )
 
-  const filteredReturns = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return returns
+  const pageCount = Math.max(1, Math.ceil(returns.length / RETURNS_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, pageCount)
+  const pageStart = (safeCurrentPage - 1) * RETURNS_PER_PAGE
+  const paginatedReturns = returns.slice(pageStart, pageStart + RETURNS_PER_PAGE)
+  const visibleStart = returns.length === 0 ? 0 : pageStart + 1
+  const visibleEnd = Math.min(pageStart + RETURNS_PER_PAGE, returns.length)
 
-    return returns.filter((entry) =>
-      [entry.customerName, entry.customerPhone, entry.reason]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(query))
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount)
+    }
+  }, [currentPage, pageCount])
+
+  const setDraftItem = (
+    list: "return" | "replacement",
+    index: number,
+    key: keyof DraftItem,
+    value: string
+  ) => {
+    const setter = list === "return" ? setReturnDraftItems : setReplacementDraftItems
+    setter((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item
+      )
     )
-  }, [returns, search])
+  }
 
-  const totalRefunds = useMemo(() => {
-    return filteredReturns.reduce((sum, entry) => sum + entry.refundAmount, 0)
-  }, [filteredReturns])
+  const addDraftItem = (list: "return" | "replacement") => {
+    const setter = list === "return" ? setReturnDraftItems : setReplacementDraftItems
+    setter((current) => [...current, emptyDraft])
+  }
+
+  const removeDraftItem = (list: "return" | "replacement", index: number) => {
+    const setter = list === "return" ? setReturnDraftItems : setReplacementDraftItems
+    setter((current) =>
+      current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)
+    )
+  }
 
   const resetForm = () => {
-    setFormState(emptyForm)
-    setActiveReturnId(null)
+    setReturnDraftItems([emptyDraft])
+    setReplacementDraftItems([emptyDraft])
+    setNotes("")
     setError(null)
+    setActiveReturnId(null)
   }
 
   const openCreate = () => {
@@ -158,94 +165,126 @@ export function ReturnsManager({
   }
 
   const openEdit = (entry: ReturnClient) => {
-    setFormState({
-      saleId: entry.saleId,
-      reason: entry.reason,
-      returnDate: entry.returnDate ? entry.returnDate.slice(0, 10) : "",
-      refundAmount: String(entry.refundAmount),
-      refundMethod: entry.refundMethod,
-      customerName: entry.customerName,
-      customerPhone: entry.customerPhone,
-      notes: entry.notes ?? "",
-      items: entry.items.map((item) => ({
+    setReturnDraftItems(
+      entry.returnItems.map((item) => ({
         productId: item.productId,
         quantity: String(item.quantity),
-      })),
-    })
-    setActiveReturnId(entry._id)
+        unitPrice: String(item.unitPrice),
+      }))
+    )
+    setReplacementDraftItems(
+      entry.replacementItems.map((item) => ({
+        productId: item.productId,
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice),
+      }))
+    )
+    setNotes(entry.notes ?? "")
     setError(null)
+    setActiveReturnId(entry._id)
     setFormOpen(true)
   }
 
-  const updateItem = (index: number, field: keyof ReturnItemDraft, value: string) => {
-    setFormState((prev) => ({
-      ...prev,
-      items: prev.items.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
-      ),
-    }))
+  const returnTotal = computeTotal(returnDraftItems)
+  const replacementTotal = computeTotal(replacementDraftItems)
+  const replacementWithinReturn = replacementTotal - returnTotal <= TOTAL_TOLERANCE
+
+  const getItemLabel = (item: ReturnItemClient) => {
+    return item.name?.trim() || item.sku?.trim() || "Unnamed item"
   }
 
-  const addItem = () => {
-    setFormState((prev) => ({
-      ...prev,
-      items: [...prev.items, emptyItem],
-    }))
-  }
-
-  const removeItem = (index: number) => {
-    setFormState((prev) =>
-      prev.items.length === 1
-        ? prev
-        : { ...prev, items: prev.items.filter((_, i) => i !== index) }
-    )
-  }
-
-  const submitForm = async () => {
-    const sale = salesMap.get(formState.saleId)
-    if (!sale) {
-      setError("Select a sale for this return.")
-      return
-    }
-
-    if (!formState.reason.trim()) {
-      setError("Reason is required.")
-      return
-    }
-
-    if (!formState.customerName.trim() || !formState.customerPhone.trim()) {
-      setError("Customer name and phone are required.")
-      return
-    }
-
-    if (!formState.returnDate) {
-      setError("Select a return date.")
-      return
-    }
-
-    const refundAmount = Number(formState.refundAmount)
-    if (!Number.isFinite(refundAmount) || refundAmount < 0) {
-      setError("Refund amount must be 0 or more.")
-      return
-    }
-
-    const payloadItems = formState.items.map((item) => ({
+  const validateItems = (items: DraftItem[]) => {
+    return items.map((item) => ({
       productId: item.productId,
       quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
     }))
+  }
 
-    if (payloadItems.some((item) => !item.productId)) {
-      setError("Select an item for each return line.")
+  const submitReturn = async () => {
+    setError(null)
+
+    const returnItems = validateItems(returnDraftItems)
+    const replacementItems = validateItems(replacementDraftItems)
+
+    if (returnItems.some((item) => !item.productId)) {
+      setError("Select a product for each return line.")
       return
     }
 
-    if (payloadItems.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1)) {
-      setError("Return quantity must be at least 1.")
+    if (replacementItems.some((item) => !item.productId)) {
+      setError("Select a product for each replacement line.")
       return
+    }
+
+    const hasInvalidReturn = returnItems.some(
+      (item) =>
+        Number.isNaN(item.quantity) ||
+        item.quantity < 1 ||
+        Number.isNaN(item.unitPrice) ||
+        item.unitPrice < 0
+    )
+
+    const hasInvalidReplacement = replacementItems.some(
+      (item) =>
+        Number.isNaN(item.quantity) ||
+        item.quantity < 1 ||
+        Number.isNaN(item.unitPrice) ||
+        item.unitPrice < 0
+    )
+
+    if (hasInvalidReturn || hasInvalidReplacement) {
+      setError("Quantity must be at least 1 and price must be 0 or more.")
+      return
+    }
+
+    if (!replacementWithinReturn) {
+      setError("Replacement total cannot exceed the return total.")
+      return
+    }
+
+    const newReturnItems: ReturnItemClient[] = returnItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.unitPrice * item.quantity,
+    }))
+    const newReplacementItems: ReturnItemClient[] = replacementItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.unitPrice * item.quantity,
+    }))
+
+    const newNetMap = buildNetMap(newReturnItems, newReplacementItems)
+    const existingEntry = activeReturnId
+      ? returns.find((entry) => entry._id === activeReturnId)
+      : null
+    const oldNetMap = existingEntry
+      ? buildNetMap(existingEntry.returnItems, existingEntry.replacementItems)
+      : new Map<string, number>()
+
+    const allProductIds = new Set([
+      ...Array.from(newNetMap.keys()),
+      ...Array.from(oldNetMap.keys()),
+    ])
+
+    for (const productId of allProductIds) {
+      const product = productMap.get(productId)
+      if (!product) {
+        setError("One selected product is no longer available.")
+        return
+      }
+      const oldNet = oldNetMap.get(productId) ?? 0
+      const newNet = newNetMap.get(productId) ?? 0
+      const delta = newNet - oldNet
+      if (product.quantity + delta < 0) {
+        setError(`Insufficient stock for ${product.name}.`)
+        return
+      }
     }
 
     setSubmitting(true)
-    setError(null)
 
     try {
       const response = await fetch(
@@ -254,39 +293,33 @@ export function ReturnsManager({
           method: activeReturnId ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            saleId: formState.saleId,
-            items: payloadItems,
-            refundAmount,
-            refundMethod: formState.refundMethod,
-            reason: formState.reason.trim(),
-            returnDate: formState.returnDate,
-            customerName: formState.customerName.trim(),
-            customerPhone: formState.customerPhone.trim(),
-            notes: formState.notes.trim(),
+            returnItems,
+            replacementItems,
+            notes: notes.trim(),
           }),
         }
       )
 
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to save return.")
+        setError(body?.error ?? "Failed to record return.")
         return
       }
 
       const saved = body.data as ReturnClient
-      const dateLabel = saved.returnDate
-        ? formatInKigali(saved.returnDate, {
-            year: "numeric",
-            month: "short",
-            day: "2-digit",
-          })
-        : "-"
-
+      const createdAt = saved.createdAt ? new Date(saved.createdAt) : new Date()
       const normalized = {
         ...saved,
-        _id: saved._id.toString(),
-        saleId: saved.saleId.toString(),
-        returnDateLabel: dateLabel,
+        createdAtLabel: formatInKigali(createdAt, {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }),
+        createdByName: saved.createdByName ?? currentUserLabel,
       }
 
       setReturns((current) =>
@@ -297,8 +330,9 @@ export function ReturnsManager({
 
       setFormOpen(false)
       resetForm()
+      setCurrentPage(1)
     } catch {
-      setError("Failed to save return.")
+      setError("Failed to record return.")
     } finally {
       setSubmitting(false)
     }
@@ -331,45 +365,96 @@ export function ReturnsManager({
     }
   }
 
-  const saleOptions = sales.map((sale) => ({
-    value: sale._id,
-    label: `${sale.label} · ${formatCurrency(sale.totalAmount)}`,
-  }))
+  const renderItemRows = (items: DraftItem[], list: "return" | "replacement") => {
+    return items.map((item, index) => {
+      const selectedProduct = item.productId ? productMap.get(item.productId) : null
+      return (
+        <div
+          key={`${list}-${index}-${item.productId}`}
+          className="grid gap-3 rounded-lg border border-border/80 p-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]"
+        >
+          <label className="grid gap-1 text-sm">
+            Product
+            <ProductSearchSelect
+              products={products}
+              value={item.productId}
+              onValueChange={(value) => {
+                const product = productMap.get(value)
+                setDraftItem(list, index, "productId", value)
+                if (product) {
+                  setDraftItem(list, index, "unitPrice", String(product.price))
+                }
+              }}
+            />
+          </label>
 
-  const selectedSale = salesMap.get(formState.saleId)
-  const saleItems = selectedSale?.items ?? []
+          <label className="grid gap-1 text-sm">
+            Quantity
+            <Input
+              type="number"
+              min={1}
+              placeholder="e.g. 2"
+              value={item.quantity}
+              onChange={(event) =>
+                setDraftItem(list, index, "quantity", event.target.value)
+              }
+            />
+          </label>
+
+          <label className="grid gap-1 text-sm">
+            Unit Price
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="e.g. 1200"
+              value={item.unitPrice}
+              onChange={(event) =>
+                setDraftItem(list, index, "unitPrice", event.target.value)
+              }
+            />
+          </label>
+
+          <div className="flex items-end">
+            <Button
+              variant="outline"
+              onClick={() => removeDraftItem(list, index)}
+              disabled={items.length === 1}
+            >
+              Remove
+            </Button>
+          </div>
+
+          {selectedProduct ? (
+            <p className="md:col-span-4 text-xs text-muted-foreground">
+              Current stock: {selectedProduct.quantity} {selectedProduct.unit}
+            </p>
+          ) : null}
+        </div>
+      )
+    })
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            After Sales
+            Customer Service
           </p>
-          <h2 className="text-2xl font-semibold">Returns</h2>
+          <h2 className="text-2xl font-semibold">Returns & Exchanges</h2>
           <p className="text-sm text-muted-foreground">
-            Record returned items, refunds, and restocks.
+            Logged in as: {currentUserLabel}
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <div className="relative w-full sm:w-56">
-            <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search returns"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <Button onClick={openCreate}>
-            <Plus className="size-4" />
-            Add Return
-          </Button>
-        </div>
+        <Button onClick={openCreate}>
+          <Plus className="size-4" />
+          Add Return
+        </Button>
       </div>
 
       {formOpen ? (
-        <div className="rounded-lg border border-border/80 bg-background p-4">
+        <section className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -392,196 +477,74 @@ export function ReturnsManager({
             </Button>
           </div>
 
-          <div className="mt-4 grid gap-3">
-            <label className="grid gap-1 text-sm">
-              Sale
-              <Select
-                value={formState.saleId}
-                onValueChange={(value) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    saleId: value,
-                    items: [emptyItem],
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select sale" />
-                </SelectTrigger>
-                <SelectContent>
-                  {saleOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-
-            <label className="grid gap-1 text-sm">
-              Reason
-              <Input
-                value={formState.reason}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    reason: event.target.value,
-                  }))
-                }
-              />
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                Return date
-                <Input
-                  type="date"
-                  value={formState.returnDate}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      returnDate: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                Refund amount
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={formState.refundAmount}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      refundAmount: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <label className="grid gap-1 text-sm">
-              Refund method
-              <Select
-                value={formState.refundMethod}
-                onValueChange={(value) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    refundMethod: value as FormState["refundMethod"],
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select method" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((method) => (
-                    <SelectItem key={method.value} value={method.value}>
-                      {method.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                Customer name
-                <Input
-                  value={formState.customerName}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      customerName: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                Customer phone
-                <Input
-                  value={formState.customerPhone}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      customerPhone: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <label className="grid gap-1 text-sm">
-              Items
-              <div className="space-y-2">
-                {formState.items.map((item, index) => (
-                  <div
-                    key={`${index}-${item.productId}`}
-                    className="grid gap-2 rounded-md border border-border/80 p-2 sm:grid-cols-[1.6fr_0.6fr_auto]"
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-lg font-semibold">Returned Items</h4>
+                <Button variant="outline" onClick={() => addDraftItem("return")}
                   >
-                    <Select
-                      value={item.productId}
-                      onValueChange={(value) => updateItem(index, "productId", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {saleItems.map((saleItem) => (
-                          <SelectItem key={saleItem.productId} value={saleItem.productId}>
-                            {saleItem.name} ({saleItem.quantity} {saleItem.unit ?? "pcs"})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(event) =>
-                        updateItem(index, "quantity", event.target.value)
-                      }
-                      placeholder="Qty"
-                    />
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => removeItem(index)}
-                      disabled={formState.items.length === 1}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
+                  Add Item
+                </Button>
               </div>
-            </label>
+              {renderItemRows(returnDraftItems, "return")}
+            </div>
 
-            <Button type="button" variant="outline" onClick={addItem}>
-              Add Item
-            </Button>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-lg font-semibold">Replacement Items</h4>
+                <Button
+                  variant="outline"
+                  onClick={() => addDraftItem("replacement")}
+                >
+                  Add Item
+                </Button>
+              </div>
+              {renderItemRows(replacementDraftItems, "replacement")}
+            </div>
+
+            <div className="grid gap-3 rounded-lg border border-border/80 p-3 text-sm md:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Return Total</p>
+                <p className="text-base font-semibold">
+                  {formatCurrency(returnTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Replacement Total</p>
+                <p className="text-base font-semibold">
+                  {formatCurrency(replacementTotal)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Status</p>
+                <p
+                  className={
+                    replacementWithinReturn
+                      ? "text-base font-semibold text-emerald-600"
+                      : "text-base font-semibold text-destructive"
+                  }
+                >
+                  {replacementWithinReturn
+                    ? "Replacement within return"
+                    : "Replacement exceeds return"}
+                </p>
+              </div>
+            </div>
 
             <label className="grid gap-1 text-sm">
               Notes (optional)
               <textarea
-                value={formState.notes}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    notes: event.target.value,
-                  }))
-                }
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
                 className="min-h-20 rounded-md border border-border px-3 py-2"
+                placeholder="Reason for return, customer details, etc."
               />
             </label>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
 
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -593,71 +556,65 @@ export function ReturnsManager({
             >
               Cancel
             </Button>
-            <Button type="button" onClick={submitForm} disabled={submitting}>
+            <Button type="button" onClick={submitReturn} disabled={submitting}>
               {submitting ? "Saving..." : "Save"}
             </Button>
           </div>
-        </div>
+        </section>
       ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StatsCard label="Returns" value={filteredReturns.length} />
-        <StatsCard label="Total Refunds" value={formatCurrency(totalRefunds)} />
-      </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Reason</TableHead>
-            <TableHead>Items</TableHead>
-            <TableHead>Refund</TableHead>
-            <TableHead>Method</TableHead>
-            <TableHead>Recorded By</TableHead>
+            <TableHead>Time</TableHead>
+            <TableHead>Returned Items</TableHead>
+            <TableHead>Replacement Items</TableHead>
+            <TableHead>Total</TableHead>
+            <TableHead>Logged By</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredReturns.length === 0 ? (
+          {paginatedReturns.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-muted-foreground">
+              <TableCell colSpan={6} className="text-muted-foreground">
                 No returns recorded yet.
               </TableCell>
             </TableRow>
           ) : (
-            filteredReturns.map((entry) => (
+            paginatedReturns.map((entry) => (
               <TableRow key={entry._id}>
+                <TableCell>{entry.createdAtLabel ?? "-"}</TableCell>
                 <TableCell>
-                  {entry.returnDateLabel ??
-                    (entry.returnDate
-                      ? formatInKigali(entry.returnDate, {
-                          year: "numeric",
-                          month: "short",
-                          day: "2-digit",
-                        })
-                      : "-")}
+                  <div className="space-y-1">
+                    {entry.returnItems.map((item, index) => (
+                      <p key={`${entry._id}-return-${item.productId}-${index}`}>
+                        <span className="font-medium">{getItemLabel(item)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {" "}- {item.quantity} {item.unit ?? "pcs"}
+                        </span>
+                      </p>
+                    ))}
+                  </div>
                 </TableCell>
-                <TableCell className="whitespace-normal wrap-break-word">
-                  {entry.customerName}
-                  <p className="text-xs text-muted-foreground">
-                    {entry.customerPhone}
-                  </p>
-                </TableCell>
-                <TableCell className="whitespace-normal wrap-break-word">
-                  {entry.reason}
-                </TableCell>
-                <TableCell className="whitespace-normal wrap-break-word">
-                  {summarizeItems(entry.items)}
-                </TableCell>
-                <TableCell>{formatCurrency(entry.refundAmount)}</TableCell>
                 <TableCell>
-                  {PAYMENT_METHODS.find((method) => method.value === entry.refundMethod)?.label ??
-                    entry.refundMethod}
+                  <div className="space-y-1">
+                    {entry.replacementItems.map((item, index) => (
+                      <p
+                        key={`${entry._id}-replacement-${item.productId}-${index}`}
+                      >
+                        <span className="font-medium">{getItemLabel(item)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {" "}- {item.quantity} {item.unit ?? "pcs"}
+                        </span>
+                      </p>
+                    ))}
+                  </div>
                 </TableCell>
-                <TableCell>{entry.createdByName ?? "-"}</TableCell>
+                <TableCell>{formatCurrency(entry.totalReturnAmount)}</TableCell>
+                <TableCell>{entry.createdByName ?? "Unknown User"}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -684,6 +641,34 @@ export function ReturnsManager({
           )}
         </TableBody>
       </Table>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <span>
+          Showing {visibleStart}-{visibleEnd} of {returns.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={safeCurrentPage <= 1}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setCurrentPage((page) => Math.min(pageCount, page + 1))
+            }
+            disabled={safeCurrentPage >= pageCount}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
