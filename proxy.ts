@@ -6,6 +6,7 @@ import {
   refreshSessionActivity,
   verifyToken,
 } from "@/lib/auth/session"
+import { getCurrentUserSession } from "@/lib/auth/current-user"
 
 const PUBLIC_PATHS = ["/", "/reset-password", "/setup-admin"]
 
@@ -25,13 +26,17 @@ function clearAuthCookie(response: NextResponse) {
   })
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value
   if (!token) {
     return NextResponse.next()
   }
 
-  const session = verifyToken(token)
+  const tokenSession = verifyToken(token)
+  const session = tokenSession
+    ? await getCurrentUserSession(tokenSession)
+    : null
+
   if (!session) {
     const response = request.nextUrl.pathname.startsWith("/api/")
       ? NextResponse.json(

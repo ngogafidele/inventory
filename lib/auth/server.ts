@@ -5,13 +5,20 @@ import {
   type AuthSession,
   type StoreKey,
 } from "@/lib/auth/session"
+import { getCurrentUserSession } from "@/lib/auth/current-user"
 
 export async function requireServerSession(): Promise<AuthSession> {
   const cookieStore = await cookies()
-  const session = getSessionFromCookies(cookieStore)
+  const tokenSession = getSessionFromCookies(cookieStore)
+  if (!tokenSession) {
+    redirect("/")
+  }
+
+  const session = await getCurrentUserSession(tokenSession)
   if (!session) {
     redirect("/")
   }
+
   return session
 }
 

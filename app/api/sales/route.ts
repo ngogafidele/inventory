@@ -112,6 +112,29 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    const paymentStatus = payload.paymentStatus ?? "paid"
+    let outstanding: {
+      customerName: string
+      customerPhone?: string
+      paymentDate?: Date
+    } | null = null
+
+    if (paymentStatus === "unpaid") {
+      const paymentDate = parseKigaliDateInput(payload.outstanding?.paymentDate)
+      if (!paymentDate) {
+        return NextResponse.json(
+          { success: false, error: "Invalid payment date." },
+          { status: 400 }
+        )
+      }
+
+      outstanding = {
+        customerName: payload.outstanding?.customerName ?? "",
+        customerPhone: payload.outstanding?.customerPhone ?? "",
+        paymentDate,
+      }
+    }
+
     const decrementedProducts: Array<{
       productId: string
       quantity: number
@@ -144,29 +167,6 @@ export async function POST(request: NextRequest) {
       }
 
       decrementedProducts.push({ productId, quantity })
-    }
-
-    const paymentStatus = payload.paymentStatus ?? "paid"
-    let outstanding: {
-      customerName: string
-      customerPhone?: string
-      paymentDate?: Date
-    } | null = null
-
-    if (paymentStatus === "unpaid") {
-      const paymentDate = parseKigaliDateInput(payload.outstanding?.paymentDate)
-      if (!paymentDate) {
-        return NextResponse.json(
-          { success: false, error: "Invalid payment date." },
-          { status: 400 }
-        )
-      }
-
-      outstanding = {
-        customerName: payload.outstanding?.customerName ?? "",
-        customerPhone: payload.outstanding?.customerPhone ?? "",
-        paymentDate,
-      }
     }
 
     let sale
