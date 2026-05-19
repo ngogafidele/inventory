@@ -5,8 +5,7 @@ import { ReturnModel } from "@/lib/db/models/Return"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateReturnSchema } from "@/lib/db/validators/return"
-
-const TOTAL_TOLERANCE = 0.01
+import { syncLowStockAlert } from "@/lib/db/alerts"
 
 type ReturnItemInput = {
   productId: string
@@ -20,6 +19,9 @@ type ProductDocumentLike = {
   sku: string
   unit?: string
   quantity: number
+  price: number
+  costPrice?: number
+  lowStockThreshold?: number
 }
 
 export async function PUT(
@@ -67,25 +69,12 @@ export async function PUT(
           unitPrice: item.unitPrice,
         }))
 
-    const replacementItemsInput = payload.replacementItems
-      ? payload.replacementItems.map((item: ReturnItemInput) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        }))
-      : existingReturn.replacementItems.map((item) => ({
-          productId: item.productId.toString(),
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        }))
-
     const allProductIds = Array.from(
       new Set(
         [
           ...existingReturn.returnItems.map((item) => item.productId.toString()),
           ...existingReturn.replacementItems.map((item) => item.productId.toString()),
           ...returnItemsInput.map((item) => item.productId),
-          ...replacementItemsInput.map((item) => item.productId),
         ]
       )
     )
@@ -122,41 +111,11 @@ export async function PUT(
         sku: product.sku,
         unit: product.unit ?? "pcs",
         quantity: item.quantity,
+        basePrice: product.costPrice ?? product.price,
         unitPrice: item.unitPrice,
         lineTotal,
       }
     })
-
-    let totalReplacementAmount = 0
-    const replacementItems = replacementItemsInput.map((item) => {
-      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
-      if (!product) {
-        throw new Error("Product not found")
-      }
-
-      const lineTotal = item.unitPrice * item.quantity
-      totalReplacementAmount += lineTotal
-
-      return {
-        productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal,
-      }
-    })
-
-    if (totalReplacementAmount - totalReturnAmount > TOTAL_TOLERANCE) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Replacement total cannot exceed the return total.",
-        },
-        { status: 400 }
-      )
-    }
 
     const oldNetMap = new Map<string, number>()
     existingReturn.returnItems.forEach((item) => {
@@ -172,10 +131,6 @@ export async function PUT(
     returnItems.forEach((item) => {
       const current = newNetMap.get(item.productId.toString()) ?? 0
       newNetMap.set(item.productId.toString(), current + item.quantity)
-    })
-    replacementItems.forEach((item) => {
-      const current = newNetMap.get(item.productId.toString()) ?? 0
-      newNetMap.set(item.productId.toString(), current - item.quantity)
     })
 
     const updates: Array<{ productId: string; delta: number }> = []
@@ -212,9 +167,9 @@ export async function PUT(
 
     const updateInput: Record<string, unknown> = {
       returnItems,
-      replacementItems,
+      replacementItems: [],
       totalReturnAmount,
-      totalReplacementAmount,
+      totalReplacementAmount: 0,
       notes:
         typeof payload.notes === "string"
           ? payload.notes.trim()
@@ -232,6 +187,27 @@ export async function PUT(
         { success: false, error: "Return not found" },
         { status: 404 }
       )
+    }
+
+    try {
+      await Promise.all(
+        updates.map(async (entry) => {
+          const product = productMap.get(entry.productId) as
+            | ProductDocumentLike
+            | undefined
+          if (!product) return
+          await syncLowStockAlert({
+            store,
+            productId: entry.productId,
+            name: product.name,
+            sku: product.sku,
+            quantity: product.quantity + entry.delta,
+            threshold: product.lowStockThreshold ?? 0,
+          })
+        })
+      )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
     }
 
     return NextResponse.json({ success: true, data: updatedReturn })
@@ -317,16 +293,42 @@ export async function DELETE(
       }
     }
 
+    const updates = Array.from(netChanges.entries()).map(([productId, change]) => ({
+      productId,
+      delta: -change,
+    }))
+
     await Product.bulkWrite(
-      Array.from(netChanges.entries()).map(([productId, change]) => ({
+      updates.map((entry) => ({
         updateOne: {
-          filter: { _id: productId, store },
-          update: { $inc: { quantity: -change } },
+          filter: { _id: entry.productId, store },
+          update: { $inc: { quantity: entry.delta } },
         },
       }))
     )
 
     await existingReturn.deleteOne()
+
+    try {
+      await Promise.all(
+        updates.map(async (entry) => {
+          const product = products.find(
+            (item) => item._id.toString() === entry.productId
+          ) as ProductDocumentLike | undefined
+          if (!product) return
+          await syncLowStockAlert({
+            store,
+            productId: entry.productId,
+            name: product.name,
+            sku: product.sku,
+            quantity: product.quantity + entry.delta,
+            threshold: product.lowStockThreshold ?? 0,
+          })
+        })
+      )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

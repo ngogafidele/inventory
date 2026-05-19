@@ -20,20 +20,11 @@ type ReturnPageReturn = {
     sku: string
     unit?: string
     quantity: number
-    unitPrice: number
-    lineTotal: number
-  }>
-  replacementItems: Array<{
-    productId: { toString(): string }
-    name: string
-    sku: string
-    unit?: string
-    quantity: number
+    basePrice?: number
     unitPrice: number
     lineTotal: number
   }>
   totalReturnAmount: number
-  totalReplacementAmount: number
   notes?: string
   createdBy?: PopulatedUser | { toString(): string }
   createdAt?: Date
@@ -73,20 +64,11 @@ export default async function ReturnsPage() {
       sku: item.sku,
       unit: item.unit ?? "pcs",
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      lineTotal: item.lineTotal,
-    })),
-    replacementItems: (entry.replacementItems ?? []).map((item) => ({
-      productId: item.productId.toString(),
-      name: item.name,
-      sku: item.sku,
-      unit: item.unit ?? "pcs",
-      quantity: item.quantity,
+      basePrice: item.basePrice ?? 0,
       unitPrice: item.unitPrice,
       lineTotal: item.lineTotal,
     })),
     totalReturnAmount: entry.totalReturnAmount,
-    totalReplacementAmount: entry.totalReplacementAmount,
     notes: entry.notes ?? "",
     createdByName: isPopulatedUser(entry.createdBy)
       ? entry.createdBy.name ?? entry.createdBy.email ?? "Unknown User"

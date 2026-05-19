@@ -93,6 +93,18 @@ const paymentMethodsLines = [
   "B Ikaze Hardware",
 ]
 
+const PRINT_TEXT = "#111827"
+const PRINT_MUTED_TEXT = "#1f2937"
+const PRINT_HEADER_TEXT = "#00183d"
+
+function mutedText(doc: OutstandingPdfDocument) {
+  return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
+}
+
+function boldText(doc: OutstandingPdfDocument) {
+  return doc.font("Helvetica-Bold").fillColor(PRINT_TEXT)
+}
+
 function getLogoBuffer() {
   if (!existsSync(logoPath)) return null
   return readFileSync(logoPath)
@@ -130,8 +142,9 @@ function drawLogo(doc: OutstandingPdfDocument, storeInfo: StoreInfo) {
         logoPath,
       })
       doc
+        .font("Helvetica-Bold")
         .fontSize(16)
-        .fillColor("#002050")
+        .fillColor(PRINT_HEADER_TEXT)
         .text(storeInfo.name ?? "Inventory", 48, 72, { width: 150 })
     }
   }
@@ -170,12 +183,11 @@ export function generateOutstandingCustomerPDF(
 
   drawLogo(doc, storeInfo)
 
-  doc
-    .fillColor("#111827")
+  boldText(doc)
     .fontSize(22)
     .text("Outstanding Statement", 340, 58, { align: "right" })
+  mutedText(doc)
     .fontSize(10)
-    .fillColor("#5f6673")
     .text(payload.statementNumber, 340, 88, { align: "right" })
     .text(`Date: ${formatDate(payload.generatedAt)}`, 340, 104, {
       align: "right",
@@ -188,22 +200,20 @@ export function generateOutstandingCustomerPDF(
     .strokeColor("#f08010")
     .stroke()
 
-  doc
+  boldText(doc)
     .fontSize(11)
-    .fillColor("#111827")
     .text(storeInfo.name ?? "Multi-Store Inventory", 48, 230)
+  mutedText(doc)
     .fontSize(9)
-    .fillColor("#5f6673")
     .text(storeInfo.address ?? "", 48, 248)
     .text(storeInfo.phone ?? "", 48, 262)
     .text(storeInfo.email ?? "", 48, 276)
 
-  doc
+  boldText(doc)
     .fontSize(11)
-    .fillColor("#111827")
     .text("Customer", 330, 230)
+  mutedText(doc)
     .fontSize(9)
-    .fillColor("#5f6673")
     .text(payload.customerName, 330, 248)
     .text(payload.customerPhone ?? "", 330, 262)
 
@@ -220,7 +230,8 @@ export function generateOutstandingCustomerPDF(
     .rect(48, tableTop, 499, 24)
     .fillColor("#eef3f8")
     .fill()
-    .fillColor("#00183d")
+    .font("Helvetica-Bold")
+    .fillColor(PRINT_HEADER_TEXT)
     .fontSize(9)
     .text("Sale Date", columns.saleDate, tableTop + 8)
     .text("Payment", columns.paymentDate, tableTop + 8)
@@ -246,7 +257,8 @@ export function generateOutstandingCustomerPDF(
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
       .rect(48, y - 6, 499, rowHeight)
       .fill()
-      .fillColor("#111827")
+      .font("Helvetica")
+      .fillColor(PRINT_TEXT)
       .fontSize(9)
       .text(formatDate(row.saleDate), columns.saleDate, y, { width: 70 })
       .text(formatDate(row.paymentDate), columns.paymentDate, y, {
@@ -269,8 +281,9 @@ export function generateOutstandingCustomerPDF(
     .lineTo(547, y)
     .strokeColor("#d8dee8")
     .stroke()
+    .font("Helvetica-Bold")
     .fontSize(12)
-    .fillColor("#111827")
+    .fillColor(PRINT_TEXT)
     .text("Total Outstanding", 330, y + 16)
     .text(formatCurrency(payload.totalOutstanding), 448, y + 16, {
       width: 90,
@@ -280,7 +293,7 @@ export function generateOutstandingCustomerPDF(
   doc
     .font("Helvetica-Bold")
     .fontSize(9)
-    .fillColor("#111827")
+    .fillColor(PRINT_TEXT)
     .text(paymentMethodsLines.join("\n"), 48, paymentBlockY, {
       width: 220,
     })

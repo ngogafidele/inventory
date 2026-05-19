@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
+import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Expense } from "@/lib/db/models/Expense"
@@ -37,6 +38,11 @@ type DashboardRevenueTotal = {
   revenue: number
 }
 
+type DashboardReturnTotal = {
+  revenue: number
+  grossProfit: number
+}
+
 type DashboardExpenseTotal = {
   total: number
 }
@@ -49,6 +55,16 @@ type DashboardTopMovingProduct = {
   }
   soldQuantity: number
   salesValue: number
+}
+
+type DashboardTopReturnedProduct = {
+  _id: {
+    sku: string
+    name: string
+    unit?: string
+  }
+  returnedQuantity: number
+  returnedValue: number
 }
 
 function getKigaliTodayRange() {
@@ -113,6 +129,44 @@ export async function GET(request: NextRequest) {
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ])
 
+    const returns = await ReturnModel.aggregate<DashboardReturnTotal>([
+      { $match: { store } },
+      { $unwind: "$returnItems" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "returnItems.productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: "$returnItems.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$returnItems.lineTotal",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$returnItems.basePrice",
+                        { $ifNull: ["$product.costPrice", 0] },
+                      ],
+                    },
+                    "$returnItems.quantity",
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    ])
+
     const stockValue = await Product.aggregate<DashboardMoneyTotal>([
       { $match: { store } },
       {
@@ -141,6 +195,44 @@ export async function GET(request: NextRequest) {
         $group: {
           _id: null,
           revenue: { $sum: "$totalAmount" },
+        },
+      },
+    ])
+
+    const todayReturnTotals = await ReturnModel.aggregate<DashboardReturnTotal>([
+      { $match: todayFilter },
+      { $unwind: "$returnItems" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "returnItems.productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: "$returnItems.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$returnItems.lineTotal",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$returnItems.basePrice",
+                        { $ifNull: ["$product.costPrice", 0] },
+                      ],
+                    },
+                    "$returnItems.quantity",
+                  ],
+                },
+              ],
+            },
+          },
         },
       },
     ])
@@ -203,8 +295,64 @@ export async function GET(request: NextRequest) {
         },
       },
       { $sort: { soldQuantity: -1 } },
-      { $limit: 6 },
     ])
+
+    const topReturned = await ReturnModel.aggregate<DashboardTopReturnedProduct>([
+      { $match: { store } },
+      { $unwind: "$returnItems" },
+      {
+        $group: {
+          _id: {
+            sku: "$returnItems.sku",
+            name: "$returnItems.name",
+            unit: "$returnItems.unit",
+          },
+          returnedQuantity: { $sum: "$returnItems.quantity" },
+          returnedValue: { $sum: "$returnItems.lineTotal" },
+        },
+      },
+    ])
+
+    const netTopMoving = new Map(
+      topMoving.map((entry) => [
+        entry._id.sku,
+        {
+          sku: entry._id.sku,
+          name: entry._id.name,
+          unit: entry._id.unit ?? "pcs",
+          soldQuantity: entry.soldQuantity,
+          salesValue: entry.salesValue,
+        },
+      ])
+    )
+    topReturned.forEach((entry) => {
+      const current = netTopMoving.get(entry._id.sku)
+      if (current) {
+        current.soldQuantity -= entry.returnedQuantity
+        current.salesValue -= entry.returnedValue
+        return
+      }
+
+      netTopMoving.set(entry._id.sku, {
+        sku: entry._id.sku,
+        name: entry._id.name,
+        unit: entry._id.unit ?? "pcs",
+        soldQuantity: -entry.returnedQuantity,
+        salesValue: -entry.returnedValue,
+      })
+    })
+
+    const netTopMovingProducts = Array.from(netTopMoving.values())
+      .filter((entry) => entry.soldQuantity !== 0 || entry.salesValue !== 0)
+      .sort((a, b) => b.soldQuantity - a.soldQuantity)
+      .slice(0, 6)
+
+    const returnedRevenue = returns[0]?.revenue || 0
+    const returnedRevenueToday = todayReturnTotals[0]?.revenue || 0
+    const returnedGrossProfitToday = todayReturnTotals[0]?.grossProfit || 0
+    const grossProfitToday =
+      (todayGrossProfit[0]?.total || 0) - returnedGrossProfitToday
+    const expensesTodayTotal = todayExpenses[0]?.total || 0
 
     return NextResponse.json({
       success: true,
@@ -216,13 +364,11 @@ export async function GET(request: NextRequest) {
         invoiceCount,
         unpaidCount,
         stockValue: stockValue[0]?.total || 0,
-        revenue: sales[0]?.total || 0,
-        revenueToday: todaySalesTotals[0]?.revenue || 0,
-        grossProfitToday: todayGrossProfit[0]?.total || 0,
-        expensesToday: todayExpenses[0]?.total || 0,
-        profitToday:
-          (todayGrossProfit[0]?.total || 0) -
-          (todayExpenses[0]?.total || 0),
+        revenue: (sales[0]?.total || 0) - returnedRevenue,
+        revenueToday: (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday,
+        grossProfitToday,
+        expensesToday: expensesTodayTotal,
+        profitToday: grossProfitToday - expensesTodayTotal,
         outstandingAmount: unpaidTotals[0]?.total || 0,
         lowStockProducts: lowStockProducts.map((product) => ({
           _id: product._id.toString(),
@@ -241,13 +387,7 @@ export async function GET(request: NextRequest) {
             new Set(sale.items.map((item) => item.unit ?? "pcs"))
           ),
         })),
-        topMoving: topMoving.map((entry) => ({
-          sku: entry._id.sku,
-          name: entry._id.name,
-          unit: entry._id.unit ?? "pcs",
-          soldQuantity: entry.soldQuantity,
-          salesValue: entry.salesValue,
-        })),
+        topMoving: netTopMovingProducts,
       },
     })
   } catch (error) {

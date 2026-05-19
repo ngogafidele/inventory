@@ -4,6 +4,7 @@ import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
+import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { Expense } from "@/lib/db/models/Expense"
@@ -52,6 +53,12 @@ type SaleTotals = {
   unitsSold: number
 }
 
+type ReturnTotals = {
+  _id: StoreKey
+  revenue: number
+  grossProfit: number
+}
+
 type ProductTotals = {
   _id: StoreKey
   products: number
@@ -91,6 +98,15 @@ type TopMovingProduct = {
   name: string
   unit: string
   soldQuantity: number
+  revenue: number
+  grossProfit: number
+}
+
+type ReturnedProductTotals = {
+  sku: string
+  name: string
+  unit: string
+  returnedQuantity: number
   revenue: number
   grossProfit: number
 }
@@ -237,11 +253,13 @@ export default async function ReportsPage({
   const [
     productTotals,
     saleTotals,
+    returnTotals,
     invoiceTotals,
     adjustmentTotals,
     expenseTotals,
     outstandingSalesTotals,
     topMovingProducts,
+    returnedProductTotals,
     recentSales,
   ] = await Promise.all([
     Product.aggregate<ProductTotals>([
@@ -284,6 +302,43 @@ export default async function ReportsPage({
           revenue: 1,
           grossProfit: 1,
           unitsSold: 1,
+        },
+      },
+    ]),
+    ReturnModel.aggregate<ReturnTotals>([
+      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $unwind: "$returnItems" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "returnItems.productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: "$store",
+          revenue: { $sum: "$returnItems.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$returnItems.lineTotal",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$returnItems.basePrice",
+                        { $ifNull: ["$product.costPrice", 0] },
+                      ],
+                    },
+                    "$returnItems.quantity",
+                  ],
+                },
+              ],
+            },
+          },
         },
       },
     ]),
@@ -360,7 +415,6 @@ export default async function ReportsPage({
         },
       },
       { $sort: { revenue: -1 } },
-      { $limit: 8 },
       {
         $project: {
           _id: 0,
@@ -368,6 +422,59 @@ export default async function ReportsPage({
           name: "$_id.name",
           unit: "$_id.unit",
           soldQuantity: 1,
+          revenue: 1,
+          grossProfit: 1,
+        },
+      },
+    ]),
+    ReturnModel.aggregate<ReturnedProductTotals>([
+      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $unwind: "$returnItems" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "returnItems.productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: {
+            sku: "$returnItems.sku",
+            name: "$returnItems.name",
+            unit: "$returnItems.unit",
+          },
+          returnedQuantity: { $sum: "$returnItems.quantity" },
+          revenue: { $sum: "$returnItems.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$returnItems.lineTotal",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$returnItems.basePrice",
+                        { $ifNull: ["$product.costPrice", 0] },
+                      ],
+                    },
+                    "$returnItems.quantity",
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          sku: "$_id.sku",
+          name: "$_id.name",
+          unit: "$_id.unit",
+          returnedQuantity: 1,
           revenue: 1,
           grossProfit: 1,
         },
@@ -382,6 +489,7 @@ export default async function ReportsPage({
 
   const productMap = new Map(productTotals.map((item) => [item._id, item]))
   const saleMap = new Map(saleTotals.map((item) => [item._id, item]))
+  const returnMap = new Map(returnTotals.map((item) => [item._id, item]))
   const invoiceMap = new Map(invoiceTotals.map((item) => [item._id, item]))
   const adjustmentMap = new Map(
     adjustmentTotals.map((item) => [item._id, item])
@@ -394,12 +502,13 @@ export default async function ReportsPage({
   const storeReports = [currentStore].map((store) => {
     const products = productMap.get(store)
     const sales = saleMap.get(store)
+    const returns = returnMap.get(store)
     const invoices = invoiceMap.get(store)
     const adjustments = adjustmentMap.get(store)
     const expenses = expenseMap.get(store)
     const outstandingSales = outstandingSalesMap.get(store)
 
-    const grossProfit = sales?.grossProfit ?? 0
+    const grossProfit = (sales?.grossProfit ?? 0) - (returns?.grossProfit ?? 0)
     const expenseTotal = expenses?.expenses ?? 0
 
     return {
@@ -408,7 +517,7 @@ export default async function ReportsPage({
       inventoryCost: products?.inventoryCost ?? 0,
       inventoryRetail: products?.inventoryRetail ?? 0,
       sales: sales?.sales ?? 0,
-      revenue: sales?.revenue ?? 0,
+      revenue: (sales?.revenue ?? 0) - (returns?.revenue ?? 0),
       expenses: expenseTotal,
       profit: grossProfit - expenseTotal,
       invoices: invoices?.invoices ?? 0,
@@ -419,6 +528,31 @@ export default async function ReportsPage({
   })
 
   const totals = sumReports(storeReports)
+  const topMovingMap = new Map(
+    topMovingProducts.map((product) => [product.sku, { ...product }])
+  )
+  returnedProductTotals.forEach((returnedProduct) => {
+    const current = topMovingMap.get(returnedProduct.sku)
+    if (current) {
+      current.soldQuantity -= returnedProduct.returnedQuantity
+      current.revenue -= returnedProduct.revenue
+      current.grossProfit -= returnedProduct.grossProfit
+      return
+    }
+
+    topMovingMap.set(returnedProduct.sku, {
+      sku: returnedProduct.sku,
+      name: returnedProduct.name,
+      unit: returnedProduct.unit,
+      soldQuantity: -returnedProduct.returnedQuantity,
+      revenue: -returnedProduct.revenue,
+      grossProfit: -returnedProduct.grossProfit,
+    })
+  })
+  const netTopMovingProducts = Array.from(topMovingMap.values())
+    .filter((product) => product.soldQuantity !== 0 || product.revenue !== 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 8)
   const fromLabel = formatDateOnly(range.from)
   const toLabel = formatDateOnly(range.to)
   const printableRecentSales = recentSales.map((sale) => ({
@@ -481,7 +615,7 @@ export default async function ReportsPage({
             fromLabel={fromLabel}
             toLabel={toLabel}
             reports={storeReports}
-            topMovingProducts={topMovingProducts}
+            topMovingProducts={netTopMovingProducts}
             recentSales={printableRecentSales}
           />
         </div>
@@ -558,14 +692,14 @@ export default async function ReportsPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {topMovingProducts.length === 0 ? (
+              {netTopMovingProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-muted-foreground">
                     No sales movement yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                topMovingProducts.map((product) => (
+                netTopMovingProducts.map((product) => (
                   <TableRow key={product.sku}>
                     <TableCell>
                       <p className="font-medium">{product.name}</p>

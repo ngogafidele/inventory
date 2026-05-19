@@ -88,6 +88,18 @@ const businessFooterLines = [
   "B Ikaze Hardware",
 ]
 
+const PRINT_TEXT = "#111827"
+const PRINT_MUTED_TEXT = "#1f2937"
+const PRINT_HEADER_TEXT = "#00183d"
+
+function mutedText(doc: InvoicePdfDocument) {
+  return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
+}
+
+function boldText(doc: InvoicePdfDocument) {
+  return doc.font("Helvetica-Bold").fillColor(PRINT_TEXT)
+}
+
 function getLogoBuffer() {
   if (!existsSync(logoPath)) return null
   return readFileSync(logoPath)
@@ -125,8 +137,9 @@ function drawLogo(doc: InvoicePdfDocument, storeInfo: StoreInfo) {
         logoPath,
       })
       doc
+        .font("Helvetica-Bold")
         .fontSize(16)
-    .fillColor("#002050")
+        .fillColor(PRINT_HEADER_TEXT)
         .text(storeInfo.name ?? "Inventory", 48, 72, { width: 150 })
     }
   }
@@ -168,12 +181,11 @@ function writeInvoicePdf(
 
   drawLogo(doc, storeInfo)
 
-  doc
-    .fillColor("#111827")
+  boldText(doc)
     .fontSize(22)
     .text(title, 340, 58, { align: "right" })
+  mutedText(doc)
     .fontSize(10)
-    .fillColor("#5f6673")
     .text(data.number, 340, 88, { align: "right" })
     .text(`Date: ${formatDate(data.date)}`, 340, 104, { align: "right" })
 
@@ -188,22 +200,20 @@ function writeInvoicePdf(
     .strokeColor("#f08010")
     .stroke()
 
-  doc
+  boldText(doc)
     .fontSize(11)
-    .fillColor("#111827")
     .text(storeInfo.name ?? "Multi-Store Inventory", 48, 230)
+  mutedText(doc)
     .fontSize(9)
-    .fillColor("#5f6673")
     .text(storeInfo.address ?? "", 48, 248)
     .text(storeInfo.phone ?? "", 48, 262)
     .text(storeInfo.email ?? "", 48, 276)
 
-  doc
+  boldText(doc)
     .fontSize(11)
-    .fillColor("#111827")
     .text(recipientLabel, 330, 230)
+  mutedText(doc)
     .fontSize(9)
-    .fillColor("#5f6673")
     .text(data.customerName, 330, 248)
     .text(data.customerEmail ?? "", 330, 262)
     .text(data.customerPhone ?? "", 330, 276)
@@ -220,7 +230,8 @@ function writeInvoicePdf(
     .rect(48, tableTop, 499, 24)
     .fillColor("#eef3f8")
     .fill()
-    .fillColor("#00183d")
+    .font("Helvetica-Bold")
+    .fillColor(PRINT_HEADER_TEXT)
     .fontSize(9)
     .text("Item", columns.item, tableTop + 8)
     .text("Qty", columns.quantity, tableTop + 8)
@@ -238,13 +249,15 @@ function writeInvoicePdf(
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
       .rect(48, y - 7, 499, 34)
       .fill()
-      .fillColor("#111827")
+      .font("Helvetica")
+      .fillColor(PRINT_TEXT)
       .fontSize(9)
       .text(item.description, columns.item, y, { width: 210 })
-      .fillColor("#6b7280")
+      .fillColor(PRINT_MUTED_TEXT)
       .fontSize(8)
       .text(item.sku ?? "", columns.item, y + 13, { width: 210 })
-      .fillColor("#111827")
+      .font("Helvetica")
+      .fillColor(PRINT_TEXT)
       .fontSize(9)
       .text(`${item.quantity} ${item.unit ?? "pcs"}`, columns.quantity, y)
       .text(formatCurrency(item.unitPrice), columns.price, y, { width: 82 })
@@ -263,8 +276,9 @@ function writeInvoicePdf(
     .lineTo(547, y)
     .strokeColor("#d8dee8")
     .stroke()
+    .font("Helvetica-Bold")
     .fontSize(14)
-    .fillColor("#111827")
+    .fillColor(PRINT_TEXT)
     .text("Total", 355, y + 20)
     .text(formatCurrency(data.totalAmount), 448, y + 20, { width: 92 })
 
@@ -278,7 +292,7 @@ function writeInvoicePdf(
     doc
       .font("Helvetica-Bold")
       .fontSize(9)
-      .fillColor("#111827")
+      .fillColor(PRINT_TEXT)
       .text(footerLines.join("\n"), 48, footerY, { width: 220 })
   }
 

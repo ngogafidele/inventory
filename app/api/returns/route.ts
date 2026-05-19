@@ -5,8 +5,7 @@ import { ReturnModel } from "@/lib/db/models/Return"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateReturnSchema } from "@/lib/db/validators/return"
-
-const TOTAL_TOLERANCE = 0.01
+import { syncLowStockAlert } from "@/lib/db/alerts"
 
 type ProductDocumentLike = {
   _id: { toString(): string }
@@ -73,9 +72,7 @@ export async function POST(request: NextRequest) {
 
     const productIds = Array.from(
       new Set(
-        [...payload.returnItems, ...payload.replacementItems].map(
-          (item) => item.productId
-        )
+        payload.returnItems.map((item) => item.productId)
       )
     )
 
@@ -107,41 +104,11 @@ export async function POST(request: NextRequest) {
         sku: product.sku,
         unit: product.unit ?? "pcs",
         quantity: item.quantity,
+        basePrice: product.costPrice ?? product.price,
         unitPrice: item.unitPrice,
         lineTotal,
       }
     })
-
-    let totalReplacementAmount = 0
-    const replacementItems = payload.replacementItems.map((item) => {
-      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
-      if (!product) {
-        throw new Error("Product not found")
-      }
-
-      const lineTotal = item.unitPrice * item.quantity
-      totalReplacementAmount += lineTotal
-
-      return {
-        productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal,
-      }
-    })
-
-    if (totalReplacementAmount - totalReturnAmount > TOTAL_TOLERANCE) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Replacement total cannot exceed the return total.",
-        },
-        { status: 400 }
-      )
-    }
 
     const netChanges = new Map<string, number>()
 
@@ -150,39 +117,63 @@ export async function POST(request: NextRequest) {
       netChanges.set(item.productId, current + item.quantity)
     })
 
-    payload.replacementItems.forEach((item) => {
-      const current = netChanges.get(item.productId) ?? 0
-      netChanges.set(item.productId, current - item.quantity)
-    })
-
-    for (const [productId, change] of netChanges.entries()) {
-      const product = productMap.get(productId) as ProductDocumentLike | undefined
-      if (!product) {
-        throw new Error("Product not found")
-      }
-      if (product.quantity + change < 0) {
-        throw new Error(`Insufficient stock for ${product.name}`)
-      }
-    }
+    const stockUpdates = Array.from(netChanges.entries()).map(
+      ([productId, change]) => ({
+        productId,
+        change,
+      })
+    )
 
     await Product.bulkWrite(
-      Array.from(netChanges.entries()).map(([productId, change]) => ({
+      stockUpdates.map((entry) => ({
         updateOne: {
-          filter: { _id: productId, store },
-          update: { $inc: { quantity: change } },
+          filter: { _id: entry.productId, store },
+          update: { $inc: { quantity: entry.change } },
         },
       }))
     )
 
-    const createdReturn = await ReturnModel.create({
-      store,
-      returnItems,
-      replacementItems,
-      totalReturnAmount,
-      totalReplacementAmount,
-      createdBy: session.userId,
-      notes: payload.notes?.trim() ?? "",
-    })
+    let createdReturn
+    try {
+      createdReturn = await ReturnModel.create({
+        store,
+        returnItems,
+        replacementItems: [],
+        totalReturnAmount,
+        totalReplacementAmount: 0,
+        createdBy: session.userId,
+        notes: payload.notes?.trim() ?? "",
+      })
+    } catch (error) {
+      await Product.bulkWrite(
+        stockUpdates.map((entry) => ({
+          updateOne: {
+            filter: { _id: entry.productId, store },
+            update: { $inc: { quantity: -entry.change } },
+          },
+        }))
+      )
+      throw error
+    }
+
+    try {
+      await Promise.all(
+        Array.from(netChanges.entries()).map(async ([productId, change]) => {
+          const product = productMap.get(productId) as ProductDocumentLike | undefined
+          if (!product) return
+          await syncLowStockAlert({
+            store,
+            productId,
+            name: product.name,
+            sku: product.sku,
+            quantity: product.quantity + change,
+            threshold: product.lowStockThreshold ?? 0,
+          })
+        })
+      )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
+    }
 
     return NextResponse.json(
       { success: true, data: createdReturn },
