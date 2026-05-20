@@ -17,7 +17,7 @@ const OutstandingSchema = z
   })
   .strict()
 
-export const CreateSaleSchema = z
+const SalePayloadSchema = z
   .object({
     items: z.array(SaleItemSchema).min(1),
     notes: z.string().optional(),
@@ -56,3 +56,6 @@ export const CreateSaleSchema = z
       })
     }
   })
+
+export const CreateSaleSchema = SalePayloadSchema
+export const UpdateSaleSchema = SalePayloadSchema

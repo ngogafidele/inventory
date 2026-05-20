@@ -4,7 +4,7 @@ import { Product } from "@/lib/db/models/Product"
 import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
-import { formatInKigali } from "@/lib/utils/time"
+import { formatInKigali, formatKigaliDateInput } from "@/lib/utils/time"
 
 type PopulatedSaleUser = {
   _id: { toString(): string }
@@ -30,6 +30,13 @@ type SalesPageSale = {
   createdBy?: PopulatedSaleUser | { toString(): string }
   totalAmount: number
   notes: string
+  paymentStatus?: "paid" | "unpaid"
+  paymentMethod?: "cash" | "bank" | "mobile"
+  outstanding?: {
+    customerName?: string
+    customerPhone?: string
+    paymentDate?: Date
+  }
   items: SalesPageSaleItem[]
 }
 
@@ -89,6 +96,15 @@ export default async function SalesPage() {
       isPopulatedSaleUser(sale.createdBy)
         ? sale.createdBy.name ?? sale.createdBy.email ?? "Unknown User"
         : "Unknown User",
+    paymentStatus: sale.paymentStatus ?? "paid",
+    paymentMethod: sale.paymentMethod,
+    outstanding: sale.outstanding
+      ? {
+          customerName: sale.outstanding.customerName ?? "",
+          customerPhone: sale.outstanding.customerPhone ?? "",
+          paymentDate: formatKigaliDateInput(sale.outstanding.paymentDate),
+        }
+      : undefined,
     items: sale.items.map((item) => ({
       ...item,
       productId: item.productId.toString(),
@@ -109,6 +125,7 @@ export default async function SalesPage() {
       initialSales={serializedSales}
       products={serializedProducts}
       currentUserLabel={session.email}
+      isAdmin={session.isAdmin}
     />
   )
 }

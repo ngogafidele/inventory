@@ -6,10 +6,98 @@ import { Sale } from "@/lib/db/models/Sale"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { UpdateSaleSchema } from "@/lib/db/validators/sale"
+import { parseKigaliDateInput } from "@/lib/utils/time"
 
 type SaleItemForRestock = {
   productId: { toString(): string }
   quantity: number
+}
+
+type SaleItemForEdit = {
+  productId: { toString(): string }
+  quantity: number
+  name: string
+  sku: string
+  unit?: string
+  basePrice?: number
+  sellingPrice: number
+  lineTotal: number
+}
+
+type ProductForEdit = {
+  _id: { toString(): string }
+  name: string
+  sku: string
+  unit?: string
+  quantity: number
+  price: number
+  costPrice?: number
+  lowStockThreshold?: number
+}
+
+function addQuantity(map: Map<string, number>, productId: string, quantity: number) {
+  map.set(productId, (map.get(productId) ?? 0) + quantity)
+}
+
+function getSaleQuantities(items: SaleItemForEdit[]) {
+  const quantities = new Map<string, number>()
+  items.forEach((item) => addQuantity(quantities, item.productId.toString(), item.quantity))
+  return quantities
+}
+
+async function applyStockChanges(
+  entries: Array<{ productId: string; change: number }>,
+  store: string
+) {
+  const applied: Array<{ productId: string; change: number }> = []
+
+  for (const entry of entries) {
+    if (entry.change === 0) continue
+
+    const filter =
+      entry.change < 0
+        ? { _id: entry.productId, store, quantity: { $gte: Math.abs(entry.change) } }
+        : { _id: entry.productId, store }
+
+    const result = await Product.updateOne(filter, {
+      $inc: { quantity: entry.change },
+    })
+
+    if (result.modifiedCount !== 1) {
+      if (applied.length > 0) {
+        await Product.bulkWrite(
+          applied.map((appliedEntry) => ({
+            updateOne: {
+              filter: { _id: appliedEntry.productId, store },
+              update: { $inc: { quantity: -appliedEntry.change } },
+            },
+          }))
+        )
+      }
+      throw new Error("Insufficient stock for one or more products")
+    }
+
+    applied.push(entry)
+  }
+
+  return applied
+}
+
+async function rollbackStockChanges(
+  entries: Array<{ productId: string; change: number }>,
+  store: string
+) {
+  if (entries.length === 0) return
+
+  await Product.bulkWrite(
+    entries.map((entry) => ({
+      updateOne: {
+        filter: { _id: entry.productId, store },
+        update: { $inc: { quantity: -entry.change } },
+      },
+    }))
+  )
 }
 
 export async function GET(
@@ -106,6 +194,205 @@ export async function PATCH(
     return NextResponse.json(
       { success: false, error: "Failed to update sale" },
       { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  let appliedStockChanges: Array<{ productId: string; change: number }> = []
+
+  try {
+    const { authorized, session } = await requireAdmin(request)
+    if (!authorized || !session) {
+      return NextResponse.json(
+        { success: false, error: "Admin only" },
+        { status: 403 }
+      )
+    }
+
+    const store = resolveStoreFromRequest(request, session)
+    if (!store) {
+      return NextResponse.json(
+        { success: false, error: "Access denied" },
+        { status: 403 }
+      )
+    }
+
+    const { id } = await context.params
+    const payload = UpdateSaleSchema.parse(await request.json())
+
+    await connectToDatabase()
+
+    const sale = await Sale.findOne({ _id: id, store })
+    if (!sale) {
+      return NextResponse.json(
+        { success: false, error: "Sale not found" },
+        { status: 404 }
+      )
+    }
+
+    const oldItems = sale.items as SaleItemForEdit[]
+    const oldQuantities = getSaleQuantities(oldItems)
+    const newQuantities = new Map<string, number>()
+    payload.items.forEach((item) =>
+      addQuantity(newQuantities, item.productId, item.quantity)
+    )
+
+    const productIds = Array.from(
+      new Set([...oldQuantities.keys(), ...newQuantities.keys()])
+    )
+    const products = await Product.find({ _id: { $in: productIds }, store })
+    const productMap = new Map(
+      products.map((product) => [product._id.toString(), product as ProductForEdit])
+    )
+
+    for (const productId of newQuantities.keys()) {
+      if (!productMap.has(productId)) {
+        return NextResponse.json(
+          { success: false, error: "One or more products not found" },
+          { status: 404 }
+        )
+      }
+    }
+
+    for (const [productId, newQuantity] of newQuantities.entries()) {
+      const product = productMap.get(productId)
+      if (!product) {
+        return NextResponse.json(
+          { success: false, error: "One or more products not found" },
+          { status: 404 }
+        )
+      }
+
+      const oldQuantity = oldQuantities.get(productId) ?? 0
+      const availableQuantity = product.quantity + oldQuantity
+      if (availableQuantity < newQuantity) {
+        return NextResponse.json(
+          { success: false, error: `Insufficient stock for ${product.name}` },
+          { status: 400 }
+        )
+      }
+    }
+
+    let totalAmount = 0
+    const saleItems = payload.items.map((item) => {
+      const product = productMap.get(item.productId)
+      if (!product) {
+        throw new Error("Product not found")
+      }
+
+      const lineTotal = item.sellingPrice * item.quantity
+      totalAmount += lineTotal
+
+      return {
+        productId: product._id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit ?? "pcs",
+        quantity: item.quantity,
+        basePrice: product.costPrice ?? product.price,
+        sellingPrice: item.sellingPrice,
+        lineTotal,
+      }
+    })
+
+    const paymentStatus = payload.paymentStatus ?? "paid"
+    const paymentDate =
+      paymentStatus === "unpaid"
+        ? parseKigaliDateInput(payload.outstanding?.paymentDate)
+        : null
+
+    if (paymentStatus === "unpaid" && !paymentDate) {
+      return NextResponse.json(
+        { success: false, error: "Invalid payment date." },
+        { status: 400 }
+      )
+    }
+
+    const stockChanges = productIds
+      .map((productId) => ({
+        productId,
+        change:
+          (oldQuantities.get(productId) ?? 0) -
+          (newQuantities.get(productId) ?? 0),
+      }))
+      .filter((entry) => entry.change !== 0)
+
+    appliedStockChanges = await applyStockChanges(stockChanges, store)
+
+    sale.items = saleItems
+    sale.totalAmount = totalAmount
+    sale.paymentStatus = paymentStatus
+    sale.paymentMethod =
+      paymentStatus === "paid" ? payload.paymentMethod : undefined
+    sale.outstanding =
+      paymentStatus === "unpaid"
+        ? {
+            customerName: payload.outstanding?.customerName ?? "",
+            customerPhone: payload.outstanding?.customerPhone ?? "",
+            paymentDate: paymentDate ?? undefined,
+          }
+        : undefined
+    sale.notes = payload.notes?.trim() ?? ""
+
+    const invoice = await Invoice.findOne({ saleId: sale._id, store })
+    if (invoice) {
+      invoice.items = saleItems.map((item) => ({
+        description: item.name,
+        sku: item.sku,
+        unit: item.unit ?? "pcs",
+        quantity: item.quantity,
+        unitPrice: item.sellingPrice,
+        lineTotal: item.lineTotal,
+      }))
+      invoice.totalAmount = totalAmount
+    }
+
+    try {
+      await sale.save()
+      if (invoice) {
+        await invoice.save()
+      }
+    } catch (error) {
+      await rollbackStockChanges(appliedStockChanges, store)
+      throw error
+    }
+
+    try {
+      await Promise.all(
+        productIds.map(async (productId) => {
+          const product = productMap.get(productId)
+          if (!product) return
+
+          const newQuantity =
+            product.quantity +
+            ((oldQuantities.get(productId) ?? 0) -
+              (newQuantities.get(productId) ?? 0))
+
+          await syncLowStockAlert({
+            store,
+            productId,
+            name: product.name,
+            sku: product.sku,
+            quantity: newQuantity,
+            threshold: product.lowStockThreshold ?? 0,
+          })
+        })
+      )
+    } catch (error) {
+      console.error("[Low Stock Alert Sync Error]", error)
+    }
+
+    return NextResponse.json({ success: true, data: sale })
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to update sale"
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 400 }
     )
   }
 }

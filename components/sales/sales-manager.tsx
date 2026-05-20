@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
+import { Pencil } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -53,6 +54,13 @@ type SaleClient = {
   items: SaleItemClient[]
   totalAmount: number
   notes: string
+  paymentStatus?: "paid" | "unpaid"
+  paymentMethod?: "cash" | "bank" | "mobile"
+  outstanding?: {
+    customerName?: string
+    customerPhone?: string
+    paymentDate?: string
+  }
   createdByName?: string
   createdAtLabel?: string
   createdAt?: string
@@ -82,13 +90,17 @@ export function SalesManager({
   initialSales,
   products,
   currentUserLabel,
+  isAdmin,
 }: {
   initialSales: SaleClient[]
   products: ProductOption[]
   currentUserLabel: string
+  isAdmin: boolean
 }) {
   const [sales, setSales] = useState(initialSales)
+  const [productOptions, setProductOptions] = useState(products)
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraft])
+  const [activeSaleId, setActiveSaleId] = useState<string | null>(null)
   const [notes, setNotes] = useState("")
   const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">(
     "paid"
@@ -107,9 +119,25 @@ export function SalesManager({
   const [currentPage, setCurrentPage] = useState(1)
 
   const productMap = useMemo(
-    () => new Map(products.map((product) => [product._id, product])),
-    [products]
+    () => new Map(productOptions.map((product) => [product._id, product])),
+    [productOptions]
   )
+
+  const activeSale = useMemo(
+    () => sales.find((sale) => sale._id === activeSaleId) ?? null,
+    [activeSaleId, sales]
+  )
+
+  const activeSaleQuantities = useMemo(() => {
+    const quantities = new Map<string, number>()
+    activeSale?.items.forEach((item) => {
+      quantities.set(
+        item.productId,
+        (quantities.get(item.productId) ?? 0) + item.quantity
+      )
+    })
+    return quantities
+  }, [activeSale])
 
   const pageCount = Math.max(1, Math.ceil(sales.length / SALES_PER_PAGE))
   const safeCurrentPage = Math.min(currentPage, pageCount)
@@ -150,6 +178,7 @@ export function SalesManager({
 
   const resetForm = () => {
     setDraftItems([emptyDraft])
+    setActiveSaleId(null)
     setNotes("")
     setPaymentStatus("paid")
     setPaymentMethod("cash")
@@ -163,6 +192,68 @@ export function SalesManager({
 
   const getItemLabel = (item: SaleItemClient) => {
     return item.name?.trim() || item.sku?.trim() || "Unnamed item"
+  }
+
+  const updateProductQuantities = (
+    previousItems: SaleItemClient[],
+    nextItems: SaleItemClient[]
+  ) => {
+    const changes = new Map<string, number>()
+
+    previousItems.forEach((item) => {
+      changes.set(item.productId, (changes.get(item.productId) ?? 0) + item.quantity)
+    })
+    nextItems.forEach((item) => {
+      changes.set(item.productId, (changes.get(item.productId) ?? 0) - item.quantity)
+    })
+
+    setProductOptions((current) =>
+      current.map((product) => ({
+        ...product,
+        quantity: product.quantity + (changes.get(product._id) ?? 0),
+      }))
+    )
+  }
+
+  const normalizeSaleResponse = (
+    sale: SaleClient,
+    previous?: SaleClient | null
+  ): SaleClient => ({
+    ...previous,
+    ...sale,
+    _id: sale._id,
+    notes: sale.notes ?? "",
+    paymentStatus: sale.paymentStatus ?? "paid",
+    items: sale.items.map((item) => ({
+      ...item,
+      productId: String(item.productId),
+      unit: item.unit ?? "pcs",
+    })),
+    createdAtLabel: sale.createdAtLabel ?? previous?.createdAtLabel,
+    createdByName: sale.createdByName ?? previous?.createdByName ?? currentUserLabel,
+  })
+
+  const openEdit = (sale: SaleClient) => {
+    setActiveSaleId(sale._id)
+    setDraftItems(
+      sale.items.length
+        ? sale.items.map((item) => ({
+            productId: item.productId,
+            quantity: String(item.quantity),
+            sellingPrice: String(item.sellingPrice),
+          }))
+        : [emptyDraft]
+    )
+    setNotes(sale.notes ?? "")
+    setPaymentStatus(sale.paymentStatus ?? "paid")
+    setPaymentMethod(sale.paymentMethod ?? "cash")
+    setOutstandingDraft({
+      customerName: sale.outstanding?.customerName ?? "",
+      customerPhone: sale.outstanding?.customerPhone ?? "",
+      paymentDate: sale.outstanding?.paymentDate ?? "",
+    })
+    setError(null)
+    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const submitSale = async (outstanding?: OutstandingDraft) => {
@@ -204,7 +295,9 @@ export function SalesManager({
         setError("One selected product is no longer available.")
         return
       }
-      if (totalRequested > product.quantity) {
+      const availableQuantity =
+        product.quantity + (activeSaleQuantities.get(productId) ?? 0)
+      if (totalRequested > availableQuantity) {
         setError(`Insufficient stock for ${product.name}.`)
         return
       }
@@ -228,38 +321,52 @@ export function SalesManager({
         }
       }
 
-      const response = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: payloadItems,
-          notes: notes.trim(),
-          paymentStatus,
-          paymentMethod: paymentStatus === "paid" ? paymentMethod : undefined,
-          outstanding:
-            paymentStatus === "unpaid"
-              ? {
-                  customerName: outstanding?.customerName.trim(),
-                  customerPhone: outstanding?.customerPhone.trim(),
-                  paymentDate: outstanding?.paymentDate,
-                }
-              : undefined,
-        }),
-      })
+      const previousSale = activeSale
+      const response = await fetch(
+        activeSaleId ? `/api/sales/${activeSaleId}` : "/api/sales",
+        {
+          method: activeSaleId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: payloadItems,
+            notes: notes.trim(),
+            paymentStatus,
+            paymentMethod: paymentStatus === "paid" ? paymentMethod : undefined,
+            outstanding:
+              paymentStatus === "unpaid"
+                ? {
+                    customerName: outstanding?.customerName.trim(),
+                    customerPhone: outstanding?.customerPhone.trim(),
+                    paymentDate: outstanding?.paymentDate,
+                  }
+                : undefined,
+          }),
+        }
+      )
 
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to record sale.")
+        setError(body?.error ?? "Failed to save sale.")
         return false
       }
 
-      const createdSale = body.data as SaleClient
-      setSales((current) => [createdSale, ...current])
-      setCurrentPage(1)
+      const savedSale = normalizeSaleResponse(body.data as SaleClient, previousSale)
+      updateProductQuantities(previousSale?.items ?? [], savedSale.items)
+      setSales((current) => {
+        if (previousSale) {
+          return current.map((sale) =>
+            sale._id === savedSale._id ? savedSale : sale
+          )
+        }
+        return [savedSale, ...current]
+      })
+      if (!previousSale) {
+        setCurrentPage(1)
+      }
       resetForm()
       return true
     } catch {
-      setError("Failed to record sale.")
+      setError("Failed to save sale.")
       return false
     } finally {
       setSubmitting(false)
@@ -295,7 +402,16 @@ export function SalesManager({
       </div>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <h3 className="text-lg font-semibold">Record Sale</h3>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-semibold">
+            {activeSaleId ? "Edit Sale" : "Record Sale"}
+          </h3>
+          {activeSaleId ? (
+            <Button variant="outline" onClick={resetForm} disabled={submitting}>
+              Cancel Edit
+            </Button>
+          ) : null}
+        </div>
         <div className="space-y-3">
           {draftItems.map((item, index) => {
             const selectedProduct = item.productId
@@ -309,7 +425,7 @@ export function SalesManager({
                 <label className="grid gap-1 text-sm">
                   Product
                   <ProductSearchSelect
-                    products={products}
+                    products={productOptions}
                     value={item.productId}
                     onValueChange={(value) => {
                       const product = productMap.get(value)
@@ -360,7 +476,7 @@ export function SalesManager({
 
                 {selectedProduct ? (
                   <p className="md:col-span-4 text-xs text-muted-foreground">
-                    Base price: {formatCurrency(selectedProduct.price)} | Available: {selectedProduct.quantity} {selectedProduct.unit}
+                    Base price: {formatCurrency(selectedProduct.price)} | Available: {selectedProduct.quantity + (activeSaleQuantities.get(item.productId) ?? 0)} {selectedProduct.unit}
                   </p>
                 ) : null}
               </div>
@@ -429,9 +545,15 @@ export function SalesManager({
 
         <Button
           onClick={handleRecordSale}
-          disabled={submitting || products.length === 0}
+          disabled={submitting || productOptions.length === 0}
         >
-          {submitting ? "Recording..." : "Record Sale"}
+          {submitting
+            ? activeSaleId
+              ? "Saving..."
+              : "Recording..."
+            : activeSaleId
+              ? "Save Changes"
+              : "Record Sale"}
         </Button>
       </section>
 
@@ -493,7 +615,13 @@ export function SalesManager({
               onClick={handleOutstandingSubmit}
               disabled={submitting}
             >
-              {submitting ? "Recording..." : "Record Sale"}
+              {submitting
+                ? activeSaleId
+                  ? "Saving..."
+                  : "Recording..."
+                : activeSaleId
+                  ? "Save Changes"
+                  : "Record Sale"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -509,12 +637,13 @@ export function SalesManager({
             <TableHead>Sold Price</TableHead>
             <TableHead>Total</TableHead>
             <TableHead>Logged By</TableHead>
+            {isAdmin ? <TableHead>Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {paginatedSales.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-muted-foreground">
+              <TableCell colSpan={isAdmin ? 8 : 7} className="text-muted-foreground">
                 No sales recorded yet.
               </TableCell>
             </TableRow>
@@ -564,6 +693,19 @@ export function SalesManager({
                           <TableCell rowSpan={rowSpan}>
                             {sale.createdByName ?? "Unknown User"}
                           </TableCell>
+                          {isAdmin ? (
+                            <TableCell rowSpan={rowSpan}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEdit(sale)}
+                              >
+                                <Pencil className="size-4" />
+                                Edit
+                              </Button>
+                            </TableCell>
+                          ) : null}
                         </>
                       ) : null}
                     </TableRow>
