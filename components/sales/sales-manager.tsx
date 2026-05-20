@@ -128,6 +128,19 @@ export function SalesManager({
     [activeSaleId, sales]
   )
 
+  const draftTotal = useMemo(() => {
+    return draftItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity)
+      const sellingPrice = Number(item.sellingPrice)
+
+      if (!Number.isFinite(quantity) || !Number.isFinite(sellingPrice)) {
+        return sum
+      }
+
+      return sum + Math.max(0, quantity) * Math.max(0, sellingPrice)
+    }, 0)
+  }, [draftItems])
+
   const activeSaleQuantities = useMemo(() => {
     const quantities = new Map<string, number>()
     activeSale?.items.forEach((item) => {
@@ -488,6 +501,13 @@ export function SalesManager({
           <Button variant="outline" onClick={addDraftItem}>
             Add Item
           </Button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/40 px-4 py-3 text-sm">
+          <span className="text-muted-foreground">Total to be paid</span>
+          <span className="text-base font-semibold text-foreground">
+            {formatCurrency(draftTotal)}
+          </span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
