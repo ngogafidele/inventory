@@ -85,6 +85,15 @@ export function ProductsManager({
   const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
 
+  const costValue = Number(formState.costPrice)
+  const priceValue = Number(formState.price)
+  const showPriceWarning =
+    formState.costPrice.trim() !== "" &&
+    formState.price.trim() !== "" &&
+    !Number.isNaN(costValue) &&
+    !Number.isNaN(priceValue) &&
+    priceValue < costValue
+
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) return products
@@ -512,6 +521,11 @@ export function ProductsManager({
                           }))
                         }
                       />
+                      {showPriceWarning ? (
+                        <span className="text-xs text-amber-600">
+                          Warning: selling price is below cost price.
+                        </span>
+                      ) : null}
                     </label>
                   </div>
                   {error ? (
@@ -580,7 +594,16 @@ export function ProductsManager({
                 <TableCell>{product.unit ?? "pcs"}</TableCell>
                 <TableCell>{product.lowStockThreshold ?? 0}</TableCell>
                 <TableCell>{formatCurrency(product.costPrice ?? 0)}</TableCell>
-                <TableCell>{formatCurrency(product.price)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span>{formatCurrency(product.price)}</span>
+                    {product.price < (product.costPrice ?? 0) ? (
+                      <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Below cost
+                      </span>
+                    ) : null}
+                  </div>
+                </TableCell>
                 {isAdmin ? (
                   <TableCell className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
