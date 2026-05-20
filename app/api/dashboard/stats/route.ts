@@ -353,6 +353,9 @@ export async function GET(request: NextRequest) {
     const grossProfitToday =
       (todayGrossProfit[0]?.total || 0) - returnedGrossProfitToday
     const expensesTodayTotal = todayExpenses[0]?.total || 0
+    const revenueToday =
+      (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday
+    const costOfSalesToday = revenueToday - grossProfitToday
 
     return NextResponse.json({
       success: true,
@@ -365,7 +368,8 @@ export async function GET(request: NextRequest) {
         unpaidCount,
         stockValue: stockValue[0]?.total || 0,
         revenue: (sales[0]?.total || 0) - returnedRevenue,
-        revenueToday: (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday,
+        revenueToday,
+        costOfSalesToday,
         grossProfitToday,
         expensesToday: expensesTodayTotal,
         profitToday: grossProfitToday - expensesTodayTotal,

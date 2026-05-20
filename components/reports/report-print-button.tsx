@@ -13,6 +13,7 @@ type StoreReport = {
   inventoryRetail: number
   sales: number
   revenue: number
+  costOfSales: number
   expenses: number
   profit: number
   invoices: number
@@ -85,6 +86,7 @@ function sumReports(reports: StoreReport[]) {
       inventoryRetail: total.inventoryRetail + report.inventoryRetail,
       sales: total.sales + report.sales,
       revenue: total.revenue + report.revenue,
+      costOfSales: total.costOfSales + report.costOfSales,
       expenses: total.expenses + report.expenses,
       profit: total.profit + report.profit,
       invoices: total.invoices + report.invoices,
@@ -98,6 +100,7 @@ function sumReports(reports: StoreReport[]) {
       inventoryRetail: 0,
       sales: 0,
       revenue: 0,
+      costOfSales: 0,
       expenses: 0,
       profit: 0,
       invoices: 0,

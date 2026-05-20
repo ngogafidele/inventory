@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
   Boxes,
   Coins,
+  Package,
   PackageSearch,
   ReceiptText,
   TrendingUp,
@@ -34,6 +35,7 @@ type StatsResponse = {
   salesToday: number
   stockValue: number
   revenueToday: number
+  costOfSalesToday: number
   grossProfitToday: number
   expensesToday: number
   profitToday: number
@@ -99,6 +101,11 @@ export function DashboardStats({ store }: DashboardStatsProps) {
       label: "Revenue Today",
       value: formatCurrency(stats.revenueToday),
       icon: Coins,
+    },
+    {
+      label: "Cost of Sales",
+      value: formatCurrency(stats.costOfSalesToday),
+      icon: Package,
     },
     {
       label: "Expenses Today",

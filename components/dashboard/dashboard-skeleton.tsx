@@ -35,8 +35,8 @@ function TableSkeleton() {
 export function DashboardSkeleton() {
   return (
     <div className="space-y-5" aria-label="Loading dashboard">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, index) => (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        {Array.from({ length: 7 }).map((_, index) => (
           <div
             key={index}
             className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"

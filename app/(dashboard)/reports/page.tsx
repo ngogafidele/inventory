@@ -37,6 +37,7 @@ type StoreReport = {
   inventoryRetail: number
   sales: number
   revenue: number
+  costOfSales: number
   expenses: number
   profit: number
   invoices: number
@@ -207,6 +208,7 @@ function sumReports(reports: StoreReport[]) {
       inventoryRetail: total.inventoryRetail + report.inventoryRetail,
       sales: total.sales + report.sales,
       revenue: total.revenue + report.revenue,
+      costOfSales: total.costOfSales + report.costOfSales,
       expenses: total.expenses + report.expenses,
       profit: total.profit + report.profit,
       invoices: total.invoices + report.invoices,
@@ -220,6 +222,7 @@ function sumReports(reports: StoreReport[]) {
       inventoryRetail: 0,
       sales: 0,
       revenue: 0,
+      costOfSales: 0,
       expenses: 0,
       profit: 0,
       invoices: 0,
@@ -509,6 +512,8 @@ export default async function ReportsPage({
     const outstandingSales = outstandingSalesMap.get(store)
 
     const grossProfit = (sales?.grossProfit ?? 0) - (returns?.grossProfit ?? 0)
+    const netRevenue = (sales?.revenue ?? 0) - (returns?.revenue ?? 0)
+    const costOfSales = netRevenue - grossProfit
     const expenseTotal = expenses?.expenses ?? 0
 
     return {
@@ -517,7 +522,8 @@ export default async function ReportsPage({
       inventoryCost: products?.inventoryCost ?? 0,
       inventoryRetail: products?.inventoryRetail ?? 0,
       sales: sales?.sales ?? 0,
-      revenue: (sales?.revenue ?? 0) - (returns?.revenue ?? 0),
+      revenue: netRevenue,
+      costOfSales,
       expenses: expenseTotal,
       profit: grossProfit - expenseTotal,
       invoices: invoices?.invoices ?? 0,
@@ -570,6 +576,7 @@ export default async function ReportsPage({
 
   const cards = [
     { label: "Total Revenue", value: formatCurrency(totals.revenue) },
+    { label: "Cost of Sales", value: formatCurrency(totals.costOfSales) },
     { label: "Expenses", value: formatCurrency(totals.expenses) },
     { label: "Profit", value: formatCurrency(totals.profit) },
     { label: "Inventory Cost", value: formatCurrency(totals.inventoryCost) },
