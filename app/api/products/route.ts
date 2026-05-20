@@ -7,6 +7,19 @@ import { CreateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { ZodError } from "zod"
 
+const CASE_INSENSITIVE_COLLATION = { locale: "en", strength: 2 } as const
+
+function isDuplicateProductNameError(error: unknown) {
+  if (typeof error !== "object" || error === null) return false
+
+  const mongoError = error as {
+    code?: unknown
+    keyPattern?: Record<string, unknown>
+  }
+
+  return mongoError.code === 11000 && Boolean(mongoError.keyPattern?.name)
+}
+
 function getSkuBase(name: string) {
   const normalized = name.toUpperCase().replace(/[^A-Z0-9]+/g, "")
   return (normalized.slice(0, 6) || "PRD").padEnd(3, "X")
@@ -78,6 +91,18 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase()
 
+    const duplicateProduct = await Product.exists({
+      store,
+      name: payload.name,
+    }).collation(CASE_INSENSITIVE_COLLATION)
+
+    if (duplicateProduct) {
+      return NextResponse.json(
+        { success: false, error: "A product with this name already exists." },
+        { status: 409 }
+      )
+    }
+
     const product = await Product.create({
       ...productInput,
       sku: await generateProductSku(store, payload.name),
@@ -102,6 +127,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: error.issues[0]?.message ?? "Invalid input" },
         { status: 400 }
+      )
+    }
+    if (isDuplicateProductNameError(error)) {
+      return NextResponse.json(
+        { success: false, error: "A product with this name already exists." },
+        { status: 409 }
       )
     }
     return NextResponse.json(

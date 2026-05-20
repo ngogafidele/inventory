@@ -159,7 +159,8 @@ function writeInvoicePdf(
   data: PdfDocumentData,
   storeInfo: StoreInfo,
   recipientLabel = "Bill To",
-  footerLines: string[] = []
+  footerLines: string[] = [],
+  centeredFooterLine?: string
 ) {
   if (!PDFDocument) {
     const keys =
@@ -294,6 +295,19 @@ function writeInvoicePdf(
       .fontSize(9)
       .fillColor(PRINT_TEXT)
       .text(footerLines.join("\n"), 48, footerY, { width: 220 })
+
+    if (centeredFooterLine) {
+      const centeredFooterY = footerY + footerLines.length * 11 + 4
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(PRINT_TEXT)
+        .text(centeredFooterLine, 48, centeredFooterY, {
+          align: "center",
+          width: 499,
+        })
+    }
   }
 
   doc.end()
@@ -323,6 +337,7 @@ export function generateProformaPDF(
     proforma,
     storeInfo,
     "Proforma To",
-    businessFooterLines
+    businessFooterLines,
+    "Thank You For Doing Business With B Ikaze Hardware"
   )
 }

@@ -7,6 +7,19 @@ import { UpdateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { ZodError } from "zod"
 
+const CASE_INSENSITIVE_COLLATION = { locale: "en", strength: 2 } as const
+
+function isDuplicateProductNameError(error: unknown) {
+  if (typeof error !== "object" || error === null) return false
+
+  const mongoError = error as {
+    code?: unknown
+    keyPattern?: Record<string, unknown>
+  }
+
+  return mongoError.code === 11000 && Boolean(mongoError.keyPattern?.name)
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -76,6 +89,21 @@ export async function PUT(
 
     await connectToDatabase()
 
+    if (payload.name) {
+      const duplicateProduct = await Product.exists({
+        _id: { $ne: id },
+        store,
+        name: payload.name,
+      }).collation(CASE_INSENSITIVE_COLLATION)
+
+      if (duplicateProduct) {
+        return NextResponse.json(
+          { success: false, error: "A product with this name already exists." },
+          { status: 409 }
+        )
+      }
+    }
+
     const product = await Product.findOneAndUpdate(
       { _id: id, store },
       updateInput,
@@ -104,6 +132,12 @@ export async function PUT(
       return NextResponse.json(
         { success: false, error: error.issues[0]?.message ?? "Invalid input" },
         { status: 400 }
+      )
+    }
+    if (isDuplicateProductNameError(error)) {
+      return NextResponse.json(
+        { success: false, error: "A product with this name already exists." },
+        { status: 409 }
       )
     }
     return NextResponse.json(
