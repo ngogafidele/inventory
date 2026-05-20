@@ -47,6 +47,7 @@ type SalesPageProduct = {
   unit?: string
   quantity: number
   price: number
+  costPrice?: number
 }
 
 function isPopulatedSaleUser(
@@ -118,6 +119,7 @@ export default async function SalesPage() {
     unit: product.unit ?? "pcs",
     quantity: product.quantity,
     price: product.price,
+    costPrice: product.costPrice,
   }))
 
   return (

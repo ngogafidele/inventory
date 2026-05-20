@@ -35,6 +35,7 @@ type ProductOption = {
   sku: string
   unit: string
   price: number
+  costPrice?: number
   quantity: number
 }
 
@@ -70,6 +71,7 @@ type DraftItem = {
   productId: string
   quantity: string
   sellingPrice: string
+  costPrice?: string
 }
 
 type OutstandingDraft = {
@@ -82,6 +84,7 @@ const emptyDraft: DraftItem = {
   productId: "",
   quantity: "",
   sellingPrice: "",
+  costPrice: "",
 }
 
 const SALES_PER_PAGE = 20
@@ -254,6 +257,7 @@ export function SalesManager({
             productId: item.productId,
             quantity: String(item.quantity),
             sellingPrice: String(item.sellingPrice),
+            costPrice: isAdmin ? String(item.basePrice ?? "") : "",
           }))
         : [emptyDraft]
     )
@@ -276,6 +280,10 @@ export function SalesManager({
       productId: item.productId,
       quantity: Number(item.quantity),
       sellingPrice: Number(item.sellingPrice),
+      costPrice:
+        isAdmin && item.costPrice !== undefined && item.costPrice !== ""
+          ? Number(item.costPrice)
+          : undefined,
     }))
 
     if (payloadItems.some((item) => !item.productId)) {
@@ -284,13 +292,20 @@ export function SalesManager({
     }
 
     if (
-      payloadItems.some(
-        (item) =>
+      payloadItems.some((item) => {
+        const hasInvalidCostPrice =
+          isAdmin &&
+          item.costPrice !== undefined &&
+          (Number.isNaN(item.costPrice) || item.costPrice < 0)
+
+        return (
           Number.isNaN(item.quantity) ||
           item.quantity < 1 ||
           Number.isNaN(item.sellingPrice) ||
-          item.sellingPrice < 0
-      )
+          item.sellingPrice < 0 ||
+          hasInvalidCostPrice
+        )
+      })
     ) {
       setError("Quantity must be at least 1 and price must be 0 or more.")
       return
@@ -433,7 +448,11 @@ export function SalesManager({
             return (
               <div
                 key={`${index}-${item.productId}`}
-                className="grid gap-3 rounded-lg border border-border/80 p-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]"
+                className={`grid gap-3 rounded-lg border border-border/80 p-3 ${
+                  isAdmin
+                    ? "md:grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_auto]"
+                    : "md:grid-cols-[1.6fr_0.8fr_1fr_auto]"
+                }`}
               >
                 <label className="grid gap-1 text-sm">
                   Product
@@ -445,6 +464,13 @@ export function SalesManager({
                       setDraftItem(index, "productId", value)
                       if (product) {
                         setDraftItem(index, "sellingPrice", String(product.price))
+                        if (isAdmin) {
+                          setDraftItem(
+                            index,
+                            "costPrice",
+                            String(product.costPrice ?? product.price)
+                          )
+                        }
                       }
                     }}
                   />
@@ -477,6 +503,22 @@ export function SalesManager({
                   />
                 </label>
 
+                {isAdmin ? (
+                  <label className="grid gap-1 text-sm">
+                    Cost Price
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="e.g. 800"
+                      value={item.costPrice ?? ""}
+                      onChange={(event) =>
+                        setDraftItem(index, "costPrice", event.target.value)
+                      }
+                    />
+                  </label>
+                ) : null}
+
                 <div className="flex items-end">
                   <Button
                     variant="outline"
@@ -489,7 +531,7 @@ export function SalesManager({
 
                 {selectedProduct ? (
                   <p className="md:col-span-4 text-xs text-muted-foreground">
-                    Base price: {formatCurrency(selectedProduct.price)} | Available: {selectedProduct.quantity + (activeSaleQuantities.get(item.productId) ?? 0)} {selectedProduct.unit}
+                    Base price: {formatCurrency(selectedProduct.costPrice ?? selectedProduct.price)} | Available: {selectedProduct.quantity + (activeSaleQuantities.get(item.productId) ?? 0)} {selectedProduct.unit}
                   </p>
                 ) : null}
               </div>

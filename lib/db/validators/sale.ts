@@ -6,6 +6,7 @@ export const SaleItemSchema = z
     productId: objectIdSchema,
     quantity: z.number().int().min(1),
     sellingPrice: z.number().min(0),
+    costPrice: z.number().min(0).optional(),
   })
   .strict()
 

@@ -100,13 +100,18 @@ export async function POST(request: NextRequest) {
       const lineTotal = item.sellingPrice * item.quantity
       totalAmount += lineTotal
 
+      const requestedCostPrice =
+        session.isAdmin && Number.isFinite(item.costPrice)
+          ? item.costPrice
+          : undefined
+
       return {
         productId: product._id,
         name: product.name,
         sku: product.sku,
         unit: product.unit ?? "pcs",
         quantity: item.quantity,
-        basePrice: product.costPrice ?? product.price,
+        basePrice: requestedCostPrice ?? product.costPrice ?? product.price,
         sellingPrice: item.sellingPrice,
         lineTotal,
       }
