@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { ClientSession } from "mongoose"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
@@ -48,7 +49,8 @@ function getSaleQuantities(items: SaleItemForEdit[]) {
 
 async function applyStockChanges(
   entries: Array<{ productId: string; change: number }>,
-  store: string
+  store: string,
+  session?: ClientSession
 ) {
   const applied: Array<{ productId: string; change: number }> = []
 
@@ -60,9 +62,11 @@ async function applyStockChanges(
         ? { _id: entry.productId, store, quantity: { $gte: Math.abs(entry.change) } }
         : { _id: entry.productId, store }
 
-    const result = await Product.updateOne(filter, {
-      $inc: { quantity: entry.change },
-    })
+    const result = await Product.updateOne(
+      filter,
+      { $inc: { quantity: entry.change } },
+      { session }
+    )
 
     if (result.modifiedCount !== 1) {
       if (applied.length > 0) {
@@ -72,7 +76,8 @@ async function applyStockChanges(
               filter: { _id: appliedEntry.productId, store },
               update: { $inc: { quantity: -appliedEntry.change } },
             },
-          }))
+          })),
+          { session }
         )
       }
       throw new Error("Insufficient stock for one or more products")
@@ -82,22 +87,6 @@ async function applyStockChanges(
   }
 
   return applied
-}
-
-async function rollbackStockChanges(
-  entries: Array<{ productId: string; change: number }>,
-  store: string
-) {
-  if (entries.length === 0) return
-
-  await Product.bulkWrite(
-    entries.map((entry) => ({
-      updateOne: {
-        filter: { _id: entry.productId, store },
-        update: { $inc: { quantity: -entry.change } },
-      },
-    }))
-  )
 }
 
 export async function GET(
@@ -165,7 +154,10 @@ export async function PATCH(
 
     const { id } = await context.params
     const payload = (await request.json().catch(() => null)) as
-      | { paymentStatus?: "paid" | "unpaid" }
+      | {
+          paymentStatus?: "paid" | "unpaid"
+          paymentMethod?: "cash" | "bank" | "mobile"
+        }
       | null
 
     if (!payload?.paymentStatus || payload.paymentStatus !== "paid") {
@@ -174,11 +166,24 @@ export async function PATCH(
         { status: 400 }
       )
     }
+    if (
+      !payload.paymentMethod ||
+      !["cash", "bank", "mobile"].includes(payload.paymentMethod)
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Payment method is required." },
+        { status: 400 }
+      )
+    }
 
     await connectToDatabase()
     const sale = await Sale.findOneAndUpdate(
       { _id: id, store },
-      { paymentStatus: "paid", $unset: { outstanding: "" } },
+      {
+        paymentStatus: "paid",
+        paymentMethod: payload.paymentMethod,
+        $unset: { outstanding: "" },
+      },
       { new: true }
     )
 
@@ -202,8 +207,6 @@ export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  let appliedStockChanges: Array<{ productId: string; change: number }> = []
-
   try {
     const { authorized, session } = await requireAdmin(request)
     if (!authorized || !session) {
@@ -325,44 +328,49 @@ export async function PUT(
       }))
       .filter((entry) => entry.change !== 0)
 
-    appliedStockChanges = await applyStockChanges(stockChanges, store)
-
-    sale.items = saleItems
-    sale.totalAmount = totalAmount
-    sale.paymentStatus = paymentStatus
-    sale.paymentMethod =
-      paymentStatus === "paid" ? payload.paymentMethod : undefined
-    sale.outstanding =
-      paymentStatus === "unpaid"
-        ? {
-            customerName: payload.outstanding?.customerName ?? "",
-            customerPhone: payload.outstanding?.customerPhone ?? "",
-            paymentDate: paymentDate ?? undefined,
-          }
-        : undefined
-    sale.notes = payload.notes?.trim() ?? ""
-
-    const invoice = await Invoice.findOne({ saleId: sale._id, store })
-    if (invoice) {
-      invoice.items = saleItems.map((item) => ({
-        description: item.name,
-        sku: item.sku,
-        unit: item.unit ?? "pcs",
-        quantity: item.quantity,
-        unitPrice: item.sellingPrice,
-        lineTotal: item.lineTotal,
-      }))
-      invoice.totalAmount = totalAmount
-    }
-
+    const db = await connectToDatabase()
+    const dbSession = await db.startSession()
     try {
-      await sale.save()
-      if (invoice) {
-        await invoice.save()
-      }
-    } catch (error) {
-      await rollbackStockChanges(appliedStockChanges, store)
-      throw error
+      await dbSession.withTransaction(async () => {
+        await applyStockChanges(stockChanges, store, dbSession)
+
+        sale.items = saleItems
+        sale.totalAmount = totalAmount
+        sale.paymentStatus = paymentStatus
+        sale.paymentMethod =
+          paymentStatus === "paid" ? payload.paymentMethod : undefined
+        sale.outstanding =
+          paymentStatus === "unpaid"
+            ? {
+                customerName: payload.outstanding?.customerName ?? "",
+                customerPhone: payload.outstanding?.customerPhone ?? "",
+                paymentDate: paymentDate ?? undefined,
+              }
+            : undefined
+        sale.notes = payload.notes?.trim() ?? ""
+
+        const invoice = await Invoice.findOne({ saleId: sale._id, store }).session(
+          dbSession
+        )
+        if (invoice) {
+          invoice.items = saleItems.map((item) => ({
+            description: item.name,
+            sku: item.sku,
+            unit: item.unit ?? "pcs",
+            quantity: item.quantity,
+            unitPrice: item.sellingPrice,
+            lineTotal: item.lineTotal,
+          }))
+          invoice.totalAmount = totalAmount
+        }
+
+        await sale.save({ session: dbSession })
+        if (invoice) {
+          await invoice.save({ session: dbSession })
+        }
+      })
+    } finally {
+      await dbSession.endSession()
     }
 
     try {

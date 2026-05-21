@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
-import { Pencil } from "lucide-react"
+import { AlertTriangle, Pencil } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -237,6 +237,10 @@ export function SalesManager({
 
   const getItemLabel = (item: SaleItemClient) => {
     return item.name?.trim() || item.sku?.trim() || "Unnamed item"
+  }
+
+  const isSoldBelowCost = (item: SaleItemClient) => {
+    return item.basePrice !== undefined && item.sellingPrice < item.basePrice
   }
 
   const updateProductQuantities = (
@@ -796,7 +800,17 @@ export function SalesManager({
                         </div>
                       </TableCell>
                       <TableCell>{formatCurrency(item.basePrice ?? 0)}</TableCell>
-                      <TableCell>{formatCurrency(item.sellingPrice)}</TableCell>
+                      <TableCell>
+                        <div className="grid gap-1">
+                          <span>{formatCurrency(item.sellingPrice)}</span>
+                          {isSoldBelowCost(item) ? (
+                            <span className="inline-flex w-fit items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="size-3.5" />
+                              Sold below cost
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       {itemIndex === 0 ? (
                         <>
                           <TableCell rowSpan={rowSpan}>

@@ -4,6 +4,13 @@ import { useMemo, useState } from "react"
 import { Download, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import {
   Table,
@@ -61,6 +68,9 @@ export function OutstandingManager({
   const [search, setSearch] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "bank" | "mobile"
+  >("cash")
 
   const filteredSales = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -132,7 +142,7 @@ export function OutstandingManager({
       const response = await fetch(`/api/sales/${saleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentStatus: "paid" }),
+        body: JSON.stringify({ paymentStatus: "paid", paymentMethod }),
       })
       const body = await response.json().catch(() => null)
 
@@ -174,11 +184,30 @@ export function OutstandingManager({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatsCard label="Loan Sales" value={filteredSales.length} />
-        <StatsCard
-          label="Loans Total"
-          value={formatCurrency(totalOutstanding)}
-        />
-      </div>
+          <StatsCard
+            label="Loans Total"
+            value={formatCurrency(totalOutstanding)}
+          />
+        </div>
+
+        <label className="grid max-w-xs gap-1 text-sm">
+          Payment method
+          <Select
+            value={paymentMethod}
+            onValueChange={(value) =>
+              setPaymentMethod(value as "cash" | "bank" | "mobile")
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="bank">Bank</SelectItem>
+              <SelectItem value="mobile">Mobile Money</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

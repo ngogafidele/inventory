@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase()
 
-    const productIds = payload.items.map((item) => item.productId)
+    const productIds = Array.from(
+      new Set(payload.items.map((item) => item.productId))
+    )
     const products = await Product.find({ _id: { $in: productIds }, store })
 
     if (products.length !== productIds.length) {

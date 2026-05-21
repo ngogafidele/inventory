@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
+import { ReturnModel } from "@/lib/db/models/Return"
+import { Sale } from "@/lib/db/models/Sale"
+import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateProductSchema } from "@/lib/db/validators/product"
@@ -171,6 +174,31 @@ export async function DELETE(
     }
 
     await connectToDatabase()
+
+    const [saleReference, returnReference, adjustmentReference] =
+      await Promise.all([
+        Sale.exists({ store, "items.productId": id }),
+        ReturnModel.exists({
+          store,
+          $or: [
+            { "returnItems.productId": id },
+            { "replacementItems.productId": id },
+          ],
+        }),
+        StockAdjustment.exists({ store, productId: id }),
+      ])
+
+    if (saleReference || returnReference || adjustmentReference) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This product is referenced by sales, returns, or stock history and cannot be deleted.",
+        },
+        { status: 409 }
+      )
+    }
+
     const product = await Product.findOneAndDelete({ _id: id, store })
 
     if (!product) {
