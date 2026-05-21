@@ -125,15 +125,44 @@ export async function GET(request: NextRequest) {
     }
 
     const statementNumber = buildStatementNumber()
-    const rows = sales.map((sale) => ({
-      saleDate: sale.createdAt,
-      paymentDate: sale.outstanding?.paymentDate,
-      items: summarizeItems(sale.items),
-      recordedBy: isPopulatedSaleUser(sale.createdBy)
+    // Build rows so that each item in a sale gets its own row in the PDF table.
+    // This ensures multiple items with the same sale/payment date appear on
+    // separate lines rather than being concatenated into a single row.
+    const rows: Array<{
+      saleDate?: Date
+      paymentDate?: Date
+      items: string
+      recordedBy: string
+      amount: number
+    }> = []
+
+    for (const sale of sales) {
+      const recordedBy = isPopulatedSaleUser(sale.createdBy)
         ? sale.createdBy.name ?? sale.createdBy.email ?? "Unknown User"
-        : "Unknown User",
-      amount: sale.totalAmount,
-    }))
+        : "Unknown User"
+
+      if (!sale.items || sale.items.length === 0) {
+        rows.push({
+          saleDate: sale.createdAt,
+          paymentDate: sale.outstanding?.paymentDate,
+          items: "-",
+          recordedBy,
+          amount: sale.totalAmount,
+        })
+        continue
+      }
+
+      for (const item of sale.items) {
+        const itemText = `${item.name} (${item.quantity} ${item.unit ?? "pcs"})`
+        rows.push({
+          saleDate: sale.createdAt,
+          paymentDate: sale.outstanding?.paymentDate,
+          items: itemText,
+          recordedBy,
+          amount: item.lineTotal ?? 0,
+        })
+      }
+    }
 
     const totalOutstanding = sales.reduce(
       (sum, sale) => sum + sale.totalAmount,

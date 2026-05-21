@@ -71,10 +71,14 @@ type OutstandingPdfDocument = {
   stroke(): OutstandingPdfDocument
   addPage(): OutstandingPdfDocument
   heightOfString(text: string, options?: { width?: number }): number
+  on(event: "data", listener: (chunk: Buffer) => void): OutstandingPdfDocument
+  on(event: "end", listener: () => void): OutstandingPdfDocument
+  on(event: "error", listener: (error: unknown) => void): OutstandingPdfDocument
   end(): void
 }
 
 const logoPath = path.join(process.cwd(), "public", "images", "logo.png")
+const stampPath = path.join(process.cwd(), "public", "images", "stamp.jpg")
 const logoBox = {
   x: 42,
   y: 24,
@@ -83,6 +87,13 @@ const logoBox = {
   imageX: 48,
   imageY: 30,
   imageFit: [162, 162] as [number, number],
+}
+
+const stampBox = {
+  x: 438,
+  width: 78,
+  height: 78,
+  fit: [78, 78] as [number, number],
 }
 
 const paymentMethodsLines = [
@@ -108,6 +119,11 @@ function boldText(doc: OutstandingPdfDocument) {
 function getLogoBuffer() {
   if (!existsSync(logoPath)) return null
   return readFileSync(logoPath)
+}
+
+function getStampBuffer() {
+  if (!existsSync(stampPath)) return null
+  return readFileSync(stampPath)
 }
 
 function drawLogo(doc: OutstandingPdfDocument, storeInfo: StoreInfo) {
@@ -150,6 +166,32 @@ function drawLogo(doc: OutstandingPdfDocument, storeInfo: StoreInfo) {
   }
 }
 
+function drawStamp(doc: OutstandingPdfDocument, y: number) {
+  const stampBuffer = getStampBuffer()
+  const stampY = y + 34
+
+  try {
+    if (!stampBuffer) throw new Error("Stamp not found")
+    doc.image(stampBuffer, stampBox.x, stampY, { fit: stampBox.fit })
+  } catch (bufferError) {
+    try {
+      doc.image(stampPath, stampBox.x, stampY, { fit: stampBox.fit })
+    } catch (pathError) {
+      console.error("[Outstanding PDF Stamp Error]", {
+        buffer:
+          bufferError instanceof Error
+            ? bufferError.message
+            : "Failed to load stamp buffer",
+        path:
+          pathError instanceof Error
+            ? pathError.message
+            : "Failed to load stamp path",
+        stampPath,
+      })
+    }
+  }
+}
+
 function formatDate(value: Date | string | undefined) {
   if (!value) return "-"
   return new Intl.DateTimeFormat("en-RW", {
@@ -171,7 +213,7 @@ export function generateOutstandingCustomerPDF(
     throw new Error(`Unable to load pdfkit constructor. Exports: ${keys}`)
   }
 
-  const doc = new PDFDocument({ margin: 48, size: "A4" }) as OutstandingPdfDocument
+  const doc = new PDFDocument({ margin: 48, size: "A4" }) as unknown as OutstandingPdfDocument
   const chunks: Buffer[] = []
 
   doc.on("data", (chunk: Buffer) => chunks.push(chunk))
@@ -183,41 +225,52 @@ export function generateOutstandingCustomerPDF(
 
   drawLogo(doc, storeInfo)
 
-  boldText(doc)
-    .fontSize(22)
-    .text("Outstanding Statement", 340, 58, { align: "right" })
+  // Compute a safe header bottom so subsequent content doesn't overlap
+  // with the title/logo area. Use font metrics to measure text heights.
+  const titleFont = "Helvetica-Bold"
+  const bodyFont = "Helvetica"
+  doc.font(titleFont).fontSize(22)
+  const titleHeight = doc.heightOfString("Outstanding Statement", { width: 200 })
+  doc.font(bodyFont).fontSize(10)
+  const stmtHeight = doc.heightOfString(String(payload.statementNumber ?? ""), { width: 200 })
+  const dateHeight = doc.heightOfString(`Date: ${formatDate(payload.generatedAt)}`, { width: 200 })
+
+  // Compute header bottom using the actual title position and measured heights
+  const titleY = logoBox.y + 12
+  const stmtY = titleY + titleHeight + 6
+  const dateY = stmtY + stmtHeight
+  const headerBottom = Math.max(logoBox.y + logoBox.height, dateY + dateHeight)
+
+  const separatorY = Math.ceil(headerBottom + 16)
+
+  // Draw title and statement on the right side within the computed header area
+  const titleX = 340
+  boldText(doc).fontSize(22).text("Outstanding Statement", titleX, titleY, { align: "right" })
   mutedText(doc)
     .fontSize(10)
-    .text(payload.statementNumber, 340, 88, { align: "right" })
-    .text(`Date: ${formatDate(payload.generatedAt)}`, 340, 104, {
+    .text(payload.statementNumber, titleX, stmtY, { align: "right" })
+    .text(`Date: ${formatDate(payload.generatedAt)}`, titleX, dateY, {
       align: "right",
     })
 
-  doc
-    .moveTo(48, 210)
-    .lineTo(547, 210)
-    .lineWidth(1.5)
-    .strokeColor("#f08010")
-    .stroke()
+  doc.moveTo(48, separatorY).lineTo(547, separatorY).lineWidth(1.5).strokeColor("#f08010").stroke()
 
-  boldText(doc)
-    .fontSize(11)
-    .text(storeInfo.name ?? "Multi-Store Inventory", 48, 230)
+  const contentStart = separatorY + 20
+
+  boldText(doc).fontSize(11).text(storeInfo.name ?? "Multi-Store Inventory", 48, contentStart)
   mutedText(doc)
     .fontSize(9)
-    .text(storeInfo.address ?? "", 48, 248)
-    .text(storeInfo.phone ?? "", 48, 262)
-    .text(storeInfo.email ?? "", 48, 276)
+    .text(storeInfo.address ?? "", 48, contentStart + 18)
+    .text(storeInfo.phone ?? "", 48, contentStart + 32)
+    .text(storeInfo.email ?? "", 48, contentStart + 46)
 
-  boldText(doc)
-    .fontSize(11)
-    .text("Customer", 330, 230)
+  boldText(doc).fontSize(11).text("Customer", 330, contentStart)
   mutedText(doc)
     .fontSize(9)
-    .text(payload.customerName, 330, 248)
-    .text(payload.customerPhone ?? "", 330, 262)
+    .text(payload.customerName, 330, contentStart + 18)
+    .text(payload.customerPhone ?? "", 330, contentStart + 32)
 
-  const tableTop = 320
+  const tableTop = contentStart + 90
   const columns = {
     saleDate: 54,
     paymentDate: 130,
@@ -288,6 +341,8 @@ export function generateOutstandingCustomerPDF(
     .text(formatCurrency(payload.totalOutstanding), 448, y + 16, {
       width: 90,
     })
+
+  drawStamp(doc, y)
 
   const paymentBlockY = y + 56
   doc

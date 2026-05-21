@@ -70,6 +70,7 @@ type InvoicePdfDocument = {
 }
 
 const logoPath = path.join(process.cwd(), "public", "images", "logo.png")
+const stampPath = path.join(process.cwd(), "public", "images", "stamp.jpg")
 const logoBox = {
   x: 42,
   y: 24,
@@ -78,6 +79,13 @@ const logoBox = {
   imageX: 48,
   imageY: 30,
   imageFit: [162, 162] as [number, number],
+}
+
+const stampBox = {
+  x: 438,
+  width: 78,
+  height: 78,
+  fit: [78, 78] as [number, number],
 }
 
 const businessFooterLines = [
@@ -103,6 +111,11 @@ function boldText(doc: InvoicePdfDocument) {
 function getLogoBuffer() {
   if (!existsSync(logoPath)) return null
   return readFileSync(logoPath)
+}
+
+function getStampBuffer() {
+  if (!existsSync(stampPath)) return null
+  return readFileSync(stampPath)
 }
 
 function drawLogo(doc: InvoicePdfDocument, storeInfo: StoreInfo) {
@@ -141,6 +154,32 @@ function drawLogo(doc: InvoicePdfDocument, storeInfo: StoreInfo) {
         .fontSize(16)
         .fillColor(PRINT_HEADER_TEXT)
         .text(storeInfo.name ?? "Inventory", 48, 72, { width: 150 })
+    }
+  }
+}
+
+function drawStamp(doc: InvoicePdfDocument, y: number) {
+  const stampBuffer = getStampBuffer()
+  const stampY = y + 34
+
+  try {
+    if (!stampBuffer) throw new Error("Stamp not found")
+    doc.image(stampBuffer, stampBox.x, stampY, { fit: stampBox.fit })
+  } catch (bufferError) {
+    try {
+      doc.image(stampPath, stampBox.x, stampY, { fit: stampBox.fit })
+    } catch (pathError) {
+      console.error("[Invoice PDF Stamp Error]", {
+        buffer:
+          bufferError instanceof Error
+            ? bufferError.message
+            : "Failed to load stamp buffer",
+        path:
+          pathError instanceof Error
+            ? pathError.message
+            : "Failed to load stamp path",
+        stampPath,
+      })
     }
   }
 }
@@ -282,6 +321,8 @@ function writeInvoicePdf(
     .fillColor(PRINT_TEXT)
     .text("Total", 355, y + 20)
     .text(formatCurrency(data.totalAmount), 448, y + 20, { width: 92 })
+
+  drawStamp(doc, y)
 
   if (footerLines.length > 0) {
     let footerY = y + 58
