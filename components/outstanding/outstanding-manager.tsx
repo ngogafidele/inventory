@@ -48,6 +48,10 @@ function summarizeItems(items: OutstandingItem[]) {
     .join(", ")
 }
 
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
 export function OutstandingManager({
   initialSales,
 }: {
@@ -60,12 +64,20 @@ export function OutstandingManager({
 
   const filteredSales = useMemo(() => {
     const query = search.trim().toLowerCase()
+    const normalizedQuery = normalizeSearchText(search.trim())
     if (!query) return sales
 
     return sales.filter((sale) => {
       const name = sale.outstanding?.customerName?.toLowerCase() ?? ""
       const phone = sale.outstanding?.customerPhone?.toLowerCase() ?? ""
-      return name.includes(query) || phone.includes(query)
+      const normalizedName = normalizeSearchText(name)
+      const normalizedPhone = normalizeSearchText(phone)
+      return (
+        name.includes(query) ||
+        phone.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        normalizedPhone.includes(normalizedQuery)
+      )
     })
   }, [sales, search])
 
@@ -144,16 +156,16 @@ export function OutstandingManager({
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             Receivables
           </p>
-          <h2 className="text-2xl font-semibold">Outstanding Payments</h2>
+          <h2 className="text-2xl font-semibold">Loans</h2>
           <p className="text-sm text-muted-foreground">
-            Track unpaid sales and follow up on expected payments.
+            Track loans and follow up on expected payments.
           </p>
         </div>
         <div className="relative w-full sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Search by customer or phone"
+            placeholder="Search by customer name or number"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -161,9 +173,9 @@ export function OutstandingManager({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <StatsCard label="Outstanding Sales" value={filteredSales.length} />
+        <StatsCard label="Loan Sales" value={filteredSales.length} />
         <StatsCard
-          label="Outstanding Total"
+          label="Loans Total"
           value={formatCurrency(totalOutstanding)}
         />
       </div>
@@ -186,8 +198,8 @@ export function OutstandingManager({
         <TableBody>
           {filteredSales.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-muted-foreground">
-                No outstanding sales found.
+                <TableCell colSpan={8} className="text-muted-foreground">
+                No loans found.
               </TableCell>
             </TableRow>
           ) : (

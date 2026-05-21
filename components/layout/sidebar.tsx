@@ -30,7 +30,7 @@ const commonNavItems = [
   { href: "/returns", label: "Returns", icon: RotateCcw },
   { href: "/invoices", label: "Invoices", icon: ClipboardList },
   { href: "/expenses", label: "Expenses", icon: Wallet },
-  { href: "/outstanding", label: "Outstanding", icon: Clock },
+  { href: "/outstanding", label: "Loans", icon: Clock },
   { href: "/alerts", label: "Low Stock Alerts", icon: Bell },
 ]
 

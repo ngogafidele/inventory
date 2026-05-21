@@ -23,6 +23,8 @@ type OutstandingSale = {
     name: string
     unit?: string
     quantity: number
+    basePrice?: number
+    lineTotal?: number
   }>
   outstanding?: {
     customerName: string
@@ -46,7 +48,7 @@ function buildStatementNumber(date = new Date()) {
   const parts = getKigaliDateParts(date)
   const dateStamp = `${parts.year}${pad2(parts.month)}${pad2(parts.day)}`
   const random = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0")
-  return `OUT-${dateStamp}-${random}`
+  return `LOAN-${dateStamp}-${random}`
 }
 
 function slugifyCustomerName(value: string) {
@@ -59,13 +61,6 @@ function slugifyCustomerName(value: string) {
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
-function summarizeItems(items: OutstandingSale["items"]) {
-  if (!items.length) return "-"
-  return items
-    .map((item) => `${item.name} (${item.quantity} ${item.unit ?? "pcs"})`)
-    .join(", ")
 }
 
 export async function GET(request: NextRequest) {
@@ -132,6 +127,7 @@ export async function GET(request: NextRequest) {
       saleDate?: Date
       paymentDate?: Date
       items: string
+      pricePerUnit: number | null
       recordedBy: string
       amount: number
     }> = []
@@ -146,6 +142,7 @@ export async function GET(request: NextRequest) {
           saleDate: sale.createdAt,
           paymentDate: sale.outstanding?.paymentDate,
           items: "-",
+          pricePerUnit: null,
           recordedBy,
           amount: sale.totalAmount,
         })
@@ -158,6 +155,7 @@ export async function GET(request: NextRequest) {
           saleDate: sale.createdAt,
           paymentDate: sale.outstanding?.paymentDate,
           items: itemText,
+          pricePerUnit: item.sellingPrice ?? item.basePrice ?? null,
           recordedBy,
           amount: item.lineTotal ?? 0,
         })

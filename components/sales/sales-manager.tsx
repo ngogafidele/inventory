@@ -89,6 +89,10 @@ const emptyDraft: DraftItem = {
 
 const SALES_PER_PAGE = 20
 
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
 export function SalesManager({
   initialSales,
   products,
@@ -120,6 +124,7 @@ export function SalesManager({
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [search, setSearch] = useState("")
 
   const productMap = useMemo(
     () => new Map(productOptions.map((product) => [product._id, product])),
@@ -155,18 +160,42 @@ export function SalesManager({
     return quantities
   }, [activeSale])
 
-  const pageCount = Math.max(1, Math.ceil(sales.length / SALES_PER_PAGE))
+  const filteredSales = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    const normalizedQuery = normalizeSearchText(search.trim())
+    if (!query) return sales
+
+    return sales.filter((sale) => {
+      const name = sale.outstanding?.customerName?.toLowerCase() ?? ""
+      const phone = sale.outstanding?.customerPhone?.toLowerCase() ?? ""
+      const normalizedName = normalizeSearchText(name)
+      const normalizedPhone = normalizeSearchText(phone)
+
+      return (
+        name.includes(query) ||
+        phone.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        normalizedPhone.includes(normalizedQuery)
+      )
+    })
+  }, [sales, search])
+
+  const pageCount = Math.max(1, Math.ceil(filteredSales.length / SALES_PER_PAGE))
   const safeCurrentPage = Math.min(currentPage, pageCount)
   const pageStart = (safeCurrentPage - 1) * SALES_PER_PAGE
-  const paginatedSales = sales.slice(pageStart, pageStart + SALES_PER_PAGE)
-  const visibleStart = sales.length === 0 ? 0 : pageStart + 1
-  const visibleEnd = Math.min(pageStart + SALES_PER_PAGE, sales.length)
+  const paginatedSales = filteredSales.slice(pageStart, pageStart + SALES_PER_PAGE)
+  const visibleStart = filteredSales.length === 0 ? 0 : pageStart + 1
+  const visibleEnd = Math.min(pageStart + SALES_PER_PAGE, filteredSales.length)
 
   useEffect(() => {
     if (currentPage > pageCount) {
       setCurrentPage(pageCount)
     }
   }, [currentPage, pageCount])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search])
 
   const setDraftItem = (
     index: number,
@@ -598,7 +627,7 @@ export function SalesManager({
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            className="min-h-[80px] rounded-md border border-border px-3 py-2"
+            className="min-h-20 rounded-md border border-border px-3 py-2"
             placeholder="Any note for this sale"
           />
         </label>
@@ -622,7 +651,7 @@ export function SalesManager({
       <Dialog open={outstandingOpen} onOpenChange={setOutstandingOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Outstanding payment details</DialogTitle>
+            <DialogTitle>Loan details</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
@@ -689,12 +718,22 @@ export function SalesManager({
         </DialogContent>
       </Dialog>
 
+      <div className="w-full sm:max-w-sm">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by customer name or phone"
+          aria-label="Search sales by customer name or phone"
+        />
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Time</TableHead>
+            <TableHead>Customer Name</TableHead>
+            <TableHead>Customer Phone</TableHead>
             <TableHead>Items Sold</TableHead>
-            <TableHead>Quantity Sold</TableHead>
             <TableHead>Cost Price</TableHead>
             <TableHead>Sold Price</TableHead>
             <TableHead>Total</TableHead>
@@ -705,12 +744,14 @@ export function SalesManager({
         <TableBody>
           {paginatedSales.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 8 : 7} className="text-muted-foreground">
-                No sales recorded yet.
+              <TableCell colSpan={isAdmin ? 9 : 8} className="text-muted-foreground">
+                {search.trim() ? "No matching sales found." : "No sales recorded yet."}
               </TableCell>
             </TableRow>
           ) : (
             paginatedSales.map((sale) => {
+              const customerName = sale.paymentStatus === "unpaid" ? sale.outstanding?.customerName ?? "-" : "-"
+              const customerPhone = sale.paymentStatus === "unpaid" ? sale.outstanding?.customerPhone ?? "-" : "-"
               const items = sale.items.length
                 ? sale.items
                 : [
@@ -732,18 +773,27 @@ export function SalesManager({
                           {sale.createdAtLabel ?? "-"}
                         </TableCell>
                       ) : null}
+                      {itemIndex === 0 ? (
+                        <>
+                          <TableCell rowSpan={rowSpan}>
+                            {customerName}
+                          </TableCell>
+                          <TableCell rowSpan={rowSpan}>
+                            {customerPhone}
+                          </TableCell>
+                        </>
+                      ) : null}
                       <TableCell>
-                        <div className="whitespace-normal break-words">
-                          <p className="font-medium">{getItemLabel(item)}</p>
+                        <div className="whitespace-normal wrap-break-word">
+                          <p className="font-medium">
+                            {getItemLabel(item)} ({item.quantity} {item.unit ?? "pcs"})
+                          </p>
                           {item.sku ? (
                             <p className="text-xs text-muted-foreground">
                               {item.sku}
                             </p>
                           ) : null}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {item.quantity} {item.unit ?? "pcs"}
                       </TableCell>
                       <TableCell>{formatCurrency(item.basePrice ?? 0)}</TableCell>
                       <TableCell>{formatCurrency(item.sellingPrice)}</TableCell>
@@ -780,7 +830,7 @@ export function SalesManager({
       </Table>
       <div className="flex flex-col gap-3 border-t border-border/80 pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>
-          Showing {visibleStart}-{visibleEnd} of {sales.length} sales
+          Showing {visibleStart}-{visibleEnd} of {filteredSales.length} sales
         </p>
         <div className="flex items-center gap-2">
           <Button

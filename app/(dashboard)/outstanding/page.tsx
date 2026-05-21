@@ -59,9 +59,6 @@ export default async function OutstandingPage() {
           year: "numeric",
           month: "short",
           day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
         })
       : "-",
     createdByName: isPopulatedSaleUser(sale.createdBy)

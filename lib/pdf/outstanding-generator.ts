@@ -26,6 +26,7 @@ type OutstandingSaleRow = {
   saleDate?: Date | string
   paymentDate?: Date | string
   items: string
+  pricePerUnit: number | null
   recordedBy: string
   amount: number
 }
@@ -245,7 +246,7 @@ export function generateOutstandingCustomerPDF(
 
   // Draw title and statement on the right side within the computed header area
   const titleX = 340
-  boldText(doc).fontSize(22).text("Outstanding Statement", titleX, titleY, { align: "right" })
+  boldText(doc).fontSize(22).text("Loan Statement", titleX, titleY, { align: "right" })
   mutedText(doc)
     .fontSize(10)
     .text(payload.statementNumber, titleX, stmtY, { align: "right" })
@@ -273,9 +274,10 @@ export function generateOutstandingCustomerPDF(
   const tableTop = contentStart + 90
   const columns = {
     saleDate: 54,
-    paymentDate: 130,
-    items: 206,
-    recordedBy: 392,
+    paymentDate: 122,
+    items: 176,
+    recordedBy: 326,
+    pricePerUnit: 404,
     amount: 478,
   }
 
@@ -290,16 +292,17 @@ export function generateOutstandingCustomerPDF(
     .text("Payment", columns.paymentDate, tableTop + 8)
     .text("Items", columns.items, tableTop + 8)
     .text("Recorded", columns.recordedBy, tableTop + 8)
+    .text("Price / unit", columns.pricePerUnit, tableTop + 8)
     .text("Amount", columns.amount, tableTop + 8)
 
   let y = tableTop + 32
 
   payload.rows.forEach((row, index) => {
-    const itemsHeight = doc.heightOfString(row.items, { width: 160 })
-    const recordedByHeight = doc.heightOfString(row.recordedBy, {
-      width: 80,
-    })
-    const rowHeight = Math.max(22, itemsHeight, recordedByHeight) + 12
+    const costText = row.pricePerUnit === null ? "-" : formatCurrency(row.pricePerUnit)
+    const itemsHeight = doc.heightOfString(row.items, { width: 122 })
+    const recordedByHeight = doc.heightOfString(row.recordedBy, { width: 70 })
+    const costHeight = doc.heightOfString(costText, { width: 70 })
+    const rowHeight = Math.max(22, itemsHeight, costHeight, recordedByHeight) + 12
 
     if (y + rowHeight > 700) {
       doc.addPage()
@@ -314,12 +317,11 @@ export function generateOutstandingCustomerPDF(
       .fillColor(PRINT_TEXT)
       .fontSize(9)
       .text(formatDate(row.saleDate), columns.saleDate, y, { width: 70 })
-      .text(formatDate(row.paymentDate), columns.paymentDate, y, {
-        width: 70,
-      })
-      .text(row.items, columns.items, y, { width: 160 })
-      .text(row.recordedBy, columns.recordedBy, y, { width: 80 })
-      .text(formatCurrency(row.amount), columns.amount, y, { width: 70 })
+      .text(formatDate(row.paymentDate), columns.paymentDate, y, { width: 70 })
+      .text(row.items, columns.items, y, { width: 122 })
+      .text(row.recordedBy, columns.recordedBy, y, { width: 70 })
+      .text(costText, columns.pricePerUnit, y, { width: 70 })
+      .text(formatCurrency(row.amount), columns.amount, y, { width: 60 })
 
     y += rowHeight + 4
   })
@@ -337,7 +339,7 @@ export function generateOutstandingCustomerPDF(
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(PRINT_TEXT)
-    .text("Total Outstanding", 330, y + 16)
+    .text("Total Loans", 330, y + 16)
     .text(formatCurrency(payload.totalOutstanding), 448, y + 16, {
       width: 90,
     })
