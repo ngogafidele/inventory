@@ -562,15 +562,57 @@ export default async function ReportsPage({
   const fromLabel = formatDateOnly(range.from)
   const toLabel = formatDateOnly(range.to)
   const cards = [
-    { label: "Total Revenue", value: formatCurrency(totals.revenue) },
-    { label: "Cost of Sales", value: formatCurrency(totals.costOfSales) },
-    { label: "Expenses", value: formatCurrency(totals.expenses) },
-    { label: "Profit", value: formatCurrency(totals.profit) },
-    { label: "Inventory Cost", value: formatCurrency(totals.inventoryCost) },
-    { label: "Inventory Retail", value: formatCurrency(totals.inventoryRetail) },
-    { label: "Sales Records", value: formatNumber(totals.sales) },
-    { label: "Products", value: formatNumber(totals.products) },
-    { label: "Outstanding", value: formatCurrency(totals.outstanding) },
+    {
+      label: "Total Revenue",
+      value: formatCurrency(totals.revenue),
+      className: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    },
+    {
+      label: "Cost of Sales",
+      value: formatCurrency(totals.costOfSales),
+      className: "border-sky-200 bg-sky-50 text-sky-950",
+    },
+    {
+      label: "Expenses",
+      value: formatCurrency(totals.expenses),
+      className: "border-rose-200 bg-rose-50 text-rose-950",
+    },
+    {
+      label: "Profit",
+      value: formatCurrency(totals.profit),
+      className:
+        totals.profit >= 0
+          ? "border-teal-200 bg-teal-50 text-teal-950"
+          : "border-amber-200 bg-amber-50 text-amber-950",
+    },
+    {
+      label: "Inventory Cost",
+      value: formatCurrency(totals.inventoryCost),
+      className: "border-indigo-200 bg-indigo-50 text-indigo-950",
+    },
+    {
+      label: "Inventory Retail",
+      value: formatCurrency(totals.inventoryRetail),
+      className: "border-cyan-200 bg-cyan-50 text-cyan-950",
+    },
+    {
+      label: "Sales Records",
+      value: formatNumber(totals.sales),
+      className: "border-violet-200 bg-violet-50 text-violet-950",
+    },
+    {
+      label: "Products",
+      value: formatNumber(totals.products),
+      className: "border-lime-200 bg-lime-50 text-lime-950",
+    },
+    {
+      label: "Outstanding",
+      value: formatCurrency(totals.outstanding),
+      className:
+        totals.outstanding > 0
+          ? "border-orange-200 bg-orange-50 text-orange-950"
+          : "border-slate-200 bg-slate-50 text-slate-950",
+    },
   ]
 
   return (
@@ -612,12 +654,12 @@ export default async function ReportsPage({
         {cards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"
+            className={`rounded-2xl border p-4 shadow-sm ${card.className}`}
           >
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs uppercase tracking-[0.16em] opacity-70">
               {card.label}
             </p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">
+            <p className="mt-2 text-2xl font-semibold">
               {card.value}
             </p>
           </div>

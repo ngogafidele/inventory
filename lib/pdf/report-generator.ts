@@ -265,17 +265,57 @@ function drawEmptyRow(doc: ReportPdfDocument, y: number, text: string) {
 
 function drawMetrics(doc: ReportPdfDocument, y: number, totals: ReturnType<typeof sumReports>) {
   const metrics = [
-    ["Total Revenue", formatCurrency(totals.revenue)],
-    ["Expenses", formatCurrency(totals.expenses)],
-    ["Profit", formatCurrency(totals.profit)],
-    ["Inventory Cost", formatCurrency(totals.inventoryCost)],
-    ["Inventory Retail", formatCurrency(totals.inventoryRetail)],
-    ["Sales Records", formatNumber(totals.sales)],
-    ["Products", formatNumber(totals.products)],
-    ["Loans", formatCurrency(totals.outstanding)],
+    {
+      label: "Total Revenue",
+      value: formatCurrency(totals.revenue),
+      fill: "#dff7ea",
+      border: "#7fc99a",
+    },
+    {
+      label: "Expenses",
+      value: formatCurrency(totals.expenses),
+      fill: "#ffe3e6",
+      border: "#e58a96",
+    },
+    {
+      label: "Profit",
+      value: formatCurrency(totals.profit),
+      fill: totals.profit >= 0 ? "#dcf7f0" : "#fff0cc",
+      border: totals.profit >= 0 ? "#72c7ad" : "#d9a43b",
+    },
+    {
+      label: "Inventory Cost",
+      value: formatCurrency(totals.inventoryCost),
+      fill: "#e7ebff",
+      border: "#9ca9e8",
+    },
+    {
+      label: "Inventory Retail",
+      value: formatCurrency(totals.inventoryRetail),
+      fill: "#ddf6fb",
+      border: "#7bc7d5",
+    },
+    {
+      label: "Sales Records",
+      value: formatNumber(totals.sales),
+      fill: "#f0e7ff",
+      border: "#b79ae6",
+    },
+    {
+      label: "Products",
+      value: formatNumber(totals.products),
+      fill: "#e8f8d7",
+      border: "#a7d36b",
+    },
+    {
+      label: "Loans",
+      value: formatCurrency(totals.outstanding),
+      fill: totals.outstanding > 0 ? "#ffe9d6" : "#eef2f7",
+      border: totals.outstanding > 0 ? "#e4a166" : "#b9c3d0",
+    },
   ]
 
-  metrics.forEach(([label, value], index) => {
+  metrics.forEach((metric, index) => {
     const col = index % 4
     const row = Math.floor(index / 4)
     const x = PAGE_LEFT + col * 186
@@ -283,16 +323,23 @@ function drawMetrics(doc: ReportPdfDocument, y: number, totals: ReturnType<typeo
 
     doc
       .rect(x, top, 174, 42)
-      .fillColor(index % 2 === 0 ? "#ffffff" : ROW_FILL)
+      .fillColor(metric.fill)
+      .fill()
+      .rect(x, top, 174, 42)
+      .lineWidth(1)
+      .strokeColor(metric.border)
+      .stroke()
+      .rect(x, top, 4, 42)
+      .fillColor(metric.border)
       .fill()
       .font("Helvetica-Bold")
       .fontSize(7)
       .fillColor(PRINT_MUTED_TEXT)
-      .text(label.toUpperCase(), x + 8, top + 8, { width: 158 })
+      .text(metric.label.toUpperCase(), x + 10, top + 8, { width: 156 })
       .fontSize(11)
       .fillColor(PRINT_TEXT)
-      .text(truncateToWidth(doc, value, 158), x + 8, top + 22, {
-        width: 158,
+      .text(truncateToWidth(doc, metric.value, 156), x + 10, top + 22, {
+        width: 156,
       })
   })
 
