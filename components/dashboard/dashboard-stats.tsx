@@ -14,6 +14,7 @@ import {
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatInKigali } from "@/lib/utils/time"
+import { cn } from "@/lib/utils"
 import {
   Table,
   TableBody,
@@ -90,32 +91,58 @@ export function DashboardStats({ store }: DashboardStatsProps) {
   }
 
   const cards = [
-    { label: "Products", value: stats.productCount, icon: Boxes },
+    {
+      label: "Products",
+      value: stats.productCount,
+      icon: Boxes,
+      className: "border-lime-200 bg-lime-50 text-lime-950",
+      iconClassName: "text-lime-700",
+    },
     {
       label: "Total Stock Value",
       value: formatCurrency(stats.stockValue),
       icon: Warehouse,
+      className: "border-indigo-200 bg-indigo-50 text-indigo-950",
+      iconClassName: "text-indigo-700",
     },
-    { label: "Sales Today", value: stats.salesToday, icon: ReceiptText },
+    {
+      label: "Sales Today",
+      value: stats.salesToday,
+      icon: ReceiptText,
+      className: "border-violet-200 bg-violet-50 text-violet-950",
+      iconClassName: "text-violet-700",
+    },
     {
       label: "Revenue Today",
       value: formatCurrency(stats.revenueToday),
       icon: Coins,
+      className: "border-emerald-200 bg-emerald-50 text-emerald-950",
+      iconClassName: "text-emerald-700",
     },
     {
       label: "Cost of Sales",
       value: formatCurrency(stats.costOfSalesToday),
       icon: Package,
+      className: "border-sky-200 bg-sky-50 text-sky-950",
+      iconClassName: "text-sky-700",
     },
     {
       label: "Expenses Today",
       value: formatCurrency(stats.expensesToday),
       icon: Wallet,
+      className: "border-rose-200 bg-rose-50 text-rose-950",
+      iconClassName: "text-rose-700",
     },
     {
       label: "Profit Today",
       value: formatCurrency(stats.profitToday),
       icon: TrendingUp,
+      className:
+        stats.profitToday >= 0
+          ? "border-teal-200 bg-teal-50 text-teal-950"
+          : "border-amber-200 bg-amber-50 text-amber-950",
+      iconClassName:
+        stats.profitToday >= 0 ? "text-teal-700" : "text-amber-700",
     },
   ]
 
@@ -125,17 +152,15 @@ export function DashboardStats({ store }: DashboardStatsProps) {
         {cards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"
+            className={cn("rounded-2xl border p-4 shadow-sm", card.className)}
           >
             <div className="flex items-center justify-between">
-              <p className="max-w-36 text-xs uppercase leading-4 tracking-[0.12em] text-muted-foreground">
+              <p className="max-w-36 text-xs uppercase leading-4 tracking-[0.12em] opacity-70">
                 {card.label}
               </p>
-              <card.icon className="size-4 text-primary" />
+              <card.icon className={cn("size-4", card.iconClassName)} />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-foreground">
-              {card.value}
-            </p>
+            <p className="mt-2 text-2xl font-semibold">{card.value}</p>
           </div>
         ))}
       </div>
