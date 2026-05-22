@@ -1,26 +1,44 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Bell, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils/format"
+import type { LoanNotification } from "@/types/loan-notification"
 
-export type LoanNotification = {
-  id: string
-  customerName: string
-  customerPhone?: string
-  amount: number
-  paymentDateLabel: string
-  status: "due" | "overdue"
-}
-
-export function LoanNotifications({
-  notifications,
-}: {
-  notifications: LoanNotification[]
-}) {
+export function LoanNotifications() {
+  const [notifications, setNotifications] = useState<LoanNotification[]>([])
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch("/api/loans/notifications", {
+          cache: "no-store",
+        })
+        const body = await response.json().catch(() => null)
+
+        if (isMounted && response.ok && body?.success) {
+          setNotifications(body.data ?? [])
+        }
+      } catch {
+        if (isMounted) {
+          setNotifications([])
+        }
+      }
+    }
+
+    fetchNotifications()
+    window.addEventListener("loan-notifications:refresh", fetchNotifications)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener("loan-notifications:refresh", fetchNotifications)
+    }
+  }, [])
 
   const counts = useMemo(
     () =>

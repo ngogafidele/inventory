@@ -98,6 +98,10 @@ function getStatusLabel(status?: SaleClient["paymentStatus"]) {
   return status === "unpaid" ? "Unpaid" : "Paid"
 }
 
+function refreshLoanNotifications() {
+  window.dispatchEvent(new Event("loan-notifications:refresh"))
+}
+
 export function SalesManager({
   initialSales,
   products,
@@ -431,6 +435,7 @@ export function SalesManager({
         setCurrentPage(1)
       }
       resetForm()
+      refreshLoanNotifications()
       router.refresh()
       return true
     } catch {

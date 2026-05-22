@@ -68,6 +68,10 @@ function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 }
 
+function refreshLoanNotifications() {
+  window.dispatchEvent(new Event("loan-notifications:refresh"))
+}
+
 export function OutstandingManager({
   initialSales,
   isAdmin,
@@ -166,6 +170,7 @@ export function OutstandingManager({
       }
 
       setSales((current) => current.filter((sale) => sale._id !== saleId))
+      refreshLoanNotifications()
       router.refresh()
     } catch {
       setError("Failed to mark sale as paid.")
@@ -195,6 +200,7 @@ export function OutstandingManager({
         current.filter((sale) => sale._id !== deleteTarget._id)
       )
       setDeleteTarget(null)
+      refreshLoanNotifications()
       router.refresh()
     } catch {
       setError("Failed to delete loan.")
