@@ -2,7 +2,7 @@ export default function Loading() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-3 sm:px-6 sm:py-4 lg:px-10 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto flex max-w-[90rem] flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <div className="size-9 animate-pulse rounded-xl bg-muted" />
             <div className="space-y-2">
@@ -14,7 +14,7 @@ export default function Loading() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6 lg:px-10 md:flex-row">
+      <div className="mx-auto flex max-w-[90rem] flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 md:flex-row">
         <aside className="w-full shrink-0 rounded-2xl border border-sidebar-border bg-sidebar/90 p-3 md:w-64">
           <div className="mb-4 space-y-2 border-b border-sidebar-border px-2 pb-3">
             <div className="h-3 w-28 animate-pulse rounded bg-muted" />
@@ -30,7 +30,7 @@ export default function Loading() {
           </div>
         </aside>
 
-        <main className="flex-1 rounded-2xl border border-border/80 bg-card/95 p-4 shadow-sm sm:p-5 lg:p-6">
+        <main className="flex-1 rounded-2xl border border-border/80 bg-card/95 p-3 shadow-sm sm:p-4 lg:p-5">
           <div className="space-y-5">
             <div className="space-y-2">
               <div className="h-3 w-36 animate-pulse rounded bg-muted" />
