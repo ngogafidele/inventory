@@ -93,6 +93,10 @@ function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 }
 
+function getStatusLabel(status?: SaleClient["paymentStatus"]) {
+  return status === "unpaid" ? "Unpaid" : "Paid"
+}
+
 export function SalesManager({
   initialSales,
   products,
@@ -741,6 +745,7 @@ export function SalesManager({
             <TableHead>Cost Price</TableHead>
             <TableHead>Sold Price</TableHead>
             <TableHead>Total</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Logged By</TableHead>
             {isAdmin ? <TableHead>Actions</TableHead> : null}
           </TableRow>
@@ -748,7 +753,7 @@ export function SalesManager({
         <TableBody>
           {paginatedSales.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 9 : 8} className="text-muted-foreground">
+              <TableCell colSpan={isAdmin ? 10 : 9} className="text-muted-foreground">
                 {search.trim() ? "No matching sales found." : "No sales recorded yet."}
               </TableCell>
             </TableRow>
@@ -815,6 +820,17 @@ export function SalesManager({
                         <>
                           <TableCell rowSpan={rowSpan}>
                             {formatCurrency(sale.totalAmount)}
+                          </TableCell>
+                          <TableCell rowSpan={rowSpan}>
+                            <span
+                              className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                                sale.paymentStatus === "unpaid"
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                              }`}
+                            >
+                              {getStatusLabel(sale.paymentStatus)}
+                            </span>
                           </TableCell>
                           <TableCell rowSpan={rowSpan}>
                             {sale.createdByName ?? "Unknown User"}
