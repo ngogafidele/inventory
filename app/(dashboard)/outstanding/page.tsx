@@ -79,5 +79,10 @@ export default async function OutstandingPage() {
       : undefined,
   }))
 
-  return <OutstandingManager initialSales={serializedSales} />
+  return (
+    <OutstandingManager
+      initialSales={serializedSales}
+      isAdmin={session.isAdmin}
+    />
+  )
 }

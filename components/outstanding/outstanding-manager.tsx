@@ -1,8 +1,16 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Download, Search } from "lucide-react"
+import { Download, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -61,13 +69,17 @@ function normalizeSearchText(value: string) {
 
 export function OutstandingManager({
   initialSales,
+  isAdmin,
 }: {
   initialSales: OutstandingSale[]
+  isAdmin: boolean
 }) {
   const [sales, setSales] = useState(initialSales)
   const [search, setSearch] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<OutstandingSale | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "bank" | "mobile"
   >("cash")
@@ -156,6 +168,34 @@ export function OutstandingManager({
       setError("Failed to mark sale as paid.")
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  const deleteLoan = async () => {
+    if (!deleteTarget) return
+
+    setError(null)
+    setDeletingId(deleteTarget._id)
+
+    try {
+      const response = await fetch(`/api/sales/${deleteTarget._id}?loan=true`, {
+        method: "DELETE",
+      })
+      const body = await response.json().catch(() => null)
+
+      if (!response.ok || !body?.success) {
+        setError(body?.error ?? "Failed to delete loan.")
+        return
+      }
+
+      setSales((current) =>
+        current.filter((sale) => sale._id !== deleteTarget._id)
+      )
+      setDeleteTarget(null)
+    } catch {
+      setError("Failed to delete loan.")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -276,6 +316,18 @@ export function OutstandingManager({
                       >
                         {updatingId === sale._id ? "Updating..." : "Mark Paid"}
                       </Button>
+                      {isAdmin ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          type="button"
+                          onClick={() => setDeleteTarget(sale)}
+                          disabled={deletingId === sale._id}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete
+                        </Button>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -284,6 +336,45 @@ export function OutstandingManager({
           )}
         </TableBody>
       </Table>
+
+      {isAdmin ? (
+        <Dialog
+          open={deleteTarget !== null}
+          onOpenChange={(open) => {
+            if (!open && !deletingId) {
+              setDeleteTarget(null)
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete loan?</DialogTitle>
+              <DialogDescription>
+                This will delete the loan sale and return its items to stock.
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={deleteLoan}
+                disabled={deletingId !== null}
+              >
+                {deletingId ? "Deleting..." : "Delete Loan"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </div>
   )
 }

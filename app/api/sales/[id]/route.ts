@@ -47,6 +47,14 @@ function getSaleQuantities(items: SaleItemForEdit[]) {
   return quantities
 }
 
+function getRestockQuantities(items: SaleItemForRestock[]) {
+  const quantities = new Map<string, number>()
+  items.forEach((item) =>
+    addQuantity(quantities, item.productId.toString(), item.quantity)
+  )
+  return quantities
+}
+
 async function applyStockChanges(
   entries: Array<{ productId: string; change: number }>,
   store: string,
@@ -431,14 +439,22 @@ export async function DELETE(
     }
 
     const { id } = await context.params
+    const loanOnly = request.nextUrl.searchParams.get("loan") === "true"
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
     const sale = await Sale.findOne({ _id: id, store })
 
     if (!sale) {
       return NextResponse.json(
         { success: false, error: "Sale not found" },
         { status: 404 }
+      )
+    }
+
+    if (loanOnly && sale.paymentStatus !== "unpaid") {
+      return NextResponse.json(
+        { success: false, error: "Only unpaid loan sales can be deleted here." },
+        { status: 400 }
       )
     }
 
@@ -455,54 +471,64 @@ export async function DELETE(
     }
 
     const saleItems = sale.items as SaleItemForRestock[]
-    const productIds = saleItems.map((item) => item.productId)
+    const restockQuantities = getRestockQuantities(saleItems)
+    const productIds = Array.from(restockQuantities.keys())
     const products = await Product.find({ _id: { $in: productIds }, store })
     const productMap = new Map(
       products.map((product) => [product._id.toString(), product])
     )
 
-    if (saleItems.length > 0) {
-      await Product.bulkWrite(
-        saleItems.map((item) => ({
-          updateOne: {
-            filter: { _id: item.productId, store },
-            update: { $inc: { quantity: item.quantity } },
-          },
-        }))
+    if (products.length !== productIds.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Cannot delete this sale because one or more products are missing.",
+        },
+        { status: 409 }
       )
     }
 
+    const dbSession = await db.startSession()
     try {
-      await sale.deleteOne()
-    } catch (error) {
-      if (saleItems.length > 0) {
-        await Product.bulkWrite(
-          saleItems.map((item) => ({
-            updateOne: {
-              filter: { _id: item.productId, store },
-              update: { $inc: { quantity: -item.quantity } },
-            },
-          }))
-        )
-      }
-      throw error
+      await dbSession.withTransaction(async () => {
+        if (restockQuantities.size > 0) {
+          await Product.bulkWrite(
+            Array.from(restockQuantities.entries()).map(
+              ([productId, quantity]) => ({
+                updateOne: {
+                  filter: { _id: productId, store },
+                  update: { $inc: { quantity } },
+                },
+              })
+            ),
+            { session: dbSession }
+          )
+        }
+
+        await sale.deleteOne({ session: dbSession })
+      })
+    } finally {
+      await dbSession.endSession()
     }
 
     try {
       await Promise.all(
-        saleItems.map(async (item) => {
-          const product = productMap.get(item.productId.toString())
-          if (!product) return
-          const newQuantity = product.quantity + item.quantity
-          await syncLowStockAlert({
-            store,
-            productId: product._id.toString(),
-            name: product.name,
-            sku: product.sku,
-            quantity: newQuantity,
-            threshold: product.lowStockThreshold ?? 0,
-          })
-        })
+        Array.from(restockQuantities.entries()).map(
+          async ([productId, quantity]) => {
+            const product = productMap.get(productId)
+            if (!product) return
+            const newQuantity = product.quantity + quantity
+            await syncLowStockAlert({
+              store,
+              productId: product._id.toString(),
+              name: product.name,
+              sku: product.sku,
+              quantity: newQuantity,
+              threshold: product.lowStockThreshold ?? 0,
+            })
+          }
+        )
       )
     } catch (error) {
       console.error("[Low Stock Alert Sync Error]", error)
