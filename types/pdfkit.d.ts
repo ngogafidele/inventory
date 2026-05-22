@@ -13,7 +13,7 @@ declare module "pdfkit" {
   }
 
   class PDFDocument extends EventEmitter {
-    constructor(options?: { margin?: number; size?: string })
+    constructor(options?: { layout?: "portrait" | "landscape"; margin?: number; size?: string })
     image(src: string | Buffer, x?: number, y?: number, options?: ImageOptions): this
     text(text: string, x?: number, y?: number, options?: TextOptions): this
     font(name: string): this
@@ -27,6 +27,7 @@ declare module "pdfkit" {
     fill(): this
     stroke(): this
     addPage(): this
+    heightOfString(text: string, options?: TextOptions): number
     end(): void
   }
 

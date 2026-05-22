@@ -21,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { formatInKigali } from "@/lib/utils/time"
 
 type ProductClient = {
   _id: string
@@ -63,15 +62,6 @@ const emptyForm: FormState = {
 
 const PRODUCTS_PER_PAGE = 20
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-}
-
 export function ProductsManager({
   initialProducts,
   isAdmin,
@@ -84,6 +74,7 @@ export function ProductsManager({
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+  const [catalogDownloading, setCatalogDownloading] = useState(false)
 
   const costValue = Number(formState.costPrice)
   const priceValue = Number(formState.price)
@@ -247,155 +238,36 @@ export function ProductsManager({
     }
   }
 
-  const produceCatalogPdf = () => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) {
-      setError("Allow pop-ups to produce the catalog PDF.")
-      return
+  const produceCatalogPdf = async () => {
+    setCatalogDownloading(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/products/catalog/pdf")
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        setError(body?.error ?? "Failed to download catalog PDF.")
+        return
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      const disposition = response.headers.get("content-disposition")
+      const filename =
+        disposition?.match(/filename="(.+)"/)?.[1] ?? "products-catalog.pdf"
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError("Failed to download catalog PDF.")
+    } finally {
+      setCatalogDownloading(false)
     }
-
-    const generatedAt = formatInKigali(new Date(), {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-
-    const rows = products
-      .map((product, index) => {
-        const stockStatus =
-          product.quantity <= (product.lowStockThreshold ?? 0)
-            ? "Low stock"
-            : "In stock"
-
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>
-              <strong>${escapeHtml(product.name)}</strong>
-              <span>${escapeHtml(product.sku)}</span>
-            </td>
-            <td>${escapeHtml(String(product.quantity))} ${escapeHtml(product.unit ?? "pcs")}</td>
-            <td>${escapeHtml(String(product.lowStockThreshold ?? 0))}</td>
-            <td>${escapeHtml(formatCurrency(product.costPrice ?? 0))}</td>
-            <td>${escapeHtml(formatCurrency(product.price))}</td>
-            <td>${stockStatus}</td>
-          </tr>
-        `
-      })
-      .join("")
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>Products Catalog</title>
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              padding: 32px;
-              color: #111827;
-              font-family: Arial, sans-serif;
-              background: #ffffff;
-            }
-            header {
-              display: flex;
-              justify-content: space-between;
-              gap: 24px;
-              border-bottom: 2px solid #f08010;
-              padding-bottom: 16px;
-              margin-bottom: 24px;
-            }
-            h1 {
-              margin: 0 0 6px;
-              font-size: 28px;
-              letter-spacing: 0;
-            }
-            p {
-              margin: 0;
-              color: #5f6673;
-              font-size: 13px;
-            }
-            .summary {
-              text-align: right;
-              white-space: nowrap;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              font-size: 12px;
-            }
-            th {
-              background: #eef3f8;
-              color: #00183d;
-              text-align: left;
-              border: 1px solid #cbd7e6;
-              padding: 9px 8px;
-            }
-            td {
-              border: 1px solid #d8dee8;
-              padding: 8px;
-              vertical-align: top;
-            }
-            td span {
-              display: block;
-              margin-top: 3px;
-              color: #6b7280;
-              font-size: 11px;
-            }
-            tr:nth-child(even) td {
-              background: #fbfcfe;
-            }
-            @page {
-              size: A4 landscape;
-              margin: 12mm;
-            }
-            @media print {
-              body { padding: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <header>
-            <div>
-              <h1>Products Catalog</h1>
-              <p>Complete product list for the current store.</p>
-            </div>
-            <div class="summary">
-              <p><strong>${products.length}</strong> products</p>
-              <p>Generated ${escapeHtml(generatedAt)}</p>
-            </div>
-          </header>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Product</th>
-                <th>Quantity</th>
-                <th>Low Stock</th>
-                <th>Cost Price</th>
-                <th>Selling Price</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                rows ||
-                '<tr><td colspan="7">No products found.</td></tr>'
-              }
-            </tbody>
-          </table>
-          <script>
-            window.addEventListener("load", () => {
-              window.print();
-            });
-          </script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
   }
 
   return (
@@ -414,9 +286,13 @@ export function ProductsManager({
             onChange={(event) => setSearch(event.target.value)}
             className="w-full sm:w-56"
           />
-          <Button variant="outline" onClick={produceCatalogPdf}>
+          <Button
+            variant="outline"
+            onClick={produceCatalogPdf}
+            disabled={catalogDownloading}
+          >
             <FileText className="size-4" />
-            Catalog PDF
+            {catalogDownloading ? "Preparing..." : "Catalog PDF"}
           </Button>
           {isAdmin ? (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
