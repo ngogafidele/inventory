@@ -2,6 +2,10 @@ import type { ReactNode } from "react"
 import Image from "next/image"
 import type { AuthSession } from "@/lib/auth/session"
 import { Sidebar } from "@/components/layout/sidebar"
+import {
+  LoanNotifications,
+  type LoanNotification,
+} from "@/components/layout/loan-notifications"
 import { StoreSwitcher } from "@/components/store-switcher"
 import { LogoutButton } from "@/components/auth/logout-button"
 import { UserRound } from "lucide-react"
@@ -9,10 +13,12 @@ import { UserRound } from "lucide-react"
 export function AppShell({
   session,
   userName,
+  loanNotifications,
   children,
 }: {
   session: AuthSession
   userName?: string
+  loanNotifications?: LoanNotification[]
   children: ReactNode
 }) {
   const currentStore = session.currentStore ?? session.stores[0]
@@ -41,6 +47,7 @@ export function AppShell({
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
+            <LoanNotifications notifications={loanNotifications ?? []} />
             <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 shadow-sm">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <UserRound className="size-4" />

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Download, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -74,6 +75,7 @@ export function OutstandingManager({
   initialSales: OutstandingSale[]
   isAdmin: boolean
 }) {
+  const router = useRouter()
   const [sales, setSales] = useState(initialSales)
   const [search, setSearch] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +166,7 @@ export function OutstandingManager({
       }
 
       setSales((current) => current.filter((sale) => sale._id !== saleId))
+      router.refresh()
     } catch {
       setError("Failed to mark sale as paid.")
     } finally {
@@ -192,6 +195,7 @@ export function OutstandingManager({
         current.filter((sale) => sale._id !== deleteTarget._id)
       )
       setDeleteTarget(null)
+      router.refresh()
     } catch {
       setError("Failed to delete loan.")
     } finally {

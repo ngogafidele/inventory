@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import {
@@ -108,6 +109,7 @@ export function SalesManager({
   currentUserLabel: string
   isAdmin: boolean
 }) {
+  const router = useRouter()
   const [sales, setSales] = useState(initialSales)
   const [productOptions, setProductOptions] = useState(products)
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraft])
@@ -429,6 +431,7 @@ export function SalesManager({
         setCurrentPage(1)
       }
       resetForm()
+      router.refresh()
       return true
     } catch {
       setError("Failed to save sale.")
