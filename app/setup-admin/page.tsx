@@ -88,7 +88,11 @@ export default function SetupAdminPage() {
             </div>
           ) : null}
 
-          <form className="space-y-4" onSubmit={handleSetup}>
+          <form
+            className="space-y-4"
+            autoComplete="off"
+            onSubmit={handleSetup}
+          >
             <label className="block space-y-2 text-sm font-medium text-foreground">
               Full name
               <div className="relative">
@@ -128,7 +132,8 @@ export default function SetupAdminPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  name="inventory-admin-passcode"
                   required
                   minLength={8}
                 />
@@ -144,7 +149,8 @@ export default function SetupAdminPage() {
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   type="password"
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  name="inventory-admin-passcode-confirm"
                   required
                   minLength={8}
                 />

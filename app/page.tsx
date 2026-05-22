@@ -102,7 +102,11 @@ export default function Home() {
             </div>
           ) : null}
 
-          <form className="space-y-4" onSubmit={handleLogin}>
+          <form
+            className="space-y-4"
+            autoComplete="off"
+            onSubmit={handleLogin}
+          >
             <label className="block space-y-2 text-sm font-medium text-foreground">
               Email or username
               <div className="relative">
@@ -113,7 +117,8 @@ export default function Home() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   type="text"
-                  autoComplete="username"
+                  autoComplete="off"
+                  name="inventory-login-user"
                   required
                 />
               </div>
@@ -128,7 +133,8 @@ export default function Home() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete="off"
+                  name="inventory-login-passcode"
                   required
                 />
               </div>

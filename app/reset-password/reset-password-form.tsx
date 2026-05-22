@@ -73,12 +73,16 @@ export function ResetPasswordForm({ token }: { token: string }) {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             type="password"
+            autoComplete="off"
+            name="inventory-reset-passcode"
           />
           <Input
             placeholder="Confirm new password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             type="password"
+            autoComplete="off"
+            name="inventory-reset-passcode-confirm"
           />
           <Button onClick={handleReset} disabled={isPending}>
             Reset password

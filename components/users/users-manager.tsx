@@ -250,6 +250,8 @@ export function UsersManager({
                 <Input
                   type="password"
                   value={formState.password}
+                  autoComplete="off"
+                  name="inventory-user-passcode"
                   onChange={(event) =>
                     setFormState((prev) => ({
                       ...prev,
