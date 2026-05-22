@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Bell, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import type { LoanNotification } from "@/types/loan-notification"
 export function LoanNotifications() {
   const [notifications, setNotifications] = useState<LoanNotification[]>([])
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -40,6 +41,22 @@ export function LoanNotifications() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+    }
+  }, [open])
+
   const counts = useMemo(
     () =>
       notifications.reduce(
@@ -56,7 +73,7 @@ export function LoanNotifications() {
   const visibleNotifications = notifications.slice(0, 8)
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <Button
         type="button"
         variant="outline"
@@ -75,7 +92,7 @@ export function LoanNotifications() {
       </Button>
 
       {open ? (
-        <div className="absolute right-0 top-11 z-40 w-[min(calc(100vw-1.5rem),24rem)] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl">
+        <div className="absolute left-0 top-11 z-40 w-[min(calc(100vw-1.5rem),24rem)] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl md:left-auto md:right-0">
           <div className="border-b border-border px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
