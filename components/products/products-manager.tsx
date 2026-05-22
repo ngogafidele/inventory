@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -114,16 +114,6 @@ export function ProductsManager({
     filteredProducts.length
   )
 
-  useEffect(() => {
-    if (currentPage > pageCount) {
-      setCurrentPage(pageCount)
-    }
-  }, [currentPage, pageCount])
-
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [search])
-
   const resetForm = () => {
     setFormState({
       ...emptyForm,
@@ -203,7 +193,7 @@ export function ProductsManager({
 
       setDialogOpen(false)
       resetForm()
-    } catch (err) {
+    } catch {
       setError("Failed to save product.")
     } finally {
       setSubmitting(false)
@@ -231,7 +221,7 @@ export function ProductsManager({
       setProducts((current) =>
         current.filter((product) => product._id !== productId)
       )
-    } catch (err) {
+    } catch {
       setError("Failed to delete product.")
     } finally {
       setSubmitting(false)
@@ -263,7 +253,7 @@ export function ProductsManager({
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-    } catch (err) {
+    } catch {
       setError("Failed to download catalog PDF.")
     } finally {
       setCatalogDownloading(false)
@@ -283,7 +273,10 @@ export function ProductsManager({
           <Input
             placeholder="Search products"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setCurrentPage(1)
+            }}
             className="w-full sm:w-56"
           />
           <Button

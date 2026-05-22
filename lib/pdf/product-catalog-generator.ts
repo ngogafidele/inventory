@@ -69,6 +69,7 @@ type ProductCatalogPdfDocument = {
   stroke(): ProductCatalogPdfDocument
   addPage(): ProductCatalogPdfDocument
   heightOfString(text: string, options?: { width?: number }): number
+  widthOfString(text: string): number
   on(event: "data", listener: (chunk: Buffer) => void): ProductCatalogPdfDocument
   on(event: "end", listener: () => void): ProductCatalogPdfDocument
   on(event: "error", listener: (error: unknown) => void): ProductCatalogPdfDocument
@@ -89,6 +90,7 @@ const logoBox = {
 const PRINT_TEXT = "#111827"
 const PRINT_MUTED_TEXT = "#1f2937"
 const PRINT_HEADER_TEXT = "#00183d"
+const TABLE_ROW_HEIGHT = 24
 
 function mutedText(doc: ProductCatalogPdfDocument) {
   return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
@@ -152,6 +154,31 @@ function formatDate(value: Date | string | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value))
+}
+
+function truncateToWidth(
+  doc: ProductCatalogPdfDocument,
+  value: string | undefined,
+  width: number
+) {
+  const text = value?.trim() || "-"
+  if (doc.widthOfString(text) <= width) return text
+
+  const suffix = "..."
+  const suffixWidth = doc.widthOfString(suffix)
+  let start = 0
+  let end = text.length
+
+  while (start < end) {
+    const mid = Math.ceil((start + end) / 2)
+    if (doc.widthOfString(text.slice(0, mid)) + suffixWidth <= width) {
+      start = mid
+    } else {
+      end = mid - 1
+    }
+  }
+
+  return `${text.slice(0, start).trimEnd()}${suffix}`
 }
 
 function drawTableHeader(doc: ProductCatalogPdfDocument, y: number) {
@@ -257,43 +284,47 @@ export function generateProductCatalogPDF(
     const quantity = `${product.quantity} ${product.unit ?? "pcs"}`
     const lowStockThreshold = product.lowStockThreshold ?? 0
     const status = product.quantity <= lowStockThreshold ? "Low stock" : "In stock"
-    const productHeight = doc.heightOfString(product.name, { width: 178 })
-    const rowHeight = Math.max(30, productHeight + 17)
 
-    if (y + rowHeight > 540) {
+    if (y + TABLE_ROW_HEIGHT > 540) {
       doc.addPage()
       y = 56
       drawTableHeader(doc, y)
       y += 32
     }
 
+    doc.font("Helvetica-Bold").fontSize(8)
+    const name = truncateToWidth(doc, product.name, 178)
+    doc.font("Helvetica").fontSize(7)
+    const sku = truncateToWidth(doc, product.sku, 178)
+    doc.font("Helvetica").fontSize(8)
+    const quantityText = truncateToWidth(doc, quantity, 62)
+    const lowStockText = truncateToWidth(doc, String(lowStockThreshold), 62)
+    const costPrice = truncateToWidth(doc, formatCurrency(product.costPrice ?? 0), 82)
+    const price = truncateToWidth(doc, formatCurrency(product.price), 82)
+
     doc
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
-      .rect(48, y - 7, 745, rowHeight)
+      .rect(48, y - 7, 745, TABLE_ROW_HEIGHT)
       .fill()
       .font("Helvetica")
       .fillColor(PRINT_TEXT)
       .fontSize(8)
       .text(String(index + 1), columns.index, y, { width: 24 })
       .font("Helvetica-Bold")
-      .text(product.name, columns.product, y, { width: 178 })
+      .text(name, columns.product, y, { width: 178 })
       .font("Helvetica")
       .fillColor(PRINT_MUTED_TEXT)
       .fontSize(7)
-      .text(product.sku, columns.product, y + Math.max(11, productHeight), {
-        width: 178,
-      })
+      .text(sku, columns.product, y + 10, { width: 178 })
       .fontSize(8)
       .fillColor(PRINT_TEXT)
-      .text(quantity, columns.quantity, y, { width: 62 })
-      .text(String(lowStockThreshold), columns.lowStock, y, { width: 62 })
-      .text(formatCurrency(product.costPrice ?? 0), columns.costPrice, y, {
-        width: 82,
-      })
-      .text(formatCurrency(product.price), columns.price, y, { width: 82 })
+      .text(quantityText, columns.quantity, y, { width: 62 })
+      .text(lowStockText, columns.lowStock, y, { width: 62 })
+      .text(costPrice, columns.costPrice, y, { width: 82 })
+      .text(price, columns.price, y, { width: 82 })
       .text(status, columns.status, y, { width: 70 })
 
-    y += rowHeight + 4
+    y += TABLE_ROW_HEIGHT + 2
   })
 
   if (y > 520) {

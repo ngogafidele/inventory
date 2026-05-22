@@ -1,449 +1,54 @@
 "use client"
 
+import { useState } from "react"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { STORE_LABELS, type StoreKey } from "@/lib/utils/constants"
-import { formatCurrency } from "@/lib/utils/format"
-import { formatInKigali } from "@/lib/utils/time"
 
-type StoreReport = {
-  store: StoreKey
-  products: number
-  inventoryCost: number
-  inventoryRetail: number
-  sales: number
-  revenue: number
-  costOfSales: number
-  expenses: number
-  profit: number
-  invoices: number
-  unpaidInvoices: number
-  outstanding: number
-  adjustments: number
-}
+export function ReportPrintButton() {
+  const [downloading, setDownloading] = useState(false)
 
-type TopMovingProduct = {
-  sku: string
-  name: string
-  unit: string
-  soldQuantity: number
-  revenue: number
-  grossProfit: number
-}
+  const produceReportPdf = async () => {
+    setDownloading(true)
 
-type RecentSale = {
-  _id: string
-  store: StoreKey
-  createdAt?: string
-  totalAmount: number
-  items: Array<{
-    name: string
-    sku: string
-    unit: string
-    quantity: number
-  }>
-}
+    try {
+      const query = window.location.search
+      const response = await fetch(`/api/reports/pdf${query}`)
 
-type ReportPrintButtonProps = {
-  store: StoreKey
-  fromLabel: string
-  toLabel: string
-  reports: StoreReport[]
-  topMovingProducts: TopMovingProduct[]
-  recentSales: RecentSale[]
-}
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        alert(body?.error ?? "Failed to download report PDF.")
+        return
+      }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-}
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      const disposition = response.headers.get("content-disposition")
+      const filename =
+        disposition?.match(/filename="(.+)"/)?.[1] ?? "report.pdf"
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(value)
-}
-
-function formatDateTime(date: string | undefined) {
-  if (!date) return "-"
-
-  return formatInKigali(date, {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function sumReports(reports: StoreReport[]) {
-  return reports.reduce(
-    (total, report) => ({
-      products: total.products + report.products,
-      inventoryCost: total.inventoryCost + report.inventoryCost,
-      inventoryRetail: total.inventoryRetail + report.inventoryRetail,
-      sales: total.sales + report.sales,
-      revenue: total.revenue + report.revenue,
-      costOfSales: total.costOfSales + report.costOfSales,
-      expenses: total.expenses + report.expenses,
-      profit: total.profit + report.profit,
-      invoices: total.invoices + report.invoices,
-      unpaidInvoices: total.unpaidInvoices + report.unpaidInvoices,
-      outstanding: total.outstanding + report.outstanding,
-      adjustments: total.adjustments + report.adjustments,
-    }),
-    {
-      products: 0,
-      inventoryCost: 0,
-      inventoryRetail: 0,
-      sales: 0,
-      revenue: 0,
-      costOfSales: 0,
-      expenses: 0,
-      profit: 0,
-      invoices: 0,
-      unpaidInvoices: 0,
-      outstanding: 0,
-      adjustments: 0,
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert("Failed to download report PDF.")
+    } finally {
+      setDownloading(false)
     }
-  )
-}
-
-export function ReportPrintButton({
-  store,
-  fromLabel,
-  toLabel,
-  reports,
-  topMovingProducts,
-  recentSales,
-}: ReportPrintButtonProps) {
-  const produceReportPdf = () => {
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) {
-      alert("Allow pop-ups to produce the report PDF.")
-      return
-    }
-
-    const storeName = STORE_LABELS[store]
-    const totals = sumReports(reports)
-    const generatedAt = formatInKigali(new Date(), {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-    const outstandingClass = totals.outstanding > 0 ? "metric warning" : "metric"
-
-    const summaryRows = reports
-      .map(
-        (report) => `
-          <tr>
-            <td>${escapeHtml(STORE_LABELS[report.store])}</td>
-            <td>${escapeHtml(formatCurrency(report.revenue))}</td>
-            <td>${escapeHtml(formatCurrency(report.expenses))}</td>
-            <td>${escapeHtml(formatCurrency(report.profit))}</td>
-            <td>${escapeHtml(formatNumber(report.sales))}</td>
-            <td>${escapeHtml(formatNumber(report.products))}</td>
-            <td>${escapeHtml(formatCurrency(report.outstanding))}</td>
-          </tr>
-        `
-      )
-      .join("")
-
-    const topMovingRows = topMovingProducts
-      .map(
-        (product, index) => `
-          <tr>
-            <td>${index + 1}</td>
-            <td>
-              <strong>${escapeHtml(product.name)}</strong>
-              <span>${escapeHtml(product.sku)}</span>
-            </td>
-            <td>${escapeHtml(formatNumber(product.soldQuantity))} ${escapeHtml(product.unit ?? "pcs")}</td>
-            <td>${escapeHtml(formatCurrency(product.revenue))}</td>
-            <td>${escapeHtml(formatCurrency(product.grossProfit))}</td>
-          </tr>
-        `
-      )
-      .join("")
-
-    const recentSaleRows = recentSales
-      .map((sale) => {
-        const items = sale.items
-          .map((item) => item.name || item.sku)
-          .filter(Boolean)
-          .join(", ")
-
-        return `
-          <tr>
-            <td>${escapeHtml(formatDateTime(sale.createdAt))}</td>
-            <td>${escapeHtml(STORE_LABELS[sale.store])}</td>
-            <td>${escapeHtml(items || "-")}</td>
-            <td>${escapeHtml(formatCurrency(sale.totalAmount))}</td>
-          </tr>
-        `
-      })
-      .join("")
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>${escapeHtml(storeName)} Report</title>
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              padding: 28px;
-              color: #111827;
-              font-family: Arial, sans-serif;
-              background: #ffffff;
-            }
-            header {
-              display: grid;
-              grid-template-columns: 1fr auto;
-              gap: 24px;
-              align-items: start;
-              border-bottom: 3px solid #f08010;
-              padding-bottom: 18px;
-              margin-bottom: 18px;
-            }
-            h1 {
-              margin: 0 0 6px;
-              font-size: 30px;
-              line-height: 1.1;
-              letter-spacing: 0;
-            }
-            h2 {
-              margin: 0 0 10px;
-              font-size: 15px;
-              color: #00183d;
-            }
-            p {
-              margin: 0 0 4px;
-              color: #5f6673;
-              font-size: 12px;
-            }
-            .eyebrow {
-              margin-bottom: 5px;
-              color: #002050;
-              font-size: 10px;
-              font-weight: 700;
-              letter-spacing: 0.16em;
-              text-transform: uppercase;
-            }
-            .summary {
-              min-width: 240px;
-              border: 1px solid #cbd7e6;
-              padding: 12px;
-              background: #fbfcfe;
-              text-align: right;
-              white-space: nowrap;
-            }
-            .summary strong {
-              color: #00183d;
-            }
-            .metrics {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 10px;
-              margin: 18px 0 22px;
-            }
-            .metric {
-              min-height: 70px;
-              border: 1px solid #d8dee8;
-              border-left: 4px solid #002050;
-              padding: 10px;
-              background: #fbfcfe;
-            }
-            .metric.warning {
-              border-left-color: #c27803;
-              background: #fffaf0;
-            }
-            .metric.danger {
-              border-left-color: #b42318;
-              background: #fff5f5;
-            }
-            .metric span {
-              display: block;
-              color: #5f6673;
-              font-size: 9px;
-              font-weight: 700;
-              letter-spacing: 0.08em;
-              text-transform: uppercase;
-            }
-            .metric strong {
-              display: block;
-              margin-top: 7px;
-              font-size: 16px;
-              line-height: 1.2;
-            }
-            .section-grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 16px;
-              align-items: start;
-            }
-            section {
-              margin-top: 18px;
-              break-inside: avoid;
-              page-break-inside: avoid;
-            }
-            section.full {
-              grid-column: 1 / -1;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              font-size: 11px;
-            }
-            th {
-              background: #eef3f8;
-              color: #00183d;
-              text-align: left;
-              border: 1px solid #cbd7e6;
-              padding: 8px 7px;
-            }
-            td {
-              border: 1px solid #d8dee8;
-              padding: 7px;
-              vertical-align: top;
-            }
-            td span {
-              display: block;
-              margin-top: 3px;
-              color: #6b7280;
-              font-size: 11px;
-            }
-            tr:nth-child(even) td {
-              background: #fbfcfe;
-            }
-            thead {
-              display: table-header-group;
-            }
-            tr {
-              break-inside: avoid;
-              page-break-inside: avoid;
-            }
-            .footer {
-              margin-top: 20px;
-              border-top: 1px solid #d8dee8;
-              padding-top: 10px;
-              color: #6b7280;
-              font-size: 10px;
-            }
-            @page {
-              size: A4 landscape;
-              margin: 12mm;
-            }
-            @media print {
-              body { padding: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <header>
-            <div>
-              <p class="eyebrow">Inventory Report</p>
-              <h1>${escapeHtml(storeName)}</h1>
-              <p>Period: ${escapeHtml(fromLabel)} to ${escapeHtml(toLabel)}</p>
-            </div>
-            <div class="summary">
-              <p><strong>Multi-Store Inventory</strong></p>
-              <p>Generated ${escapeHtml(generatedAt)}</p>
-            </div>
-          </header>
-
-            <div class="metrics">
-            <div class="metric"><span>Total Revenue</span><strong>${escapeHtml(formatCurrency(totals.revenue))}</strong></div>
-            <div class="metric"><span>Expenses</span><strong>${escapeHtml(formatCurrency(totals.expenses))}</strong></div>
-            <div class="metric"><span>Profit</span><strong>${escapeHtml(formatCurrency(totals.profit))}</strong></div>
-            <div class="metric"><span>Inventory Cost</span><strong>${escapeHtml(formatCurrency(totals.inventoryCost))}</strong></div>
-            <div class="metric"><span>Inventory Retail</span><strong>${escapeHtml(formatCurrency(totals.inventoryRetail))}</strong></div>
-            <div class="metric"><span>Sales Records</span><strong>${escapeHtml(formatNumber(totals.sales))}</strong></div>
-            <div class="metric"><span>Products</span><strong>${escapeHtml(formatNumber(totals.products))}</strong></div>
-            <div class="${outstandingClass}"><span>Loans</span><strong>${escapeHtml(formatCurrency(totals.outstanding))}</strong></div>
-          </div>
-
-          <div class="section-grid">
-            <section class="full">
-              <h2>Store Summary</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Store</th>
-                    <th>Revenue</th>
-                    <th>Expenses</th>
-                    <th>Profit</th>
-                    <th>Sales</th>
-                    <th>Products</th>
-                    <th>Loans</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${summaryRows || '<tr><td colspan="7">No summary data found.</td></tr>'}
-                </tbody>
-              </table>
-            </section>
-
-            <section>
-              <h2>Top Moving Products</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Product</th>
-                    <th>Sold</th>
-                    <th>Revenue</th>
-                    <th>Profit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${topMovingRows || '<tr><td colspan="5">No sales movement yet.</td></tr>'}
-                </tbody>
-              </table>
-            </section>
-
-            <section>
-              <h2>Recent Sales</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Store</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${recentSaleRows || '<tr><td colspan="4">No sales recorded yet.</td></tr>'}
-                </tbody>
-              </table>
-            </section>
-          </div>
-
-          <div class="footer">
-            This report is generated from the current inventory database and reflects transactions recorded for the selected date range.
-          </div>
-
-          <script>
-            window.addEventListener("load", () => {
-              window.print();
-            });
-          </script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
   }
 
   return (
-    <Button type="button" variant="outline" onClick={produceReportPdf}>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={produceReportPdf}
+      disabled={downloading}
+    >
       <FileText className="size-4" />
-      Report PDF
+      {downloading ? "Preparing..." : "Report PDF"}
     </Button>
   )
 }

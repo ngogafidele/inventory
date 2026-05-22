@@ -28,6 +28,7 @@ declare module "pdfkit" {
     stroke(): this
     addPage(): this
     heightOfString(text: string, options?: TextOptions): number
+    widthOfString(text: string): number
     end(): void
   }
 

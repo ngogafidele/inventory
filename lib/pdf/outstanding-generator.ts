@@ -72,6 +72,7 @@ type OutstandingPdfDocument = {
   stroke(): OutstandingPdfDocument
   addPage(): OutstandingPdfDocument
   heightOfString(text: string, options?: { width?: number }): number
+  widthOfString(text: string): number
   on(event: "data", listener: (chunk: Buffer) => void): OutstandingPdfDocument
   on(event: "end", listener: () => void): OutstandingPdfDocument
   on(event: "error", listener: (error: unknown) => void): OutstandingPdfDocument
@@ -108,6 +109,7 @@ const paymentMethodsLines = [
 const PRINT_TEXT = "#111827"
 const PRINT_MUTED_TEXT = "#1f2937"
 const PRINT_HEADER_TEXT = "#00183d"
+const TABLE_ROW_HEIGHT = 24
 
 function mutedText(doc: OutstandingPdfDocument) {
   return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
@@ -200,6 +202,31 @@ function formatDate(value: Date | string | undefined) {
     month: "short",
     day: "2-digit",
   }).format(new Date(value))
+}
+
+function truncateToWidth(
+  doc: OutstandingPdfDocument,
+  value: string | undefined,
+  width: number
+) {
+  const text = value?.trim() || "-"
+  if (doc.widthOfString(text) <= width) return text
+
+  const suffix = "..."
+  const suffixWidth = doc.widthOfString(suffix)
+  let start = 0
+  let end = text.length
+
+  while (start < end) {
+    const mid = Math.ceil((start + end) / 2)
+    if (doc.widthOfString(text.slice(0, mid)) + suffixWidth <= width) {
+      start = mid
+    } else {
+      end = mid - 1
+    }
+  }
+
+  return `${text.slice(0, start).trimEnd()}${suffix}`
 }
 
 export function generateOutstandingCustomerPDF(
@@ -299,31 +326,35 @@ export function generateOutstandingCustomerPDF(
 
   payload.rows.forEach((row, index) => {
     const costText = row.pricePerUnit === null ? "-" : formatCurrency(row.pricePerUnit)
-    const itemsHeight = doc.heightOfString(row.items, { width: 122 })
-    const recordedByHeight = doc.heightOfString(row.recordedBy, { width: 70 })
-    const costHeight = doc.heightOfString(costText, { width: 70 })
-    const rowHeight = Math.max(22, itemsHeight, costHeight, recordedByHeight) + 12
 
-    if (y + rowHeight > 700) {
+    if (y + TABLE_ROW_HEIGHT > 700) {
       doc.addPage()
       y = 56
     }
 
+    doc.font("Helvetica").fontSize(9)
+    const saleDate = truncateToWidth(doc, formatDate(row.saleDate), 70)
+    const paymentDate = truncateToWidth(doc, formatDate(row.paymentDate), 70)
+    const items = truncateToWidth(doc, row.items, 122)
+    const recordedBy = truncateToWidth(doc, row.recordedBy, 70)
+    const pricePerUnit = truncateToWidth(doc, costText, 70)
+    const amount = truncateToWidth(doc, formatCurrency(row.amount), 60)
+
     doc
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
-      .rect(48, y - 6, 499, rowHeight)
+      .rect(48, y - 6, 499, TABLE_ROW_HEIGHT)
       .fill()
       .font("Helvetica")
       .fillColor(PRINT_TEXT)
       .fontSize(9)
-      .text(formatDate(row.saleDate), columns.saleDate, y, { width: 70 })
-      .text(formatDate(row.paymentDate), columns.paymentDate, y, { width: 70 })
-      .text(row.items, columns.items, y, { width: 122 })
-      .text(row.recordedBy, columns.recordedBy, y, { width: 70 })
-      .text(costText, columns.pricePerUnit, y, { width: 70 })
-      .text(formatCurrency(row.amount), columns.amount, y, { width: 60 })
+      .text(saleDate, columns.saleDate, y, { width: 70 })
+      .text(paymentDate, columns.paymentDate, y, { width: 70 })
+      .text(items, columns.items, y, { width: 122 })
+      .text(recordedBy, columns.recordedBy, y, { width: 70 })
+      .text(pricePerUnit, columns.pricePerUnit, y, { width: 70 })
+      .text(amount, columns.amount, y, { width: 60 })
 
-    y += rowHeight + 4
+    y += TABLE_ROW_HEIGHT + 2
   })
 
   if (y > 660) {

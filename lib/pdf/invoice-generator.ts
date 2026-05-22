@@ -67,6 +67,7 @@ type InvoicePdfDocument = {
     y?: number,
     options?: { align?: "left" | "right" | "center"; width?: number }
   ): InvoicePdfDocument
+  widthOfString(text: string): number
 }
 
 const logoPath = path.join(process.cwd(), "public", "images", "logo.png")
@@ -99,6 +100,7 @@ const businessFooterLines = [
 const PRINT_TEXT = "#111827"
 const PRINT_MUTED_TEXT = "#1f2937"
 const PRINT_HEADER_TEXT = "#00183d"
+const TABLE_ROW_HEIGHT = 24
 
 function mutedText(doc: InvoicePdfDocument) {
   return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
@@ -193,6 +195,31 @@ function formatDate(value: Date | string | undefined) {
   }).format(new Date(value))
 }
 
+function truncateToWidth(
+  doc: InvoicePdfDocument,
+  value: string | undefined,
+  width: number
+) {
+  const text = value?.trim() || "-"
+  if (doc.widthOfString(text) <= width) return text
+
+  const suffix = "..."
+  const suffixWidth = doc.widthOfString(suffix)
+  let start = 0
+  let end = text.length
+
+  while (start < end) {
+    const mid = Math.ceil((start + end) / 2)
+    if (doc.widthOfString(text.slice(0, mid)) + suffixWidth <= width) {
+      start = mid
+    } else {
+      end = mid - 1
+    }
+  }
+
+  return `${text.slice(0, start).trimEnd()}${suffix}`
+}
+
 function writeInvoicePdf(
   title: string,
   data: PdfDocumentData,
@@ -280,22 +307,27 @@ function writeInvoicePdf(
 
   let y = tableTop + 32
   data.items.forEach((item, index) => {
-    if (y > 700) {
+    if (y + TABLE_ROW_HEIGHT > 700) {
       doc.addPage()
       y = 56
     }
 
+    doc.font("Helvetica").fontSize(9)
+    const description = truncateToWidth(doc, item.description, 210)
+    doc.font("Helvetica").fontSize(8)
+    const sku = item.sku ? truncateToWidth(doc, item.sku, 210) : ""
+
     doc
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
-      .rect(48, y - 7, 499, 34)
+      .rect(48, y - 7, 499, TABLE_ROW_HEIGHT)
       .fill()
       .font("Helvetica")
       .fillColor(PRINT_TEXT)
       .fontSize(9)
-      .text(item.description, columns.item, y, { width: 210 })
+      .text(description, columns.item, y, { width: 210 })
       .fillColor(PRINT_MUTED_TEXT)
       .fontSize(8)
-      .text(item.sku ?? "", columns.item, y + 13, { width: 210 })
+      .text(sku, columns.item, y + 10, { width: 210 })
       .font("Helvetica")
       .fillColor(PRINT_TEXT)
       .fontSize(9)
@@ -303,7 +335,7 @@ function writeInvoicePdf(
       .text(formatCurrency(item.unitPrice), columns.price, y, { width: 82 })
       .text(formatCurrency(item.lineTotal), columns.total, y, { width: 92 })
 
-    y += 36
+    y += TABLE_ROW_HEIGHT + 2
   })
 
   if (y > 660) {
