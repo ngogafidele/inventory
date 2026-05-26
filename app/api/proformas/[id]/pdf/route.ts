@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { Proforma } from "@/lib/db/models/Proforma"
 import { generateProformaPDF } from "@/lib/pdf/invoice-generator"
+import { STORE_ADDRESSES } from "@/lib/utils/constants"
 
 export const runtime = "nodejs"
 
@@ -55,7 +56,7 @@ export async function GET(
           lineTotal: item.lineTotal,
         })),
       },
-      { name: "B Ikaze Hardware", address: "Kigali, Gisozi" }
+      { name: "B Ikaze Hardware", address: STORE_ADDRESSES[store] }
     )
 
     return new NextResponse(new Uint8Array(pdf), {

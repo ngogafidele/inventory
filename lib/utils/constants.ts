@@ -6,3 +6,8 @@ export const STORE_LABELS: Record<StoreKey, string> = {
   store1: "Gisozi",
   store2: "Kinyinya",
 }
+
+export const STORE_ADDRESSES: Record<StoreKey, string> = {
+  store1: "Kigali, Gisozi",
+  store2: "Kigali, Kinyinya",
+}
