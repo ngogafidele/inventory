@@ -1,3 +1,4 @@
+// Persists paid and credit sales together with their item value snapshots.
 import mongoose, { Schema } from "mongoose"
 
 const SaleItemSchema = new Schema(
@@ -14,6 +15,7 @@ const SaleItemSchema = new Schema(
   { _id: false }
 )
 
+// An outstanding record means goods have been issued but payment is pending.
 const OutstandingSchema = new Schema(
   {
     customerName: { type: String, required: true },
@@ -50,6 +52,7 @@ const SaleSchema = new Schema(
 )
 
 SaleSchema.index({ store: 1 })
+// Supports the loan queue ordered by expected collection date.
 SaleSchema.index({ store: 1, paymentStatus: 1, "outstanding.paymentDate": 1 })
 
 export type SaleDocument = mongoose.InferSchemaType<typeof SaleSchema>

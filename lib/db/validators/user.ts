@@ -1,3 +1,4 @@
+// Validates user access, authentication, and password workflow payloads.
 import { z } from "zod"
 import { storeSchema } from "@/lib/db/validators/shared"
 

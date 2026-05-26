@@ -1,3 +1,4 @@
+// Renders sales invoice and proforma PDF documents using branch identity.
 import { createRequire } from "module"
 import path from "node:path"
 import type * as Fs from "node:fs"

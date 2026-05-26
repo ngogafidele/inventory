@@ -1,3 +1,4 @@
+// Updates an administrator session to operate against another branch.
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { requireAuth } from "@/lib/auth/middleware"

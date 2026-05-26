@@ -1,3 +1,4 @@
+// Defines root metadata and document structure for the B Ikaze application.
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";

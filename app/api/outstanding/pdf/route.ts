@@ -1,3 +1,4 @@
+// Generates an outstanding-balance statement PDF for a branch customer.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"

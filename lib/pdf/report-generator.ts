@@ -1,3 +1,4 @@
+// Renders management report PDFs from branch financial aggregates.
 import { createRequire } from "module"
 import path from "node:path"
 import type * as Fs from "node:fs"

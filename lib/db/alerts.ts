@@ -1,3 +1,4 @@
+// Synchronizes unresolved low-stock alerts with current inventory levels.
 import { Alert } from "@/lib/db/models/Alert"
 
 export const LOW_STOCK_THRESHOLD = 0

@@ -1,5 +1,6 @@
 "use client"
 
+// Manages return transactions and the associated stock-restoration UI.
 import { useEffect, useMemo, useState } from "react"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils/format"

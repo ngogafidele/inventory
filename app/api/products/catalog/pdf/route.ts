@@ -1,3 +1,4 @@
+// Generates a product catalog PDF using the selected branch identity.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"

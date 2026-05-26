@@ -1,3 +1,4 @@
+// Describes a product and its branch-specific inventory values.
 export type Product = {
   id: string
   name: string

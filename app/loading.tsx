@@ -1,3 +1,4 @@
+// Provides the public/root route loading state.
 export default function Loading() {
   return (
     <div className="brand-auth-surface min-h-screen">

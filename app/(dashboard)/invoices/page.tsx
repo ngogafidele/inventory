@@ -1,3 +1,4 @@
+// Composes invoice and proforma workflows for the active branch.
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"

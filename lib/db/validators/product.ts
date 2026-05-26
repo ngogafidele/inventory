@@ -1,3 +1,4 @@
+// Validates product catalog, pricing, stock, and category payloads.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

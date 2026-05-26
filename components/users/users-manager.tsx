@@ -1,5 +1,6 @@
 "use client"
 
+// Manages administrator user provisioning, access assignment, and activity.
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {

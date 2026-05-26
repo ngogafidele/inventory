@@ -1,3 +1,4 @@
+// Lists and creates quotation-style proforma invoices for a branch.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAuth } from "@/lib/auth/middleware"

@@ -1,3 +1,4 @@
+// Returns due and overdue unpaid sales for the loan notification badge.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"

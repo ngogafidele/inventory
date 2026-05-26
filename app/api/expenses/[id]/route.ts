@@ -1,3 +1,4 @@
+// Updates or deletes a recorded expense within its owning branch.
 import { NextRequest, NextResponse } from "next/server"
 import { ZodError } from "zod"
 import { connectToDatabase } from "@/lib/db/connection"

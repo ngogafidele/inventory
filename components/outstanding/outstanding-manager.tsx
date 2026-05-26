@@ -1,5 +1,6 @@
 "use client"
 
+// Manages receivable searches, settlements, statements, and admin corrections.
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Download, Search, Trash2 } from "lucide-react"
@@ -68,6 +69,7 @@ function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 }
 
+// The header badge fetches independently, so mutations trigger its refresh.
 function refreshLoanNotifications() {
   window.dispatchEvent(new Event("loan-notifications:refresh"))
 }

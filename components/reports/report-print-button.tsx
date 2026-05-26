@@ -1,5 +1,6 @@
 "use client"
 
+// Requests and downloads the currently filtered management report PDF.
 import { useState } from "react"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"

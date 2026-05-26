@@ -1,3 +1,4 @@
+// Creates the initial administrator and two-store session context.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

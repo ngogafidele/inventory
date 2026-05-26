@@ -1,5 +1,6 @@
 "use client"
 
+// Fetches and presents administrator metrics for the selected store.
 import { useEffect, useState } from "react"
 import {
   Boxes,

@@ -1,3 +1,4 @@
+// Loads recorded sales and sellable products for the active branch.
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"
 import { Product } from "@/lib/db/models/Product"

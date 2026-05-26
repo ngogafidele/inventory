@@ -1,5 +1,6 @@
 "use client"
 
+// Implements initial administrator account setup for a new installation.
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"

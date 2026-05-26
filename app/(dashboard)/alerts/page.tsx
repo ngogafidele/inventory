@@ -1,3 +1,4 @@
+// Displays low-stock alerts for the authenticated user's active branch.
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"

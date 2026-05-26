@@ -1,5 +1,6 @@
 "use client"
 
+// Manages product records, catalog actions, and branch inventory display.
 import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { FileText } from "lucide-react"

@@ -1,3 +1,4 @@
+// Provides simple line-item total calculations for shared form contexts.
 export type LineItem = {
   quantity: number
   price: number

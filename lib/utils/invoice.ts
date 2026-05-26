@@ -1,3 +1,4 @@
+// Provides a lightweight date-based invoice number helper.
 import { getKigaliDateParts } from "@/lib/utils/time"
 
 export function generateInvoiceNumber() {

@@ -1,3 +1,4 @@
+// Describes sales records and their line-item value snapshots.
 export type SaleItem = {
   id: string
   name: string

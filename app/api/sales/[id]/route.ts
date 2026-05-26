@@ -1,3 +1,4 @@
+// Handles settlement, correction, and deletion of a recorded branch sale.
 import { NextRequest, NextResponse } from "next/server"
 import type { ClientSession } from "mongoose"
 import { connectToDatabase } from "@/lib/db/connection"
@@ -184,6 +185,7 @@ export async function PATCH(
       )
     }
 
+    // Collection settles the receivable only; inventory moved at sale creation.
     await connectToDatabase()
     const sale = await Sale.findOneAndUpdate(
       { _id: id, store },
@@ -336,6 +338,7 @@ export async function PUT(
       }))
       .filter((entry) => entry.change !== 0)
 
+    // Keep the sale, linked invoice, and inventory correction atomic.
     const db = await connectToDatabase()
     const dbSession = await db.startSession()
     try {
@@ -492,6 +495,7 @@ export async function DELETE(
     const dbSession = await db.startSession()
     try {
       await dbSession.withTransaction(async () => {
+        // Removing a recorded sale reverses its physical stock movement.
         if (restockQuantities.size > 0) {
           await Product.bulkWrite(
             Array.from(restockQuantities.entries()).map(

@@ -1,3 +1,4 @@
+// Wraps protected operational pages in the authenticated application shell.
 import type { ReactNode } from "react"
 import { AppShell } from "@/components/layout/app-shell"
 import { requireServerSession } from "@/lib/auth/server"

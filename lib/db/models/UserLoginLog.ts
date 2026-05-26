@@ -1,3 +1,4 @@
+// Persists user login activity for administrative review and retention.
 import mongoose, { Schema } from "mongoose"
 
 const MAX_LOGIN_LOGS = 50

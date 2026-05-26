@@ -1,5 +1,6 @@
 "use client"
 
+// Captures a simple sale form payload for reusable form contexts.
 import { useState } from "react"
 
 export function SalesForm() {

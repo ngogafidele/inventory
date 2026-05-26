@@ -1,3 +1,4 @@
+// Presents administrator user and store-assignment management.
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
 import { UserLoginLog } from "@/lib/db/models/UserLoginLog"

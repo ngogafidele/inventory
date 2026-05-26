@@ -1,3 +1,4 @@
+// Persists product categorization scoped to an owning branch.
 import mongoose, { Schema } from "mongoose"
 
 const CategorySchema = new Schema(

@@ -1,5 +1,6 @@
 "use client"
 
+// Provides client state helpers for transient alert messages.
 import { useCallback, useState } from "react"
 
 export function useAlert() {

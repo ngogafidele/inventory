@@ -1,3 +1,4 @@
+// Validates payloads accepted by operational alert endpoints.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

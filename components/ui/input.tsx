@@ -1,3 +1,4 @@
+// Defines the shared styled text input primitive.
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

@@ -1,3 +1,4 @@
+// Persists low-stock and custom operational alerts by branch.
 import mongoose, { Schema } from "mongoose"
 
 const AlertSchema = new Schema(

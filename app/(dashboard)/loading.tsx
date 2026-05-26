@@ -1,3 +1,4 @@
+// Provides a shared loading placeholder for dashboard route transitions.
 export default function Loading() {
   return (
     <div className="min-h-screen bg-background">

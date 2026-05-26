@@ -1,3 +1,4 @@
+// Updates or reverses a return while reconciling branch inventory.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"

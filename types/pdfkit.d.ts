@@ -1,3 +1,4 @@
+// Declares the PDFKit surface consumed by the server-side generators.
 declare module "pdfkit" {
   import { EventEmitter } from "events"
 

@@ -1,3 +1,4 @@
+// Ends an authenticated session and records logout activity.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

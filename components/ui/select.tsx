@@ -1,5 +1,6 @@
 "use client"
 
+// Defines accessible select primitives for constrained field values.
 import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 

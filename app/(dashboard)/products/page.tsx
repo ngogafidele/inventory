@@ -1,3 +1,4 @@
+// Loads the store-scoped product catalog and current on-hand inventory.
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"

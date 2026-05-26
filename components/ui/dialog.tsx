@@ -1,5 +1,6 @@
 "use client"
 
+// Defines modal dialog primitives used for confirmations and forms.
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 

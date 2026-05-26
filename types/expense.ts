@@ -1,3 +1,4 @@
+// Describes expense data exchanged between UI and branch APIs.
 export type Expense = {
   id: string
   store: "store1" | "store2"

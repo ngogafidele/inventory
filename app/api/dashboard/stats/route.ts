@@ -1,3 +1,4 @@
+// Aggregates administrator dashboard metrics for a selected branch.
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"

@@ -1,3 +1,4 @@
+// Persists per-store counters for formal document numbering.
 import mongoose, { Schema } from "mongoose"
 
 const NumberSequenceSchema = new Schema(

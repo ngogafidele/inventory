@@ -1,3 +1,4 @@
+// Returns the currently authenticated user's effective session context.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAuth } from "@/lib/auth/middleware"

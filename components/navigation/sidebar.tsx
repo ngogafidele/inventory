@@ -1,3 +1,4 @@
+// Maintains the compatibility wrapper for the application sidebar.
 import { Sidebar } from "@/components/layout/sidebar"
 import type { AuthSession } from "@/lib/auth/session"
 

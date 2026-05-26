@@ -1,3 +1,4 @@
+// Defines Next.js configuration for the inventory application.
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {

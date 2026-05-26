@@ -1,3 +1,4 @@
+// Validates manual stock changes and their required audit reasons.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

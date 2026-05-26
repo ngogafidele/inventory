@@ -1,3 +1,4 @@
+// Provides route-handler authentication and administrator authorization guards.
 import type { NextRequest } from "next/server"
 import { getSessionFromRequest } from "@/lib/auth/session"
 import { getCurrentUserSession } from "@/lib/auth/current-user"

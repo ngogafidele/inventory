@@ -1,3 +1,4 @@
+// Generates an administrator financial and inventory report PDF by branch.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAdmin } from "@/lib/auth/middleware"

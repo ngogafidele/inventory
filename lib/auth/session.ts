@@ -1,3 +1,4 @@
+// Defines signed session state, idle expiry, and authorized store resolution.
 import jwt from "jsonwebtoken"
 import type { NextRequest } from "next/server"
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies"
@@ -109,6 +110,7 @@ export function isStoreKey(value: string | null | undefined): value is StoreKey 
   return STORE_KEYS.includes(value as StoreKey)
 }
 
+// Never accept a requested store unless it is included in the user's session.
 export function resolveStoreFromRequest(
   request: NextRequest,
   session: AuthSession
@@ -120,6 +122,7 @@ export function resolveStoreFromRequest(
   return candidate
 }
 
+// Server-rendered pages use the same store authorization rule as route handlers.
 export function resolveStoreFromValue(
   store: string | null | undefined,
   session: AuthSession

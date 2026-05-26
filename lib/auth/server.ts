@@ -1,3 +1,4 @@
+// Resolves authenticated sessions and active stores in Server Components.
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import {

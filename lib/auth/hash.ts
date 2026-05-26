@@ -1,3 +1,4 @@
+// Provides password hashing and verification for local authentication.
 import bcrypt from "bcrypt"
 
 const SALT_ROUNDS = 12

@@ -1,3 +1,4 @@
+// Hosts password reset form access for a reset-token request.
 import { ResetPasswordForm } from "@/app/reset-password/reset-password-form"
 
 export default async function ResetPasswordPage({

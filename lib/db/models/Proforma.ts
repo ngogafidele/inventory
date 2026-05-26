@@ -1,3 +1,4 @@
+// Persists branch quotation documents issued before or alongside sales.
 import mongoose, { Schema } from "mongoose"
 
 const ProformaItemSchema = new Schema(

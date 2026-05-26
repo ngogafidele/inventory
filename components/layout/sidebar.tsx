@@ -1,5 +1,6 @@
 "use client"
 
+// Renders role-aware navigation for authenticated operations.
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { AuthSession } from "@/lib/auth/session"

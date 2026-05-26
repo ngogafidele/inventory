@@ -1,3 +1,4 @@
+// Generates a printable sales invoice PDF for the selected branch.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAuth } from "@/lib/auth/middleware"

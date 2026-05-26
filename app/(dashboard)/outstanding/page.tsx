@@ -1,3 +1,4 @@
+// Loads unpaid branch sales for customer loan collection and follow-up.
 import "@/lib/db/models/User"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"

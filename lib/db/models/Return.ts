@@ -1,3 +1,4 @@
+// Persists returns and replacement details that affect inventory and reports.
 import mongoose, { Schema } from "mongoose"
 
 const ReturnItemSchema = new Schema(

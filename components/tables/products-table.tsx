@@ -1,3 +1,4 @@
+// Renders product table rows for read-oriented product displays.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export type ProductsTableRow = {

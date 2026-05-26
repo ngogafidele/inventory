@@ -1,3 +1,4 @@
+// Retrieves, updates, or deletes a branch-owned product record.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"

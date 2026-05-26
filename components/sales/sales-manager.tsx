@@ -1,5 +1,6 @@
 "use client"
 
+// Manages sale recording, editing, payment state, and visible sales history.
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils/format"

@@ -1,5 +1,6 @@
 "use client"
 
+// Lists and manages sales-linked invoices for the selected branch.
 import { useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Download, Eye, Filter, Pencil, Search, Trash2 } from "lucide-react"

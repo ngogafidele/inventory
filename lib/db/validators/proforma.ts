@@ -1,3 +1,4 @@
+// Validates proforma document payloads and list-query filters.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

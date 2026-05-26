@@ -1,5 +1,6 @@
 "use client"
 
+// Displays due and overdue loan alerts in the authenticated header.
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Bell, Clock } from "lucide-react"

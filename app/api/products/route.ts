@@ -1,3 +1,4 @@
+// Lists and creates products within an authorized store context.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"

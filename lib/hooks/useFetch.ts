@@ -1,5 +1,6 @@
 "use client"
 
+// Provides a lightweight client hook for JSON endpoint requests.
 import { useEffect, useState } from "react"
 
 export function useFetch<T>(url: string) {

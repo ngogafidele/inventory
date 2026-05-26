@@ -1,3 +1,4 @@
+// Refreshes authenticated sessions and expires invalid access at request time.
 import { NextResponse, type NextRequest } from "next/server"
 import {
   AUTH_COOKIE,

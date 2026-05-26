@@ -1,3 +1,4 @@
+// Supplies the dashboard loading state while branch metrics are resolved.
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 
 export default function Loading() {

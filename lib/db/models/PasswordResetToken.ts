@@ -1,3 +1,4 @@
+// Persists expiring password-reset token hashes for secure reset flows.
 import mongoose, { Schema } from "mongoose"
 
 const PasswordResetTokenSchema = new Schema(

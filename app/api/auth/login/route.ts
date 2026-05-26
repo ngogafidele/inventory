@@ -1,3 +1,4 @@
+// Authenticates a user and issues the application session cookie.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

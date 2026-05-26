@@ -1,5 +1,6 @@
 "use client"
 
+// Captures editable product values for reusable product form flows.
 import { useState } from "react"
 
 export function ProductForm() {

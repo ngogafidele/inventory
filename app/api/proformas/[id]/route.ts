@@ -1,3 +1,4 @@
+// Retrieves, updates, or removes one branch proforma invoice.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"

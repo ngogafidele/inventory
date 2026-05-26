@@ -1,3 +1,4 @@
+// Loads branch expenses for interactive operational expense management.
 import "@/lib/db/models/User"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Expense } from "@/lib/db/models/Expense"

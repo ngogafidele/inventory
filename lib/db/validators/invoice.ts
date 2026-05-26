@@ -1,3 +1,4 @@
+// Validates invoice customer details, dates, and status updates.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

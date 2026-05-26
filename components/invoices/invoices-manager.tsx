@@ -1,5 +1,6 @@
 "use client"
 
+// Manages general invoice interactions and invoice record state.
 import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"

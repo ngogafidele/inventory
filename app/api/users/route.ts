@@ -1,3 +1,4 @@
+// Lists and provisions users assigned to operational branches.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

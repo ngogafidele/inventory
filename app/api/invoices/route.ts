@@ -1,3 +1,4 @@
+// Lists invoices and creates an invoice from an existing branch sale.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"

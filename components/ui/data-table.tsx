@@ -1,5 +1,6 @@
 "use client"
 
+// Defines a generic client-rendered data table primitive.
 import * as React from "react"
 
 export type DataTableColumn<T> = {

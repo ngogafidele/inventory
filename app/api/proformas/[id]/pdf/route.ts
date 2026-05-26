@@ -1,3 +1,4 @@
+// Generates the printable PDF form of a branch proforma invoice.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAuth } from "@/lib/auth/middleware"

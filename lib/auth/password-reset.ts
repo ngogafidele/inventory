@@ -1,3 +1,4 @@
+// Creates and verifies time-limited hashed password-reset tokens.
 import { createHash, randomBytes } from "crypto"
 
 export const PASSWORD_RESET_TOKEN_BYTES = 32

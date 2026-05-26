@@ -1,3 +1,4 @@
+// Lists and records operating expenses for an authorized branch.
 import { NextRequest, NextResponse } from "next/server"
 import { ZodError } from "zod"
 import { connectToDatabase } from "@/lib/db/connection"

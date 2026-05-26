@@ -1,3 +1,4 @@
+// Handles business date parsing and display consistently in Kigali time.
 export const KIGALI_TIME_ZONE = "Africa/Kigali"
 const KIGALI_OFFSET_MINUTES = 120
 const KIGALI_OFFSET_MS = KIGALI_OFFSET_MINUTES * 60 * 1000

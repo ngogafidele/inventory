@@ -1,3 +1,4 @@
+// Generates persisted, branch-specific sequences for formal documents.
 import { NumberSequence } from "@/lib/db/models/NumberSequence"
 import { getKigaliDateParts } from "@/lib/utils/time"
 
@@ -7,6 +8,7 @@ function formatSequence(sequence: number) {
   return String(sequence).padStart(4, "0")
 }
 
+// Numbering is isolated per branch, document type, and Kigali calendar month.
 async function generateNumber(storeId: string, type: SequenceType) {
   const nowParts = getKigaliDateParts(new Date())
   const year = nowParts.year

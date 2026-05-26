@@ -1,3 +1,4 @@
+// Defines the authenticated header, navigation, and content shell.
 import type { ReactNode } from "react"
 import Image from "next/image"
 import type { AuthSession } from "@/lib/auth/session"

@@ -1,3 +1,4 @@
+// Describes returned items and recorded branch return transactions.
 export type ReturnItem = {
   productId: string
   name: string

@@ -1,3 +1,4 @@
+// Persists authenticated users, roles, active status, and store assignments.
 import mongoose, { Schema } from "mongoose"
 
 const UserSchema = new Schema(

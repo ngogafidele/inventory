@@ -1,3 +1,4 @@
+// Validates returned-item and optional replacement-item submissions.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

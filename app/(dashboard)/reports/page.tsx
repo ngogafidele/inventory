@@ -1,3 +1,4 @@
+// Produces administrator reporting views from branch-scoped operational data.
 import { redirect } from "next/navigation"
 import { connection } from "next/server"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"

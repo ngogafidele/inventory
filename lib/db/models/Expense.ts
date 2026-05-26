@@ -1,3 +1,4 @@
+// Persists branch operating expenses used in profitability reporting.
 import mongoose, { Schema } from "mongoose"
 
 const ExpenseSchema = new Schema(

@@ -1,3 +1,4 @@
+// Renders the administrator-only overview for the currently selected branch.
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { redirect } from "next/navigation"

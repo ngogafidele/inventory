@@ -1,3 +1,4 @@
+// Renders a reusable summary metric card for dashboards and workflows.
 import { cn } from "@/lib/utils"
 
 export function StatsCard({

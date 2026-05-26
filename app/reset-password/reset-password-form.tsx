@@ -1,5 +1,6 @@
 "use client"
 
+// Captures and submits a replacement password for a valid reset token.
 import Link from "next/link"
 import { useState, useTransition } from "react"
 import { KeyRound } from "lucide-react"

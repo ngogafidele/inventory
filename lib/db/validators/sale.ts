@@ -1,3 +1,4 @@
+// Validates sales, payments, and customer receivable details.
 import { z } from "zod"
 import { objectIdSchema } from "@/lib/db/validators/shared"
 

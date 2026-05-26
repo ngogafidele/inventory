@@ -1,3 +1,4 @@
+// Validates creation and editing payloads for product categories.
 import { z } from "zod"
 
 export const CreateCategorySchema = z

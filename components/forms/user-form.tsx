@@ -1,5 +1,6 @@
 "use client"
 
+// Captures user provisioning fields for administrator workflows.
 import { useState } from "react"
 
 export function UserForm() {

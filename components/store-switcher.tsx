@@ -1,5 +1,6 @@
 "use client"
 
+// Lets administrators change the active store represented by their session.
 import { useTransition } from "react"
 import {
   Select,

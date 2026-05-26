@@ -1,3 +1,4 @@
+// Presents administrator-controlled manual inventory adjustments.
 import { connectToDatabase } from "@/lib/db/connection"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { Product } from "@/lib/db/models/Product"

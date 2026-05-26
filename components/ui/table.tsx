@@ -1,5 +1,6 @@
 "use client"
 
+// Defines styled table primitives for operational lists and reports.
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

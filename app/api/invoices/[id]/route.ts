@@ -1,3 +1,4 @@
+// Retrieves, updates, or removes a customer invoice in one branch.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"

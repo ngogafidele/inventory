@@ -1,3 +1,4 @@
+// Renders a compact list of recent sale records for overview displays.
 export type RecentSale = {
   id: string
   customer: string

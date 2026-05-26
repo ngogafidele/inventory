@@ -1,3 +1,4 @@
+// Sends administrator password-reset messages through the configured provider.
 export async function sendAdminPasswordResetEmail({
   to,
   resetUrl,

@@ -1,3 +1,4 @@
+// Centralizes application capability checks derived from a session role.
 import type { AuthSession } from "@/lib/auth/session"
 
 export function canViewAnalytics(session: AuthSession) {

@@ -1,3 +1,4 @@
+// Updates or removes an individual branch alert after authorization.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Alert } from "@/lib/db/models/Alert"

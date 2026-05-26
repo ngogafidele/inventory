@@ -1,3 +1,4 @@
+// Begins the administrator password-reset email workflow.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

@@ -1,3 +1,4 @@
+// Persists customer invoices generated from sales or proformas.
 import mongoose, { Schema } from "mongoose"
 
 const InvoiceItemSchema = new Schema(

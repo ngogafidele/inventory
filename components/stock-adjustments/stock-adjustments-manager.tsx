@@ -1,5 +1,6 @@
 "use client"
 
+// Manages administrator-entered stock corrections with audit reasons.
 import { useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"

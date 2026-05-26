@@ -1,3 +1,4 @@
+// Renders customer receivable statement PDFs for unpaid sales.
 import { createRequire } from "module"
 import path from "node:path"
 import type * as Fs from "node:fs"

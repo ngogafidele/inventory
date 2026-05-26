@@ -1,3 +1,4 @@
+// Validates a reset token and persists a new administrator password.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"

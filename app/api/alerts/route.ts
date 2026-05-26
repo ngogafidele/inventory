@@ -1,3 +1,4 @@
+// Lists and creates alerts scoped to the requesting user's active branch.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Alert } from "@/lib/db/models/Alert"

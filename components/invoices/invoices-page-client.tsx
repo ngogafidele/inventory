@@ -1,5 +1,6 @@
 "use client"
 
+// Coordinates sales-invoice and proforma tabs for the billing screen.
 import { useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"

@@ -1,5 +1,6 @@
 "use client"
 
+// Provides the interactive logout action in the authenticated header.
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"

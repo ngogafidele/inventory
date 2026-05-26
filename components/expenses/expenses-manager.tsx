@@ -1,5 +1,6 @@
 "use client"
 
+// Manages branch expense entry, filtering, editing, and deletion interactions.
 import { useMemo, useState } from "react"
 import { Pencil, Plus, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"

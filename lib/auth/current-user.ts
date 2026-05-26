@@ -1,3 +1,4 @@
+// Resolves live user status and store access from a token-derived session.
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
 import mongoose from "mongoose"

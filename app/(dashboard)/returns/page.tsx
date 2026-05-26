@@ -1,3 +1,4 @@
+// Loads product returns and catalog data for the active branch.
 import "@/lib/db/models/User"
 import { connectToDatabase } from "@/lib/db/connection"
 import { ReturnModel } from "@/lib/db/models/Return"

@@ -1,3 +1,4 @@
+// Lists and records sales while applying their inventory movement.
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
@@ -147,6 +148,7 @@ export async function POST(request: NextRequest) {
       quantity: number
     }> = []
 
+    // Goods leave inventory when sold, including sales awaiting payment.
     for (const [productId, quantity] of requestedQuantities.entries()) {
       const result = await Product.updateOne(
         { _id: productId, store, quantity: { $gte: quantity } },
@@ -190,6 +192,7 @@ export async function POST(request: NextRequest) {
         notes: payload.notes ?? "",
       })
     } catch (error) {
+      // Restore inventory if recording the commercial transaction fails.
       if (decrementedProducts.length > 0) {
         await Product.bulkWrite(
           decrementedProducts.map((entry) => ({

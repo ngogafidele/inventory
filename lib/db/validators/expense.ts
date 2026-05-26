@@ -1,3 +1,4 @@
+// Validates branch expense payloads and supported payment methods.
 import { z } from "zod"
 
 const paymentMethodSchema = z.enum(["cash", "mobile-money", "bank"])

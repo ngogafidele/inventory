@@ -1,3 +1,4 @@
+// Describes authenticated roles and administrator-managed user records.
 export type UserRole = "admin" | "manager" | "staff"
 
 export type User = {

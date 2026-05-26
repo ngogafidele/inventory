@@ -1,3 +1,4 @@
+// Renders printable product catalog and inventory valuation PDFs.
 import { createRequire } from "module"
 import path from "node:path"
 import type * as Fs from "node:fs"

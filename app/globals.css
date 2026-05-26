@@ -1,3 +1,4 @@
+/* Defines global theme tokens and base styling for the application UI. */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

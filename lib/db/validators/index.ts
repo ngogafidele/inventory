@@ -1,3 +1,4 @@
+// Re-exports validation schemas for route-handler consumption.
 export * from "@/lib/db/validators/alert"
 export * from "@/lib/db/validators/category"
 export * from "@/lib/db/validators/expense"

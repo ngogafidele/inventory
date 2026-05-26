@@ -1,3 +1,4 @@
+// Persists branch-owned products, pricing, and available quantities.
 import mongoose, { Schema } from "mongoose"
 
 const ProductSchema = new Schema(

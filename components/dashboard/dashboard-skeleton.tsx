@@ -1,3 +1,4 @@
+// Defines the skeleton arrangement displayed while dashboard data loads.
 function SkeletonBlock({ className }: { className: string }) {
   return <div className={`animate-pulse rounded bg-muted ${className}`} />
 }

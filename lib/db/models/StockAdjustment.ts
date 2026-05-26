@@ -1,3 +1,4 @@
+// Persists administrator inventory corrections for an audit history.
 import mongoose, { Schema } from "mongoose"
 
 const StockAdjustmentSchema = new Schema(
