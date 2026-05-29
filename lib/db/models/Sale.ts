@@ -25,6 +25,14 @@ const OutstandingSchema = new Schema(
   { _id: false }
 )
 
+const CustomerSchema = new Schema(
+  {
+    name: { type: String },
+    phone: { type: String },
+  },
+  { _id: false }
+)
+
 const SaleSchema = new Schema(
   {
     store: {
@@ -45,6 +53,7 @@ const SaleSchema = new Schema(
       enum: ["cash", "bank", "mobile"],
       default: undefined,
     },
+    customer: { type: CustomerSchema, default: undefined },
     outstanding: { type: OutstandingSchema, default: undefined },
     notes: { type: String, default: "" },
   },

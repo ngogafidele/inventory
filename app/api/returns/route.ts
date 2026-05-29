@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const payload = CreateReturnSchema.parse(await request.json())
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
 
     const productIds = Array.from(
       new Set(
@@ -125,36 +125,41 @@ export async function POST(request: NextRequest) {
       })
     )
 
-    await Product.bulkWrite(
-      stockUpdates.map((entry) => ({
-        updateOne: {
-          filter: { _id: entry.productId, store },
-          update: { $inc: { quantity: entry.change } },
-        },
-      }))
-    )
-
     let createdReturn
+    const dbSession = await db.startSession()
     try {
-      createdReturn = await ReturnModel.create({
-        store,
-        returnItems,
-        replacementItems: [],
-        totalReturnAmount,
-        totalReplacementAmount: 0,
-        createdBy: session.userId,
-        notes: payload.notes?.trim() ?? "",
+      await dbSession.withTransaction(async () => {
+        const stockResult = await Product.bulkWrite(
+          stockUpdates.map((entry) => ({
+            updateOne: {
+              filter: { _id: entry.productId, store },
+              update: { $inc: { quantity: entry.change } },
+            },
+          })),
+          { session: dbSession }
+        )
+        if (stockResult.modifiedCount !== stockUpdates.length) {
+          throw new Error("One or more products not found")
+        }
+
+        const createdReturns = await ReturnModel.create(
+          [
+            {
+              store,
+              returnItems,
+              replacementItems: [],
+              totalReturnAmount,
+              totalReplacementAmount: 0,
+              createdBy: session.userId,
+              notes: payload.notes?.trim() ?? "",
+            },
+          ],
+          { session: dbSession }
+        )
+        createdReturn = createdReturns[0]
       })
-    } catch (error) {
-      await Product.bulkWrite(
-        stockUpdates.map((entry) => ({
-          updateOne: {
-            filter: { _id: entry.productId, store },
-            update: { $inc: { quantity: -entry.change } },
-          },
-        }))
-      )
-      throw error
+    } finally {
+      await dbSession.endSession()
     }
 
     try {

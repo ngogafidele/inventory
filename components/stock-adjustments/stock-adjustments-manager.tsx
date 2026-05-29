@@ -177,10 +177,17 @@ export function StockAdjustmentsManager({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {adjustments.map((adjustment) => {
+          {adjustments.map((adjustment, adjustmentIndex) => {
             const isIncrease = adjustment.quantityChange > 0
             return (
-              <TableRow key={adjustment._id}>
+              <TableRow
+                key={adjustment._id}
+                className={
+                  adjustmentIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>
                   {adjustment.createdAt
                     ? formatInKigali(adjustment.createdAt, {

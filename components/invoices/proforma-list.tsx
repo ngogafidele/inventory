@@ -410,8 +410,15 @@ export function ProformaInvoicesList({
                 </TableCell>
               </TableRow>
             ) : (
-              visibleProformas.map((proforma) => (
-                <TableRow key={proforma._id}>
+              visibleProformas.map((proforma, proformaIndex) => (
+                <TableRow
+                  key={proforma._id}
+                  className={
+                    proformaIndex % 2 === 1
+                      ? "bg-muted/60 hover:bg-muted/70"
+                      : undefined
+                  }
+                >
                   <TableCell className="font-semibold">
                     {proforma.proformaNumber}
                   </TableCell>

@@ -131,7 +131,10 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({ success: true, data: sale })
+    const saleResponse =
+      typeof sale.toObject === "function" ? sale.toObject() : sale
+
+    return NextResponse.json({ success: true, data: saleResponse })
   } catch (error) {
     return NextResponse.json(
       { success: false, error: "Failed to fetch sale" },
@@ -187,11 +190,28 @@ export async function PATCH(
 
     // Collection settles the receivable only; inventory moved at sale creation.
     await connectToDatabase()
+    const existingSale = await Sale.findOne({ _id: id, store })
+    if (!existingSale) {
+      return NextResponse.json(
+        { success: false, error: "Sale not found" },
+        { status: 404 }
+      )
+    }
+
+    const customerFromOutstanding = existingSale.outstanding
+      ? {
+          name: existingSale.outstanding.customerName ?? "",
+          phone: existingSale.outstanding.customerPhone ?? "",
+        }
+      : null
     const sale = await Sale.findOneAndUpdate(
       { _id: id, store },
       {
         paymentStatus: "paid",
         paymentMethod: payload.paymentMethod,
+        ...(customerFromOutstanding && !existingSale.customer
+          ? { customer: customerFromOutstanding }
+          : {}),
         $unset: { outstanding: "" },
       },
       { new: true }
@@ -204,7 +224,20 @@ export async function PATCH(
       )
     }
 
-    return NextResponse.json({ success: true, data: sale })
+    if (customerFromOutstanding && !existingSale.customer) {
+      await Sale.collection.updateOne(
+        { _id: sale._id, store },
+        { $set: { customer: customerFromOutstanding } }
+      )
+    }
+
+    const saleResponse =
+      typeof sale.toObject === "function" ? sale.toObject() : sale
+    if (customerFromOutstanding && !saleResponse.customer) {
+      saleResponse.customer = customerFromOutstanding
+    }
+
+    return NextResponse.json({ success: true, data: saleResponse })
   } catch (error) {
     return NextResponse.json(
       { success: false, error: "Failed to update sale" },
@@ -317,6 +350,16 @@ export async function PUT(
     })
 
     const paymentStatus = payload.paymentStatus ?? "paid"
+    const customer = {
+      name:
+        payload.customer?.name?.trim() ||
+        payload.outstanding?.customerName?.trim() ||
+        "",
+      phone:
+        payload.customer?.phone?.trim() ||
+        payload.outstanding?.customerPhone?.trim() ||
+        "",
+    }
     const paymentDate =
       paymentStatus === "unpaid"
         ? parseKigaliDateInput(payload.outstanding?.paymentDate)
@@ -350,11 +393,18 @@ export async function PUT(
         sale.paymentStatus = paymentStatus
         sale.paymentMethod =
           paymentStatus === "paid" ? payload.paymentMethod : undefined
+        sale.customer =
+          customer.name || customer.phone
+            ? {
+                name: customer.name,
+                phone: customer.phone,
+              }
+            : undefined
         sale.outstanding =
           paymentStatus === "unpaid"
             ? {
-                customerName: payload.outstanding?.customerName ?? "",
-                customerPhone: payload.outstanding?.customerPhone ?? "",
+                customerName: customer.name,
+                customerPhone: customer.phone,
                 paymentDate: paymentDate ?? undefined,
               }
             : undefined
@@ -376,6 +426,27 @@ export async function PUT(
         }
 
         await sale.save({ session: dbSession })
+        if (customer.name || customer.phone) {
+          await Sale.collection.updateOne(
+            { _id: sale._id, store },
+            {
+              $set: {
+                customer: {
+                  name: customer.name,
+                  phone: customer.phone,
+                },
+              },
+            },
+            { session: dbSession }
+          )
+        } else {
+          await Sale.collection.updateOne(
+            { _id: sale._id, store },
+            { $unset: { customer: "" } },
+            { session: dbSession }
+          )
+        }
+
         if (invoice) {
           await invoice.save({ session: dbSession })
         }

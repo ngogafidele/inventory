@@ -628,8 +628,15 @@ export function InvoicesManager({
               </TableCell>
             </TableRow>
           ) : (
-            invoices.map((invoice) => (
-              <TableRow key={invoice._id}>
+            invoices.map((invoice, invoiceIndex) => (
+              <TableRow
+                key={invoice._id}
+                className={
+                  invoiceIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>
                   <Button
                     type="button"

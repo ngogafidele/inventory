@@ -33,6 +33,10 @@ type SalesPageSale = {
   notes: string
   paymentStatus?: "paid" | "unpaid"
   paymentMethod?: "cash" | "bank" | "mobile"
+  customer?: {
+    name?: string
+    phone?: string
+  }
   outstanding?: {
     customerName?: string
     customerPhone?: string
@@ -61,9 +65,17 @@ function isPopulatedSaleUser(
   )
 }
 
-export default async function SalesPage() {
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    customerName?: string
+    customerPhone?: string
+  }>
+}) {
   const session = await requireServerSession()
   const store = getCurrentStore(session)
+  const resolvedSearchParams = searchParams ? await searchParams : {}
 
   await connectToDatabase()
   const sales = await Sale.find({ store })
@@ -96,6 +108,12 @@ export default async function SalesPage() {
         : "Unknown User",
     paymentStatus: sale.paymentStatus ?? "paid",
     paymentMethod: sale.paymentMethod,
+    customer: sale.customer
+      ? {
+          name: sale.customer.name ?? "",
+          phone: sale.customer.phone ?? "",
+        }
+      : undefined,
     outstanding: sale.outstanding
       ? {
           customerName: sale.outstanding.customerName ?? "",
@@ -125,6 +143,10 @@ export default async function SalesPage() {
       products={serializedProducts}
       currentUserLabel={session.email}
       isAdmin={session.isAdmin}
+      initialCustomer={{
+        name: resolvedSearchParams.customerName ?? "",
+        phone: resolvedSearchParams.customerPhone ?? "",
+      }}
     />
   )
 }

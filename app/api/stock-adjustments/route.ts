@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const payload = CreateStockAdjustmentSchema.parse(await request.json())
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
     const product = await Product.findOne({ _id: payload.productId, store })
 
     if (!product) {
@@ -68,15 +68,41 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const updatedProduct = await Product.findOneAndUpdate(
-      {
-        _id: payload.productId,
-        store,
-        quantity: { $gte: Math.max(0, -payload.quantityChange) },
-      },
-      { $inc: { quantity: payload.quantityChange } },
-      { returnDocument: "after", runValidators: true }
-    )
+    let updatedProduct
+    let adjustment
+    const dbSession = await db.startSession()
+    try {
+      await dbSession.withTransaction(async () => {
+        updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: payload.productId,
+            store,
+            quantity: { $gte: Math.max(0, -payload.quantityChange) },
+          },
+          { $inc: { quantity: payload.quantityChange } },
+          { returnDocument: "after", runValidators: true, session: dbSession }
+        )
+
+        if (!updatedProduct) return
+
+        const adjustments = await StockAdjustment.create(
+          [
+            {
+              store,
+              productId: updatedProduct._id,
+              sku: updatedProduct.sku,
+              quantityChange: payload.quantityChange,
+              reason: payload.reason,
+              adjustedBy: session.userId,
+            },
+          ],
+          { session: dbSession }
+        )
+        adjustment = adjustments[0]
+      })
+    } finally {
+      await dbSession.endSession()
+    }
 
     if (!updatedProduct) {
       return NextResponse.json(
@@ -84,15 +110,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    const adjustment = await StockAdjustment.create({
-      store,
-      productId: updatedProduct._id,
-      sku: updatedProduct.sku,
-      quantityChange: payload.quantityChange,
-      reason: payload.reason,
-      adjustedBy: session.userId,
-    })
 
     await syncLowStockAlert({
       store,

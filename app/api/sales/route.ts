@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const payload = CreateSaleSchema.parse(await request.json())
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
 
     const productIds = Array.from(
       new Set(payload.items.map((item) => item.productId))
@@ -121,6 +121,16 @@ export async function POST(request: NextRequest) {
     })
 
     const paymentStatus = payload.paymentStatus ?? "paid"
+    const customer = {
+      name:
+        payload.customer?.name?.trim() ||
+        payload.outstanding?.customerName?.trim() ||
+        "",
+      phone:
+        payload.customer?.phone?.trim() ||
+        payload.outstanding?.customerPhone?.trim() ||
+        "",
+    }
     let outstanding: {
       customerName: string
       customerPhone?: string
@@ -137,73 +147,76 @@ export async function POST(request: NextRequest) {
       }
 
       outstanding = {
-        customerName: payload.outstanding?.customerName ?? "",
-        customerPhone: payload.outstanding?.customerPhone ?? "",
+        customerName: customer.name,
+        customerPhone: customer.phone,
         paymentDate,
       }
     }
 
-    const decrementedProducts: Array<{
-      productId: string
-      quantity: number
-    }> = []
-
-    // Goods leave inventory when sold, including sales awaiting payment.
-    for (const [productId, quantity] of requestedQuantities.entries()) {
-      const result = await Product.updateOne(
-        { _id: productId, store, quantity: { $gte: quantity } },
-        { $inc: { quantity: -quantity } }
-      )
-
-      if (result.modifiedCount !== 1) {
-        if (decrementedProducts.length > 0) {
-          await Product.bulkWrite(
-            decrementedProducts.map((entry) => ({
-              updateOne: {
-                filter: { _id: entry.productId, store },
-                update: { $inc: { quantity: entry.quantity } },
-              },
-            }))
+    let sale
+    const dbSession = await db.startSession()
+    try {
+      await dbSession.withTransaction(async () => {
+        // Goods leave inventory when sold, including sales awaiting payment.
+        for (const [productId, quantity] of requestedQuantities.entries()) {
+          const result = await Product.updateOne(
+            { _id: productId, store, quantity: { $gte: quantity } },
+            { $inc: { quantity: -quantity } },
+            { session: dbSession }
           )
+
+          if (result.modifiedCount !== 1) {
+            const product = productMap.get(productId)
+            throw new Error(
+              product
+                ? `Insufficient stock for ${product.name}`
+                : "One or more products not found"
+            )
+          }
         }
 
-        const product = productMap.get(productId)
-        throw new Error(
-          product
-            ? `Insufficient stock for ${product.name}`
-            : "One or more products not found"
-        )
-      }
-
-      decrementedProducts.push({ productId, quantity })
-    }
-
-    let sale
-    try {
-      sale = await Sale.create({
-        store,
-        items: saleItems,
-        totalAmount,
-        createdBy: session.userId,
-        paymentStatus,
-        paymentMethod:
-          paymentStatus === "paid" ? payload.paymentMethod : undefined,
-        outstanding: paymentStatus === "unpaid" ? outstanding : undefined,
-        notes: payload.notes ?? "",
-      })
-    } catch (error) {
-      // Restore inventory if recording the commercial transaction fails.
-      if (decrementedProducts.length > 0) {
-        await Product.bulkWrite(
-          decrementedProducts.map((entry) => ({
-            updateOne: {
-              filter: { _id: entry.productId, store },
-              update: { $inc: { quantity: entry.quantity } },
+        const createdSales = await Sale.create(
+          [
+            {
+              store,
+              items: saleItems,
+              totalAmount,
+              createdBy: session.userId,
+              paymentStatus,
+              paymentMethod:
+                paymentStatus === "paid" ? payload.paymentMethod : undefined,
+              customer:
+                customer.name || customer.phone
+                  ? {
+                      name: customer.name,
+                      phone: customer.phone,
+                    }
+                  : undefined,
+              outstanding: paymentStatus === "unpaid" ? outstanding : undefined,
+              notes: payload.notes ?? "",
             },
-          }))
+          ],
+          { session: dbSession }
         )
-      }
-      throw error
+        sale = createdSales[0]
+
+        if (customer.name || customer.phone) {
+          await Sale.collection.updateOne(
+            { _id: sale._id, store },
+            {
+              $set: {
+                customer: {
+                  name: customer.name,
+                  phone: customer.phone,
+                },
+              },
+            },
+            { session: dbSession }
+          )
+        }
+      })
+    } finally {
+      await dbSession.endSession()
     }
 
     try {
@@ -228,7 +241,19 @@ export async function POST(request: NextRequest) {
       console.error("[Low Stock Alert Sync Error]", error)
     }
 
-    return NextResponse.json({ success: true, data: sale }, { status: 201 })
+    const saleResponse =
+      typeof sale.toObject === "function" ? sale.toObject() : sale
+    if (customer.name || customer.phone) {
+      saleResponse.customer = {
+        name: customer.name,
+        phone: customer.phone,
+      }
+    }
+
+    return NextResponse.json(
+      { success: true, data: saleResponse },
+      { status: 201 }
+    )
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to create sale"

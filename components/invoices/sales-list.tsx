@@ -349,8 +349,15 @@ export function SalesInvoicesList({
                 </TableCell>
               </TableRow>
             ) : (
-              visibleInvoices.map((invoice) => (
-                <TableRow key={invoice._id}>
+              visibleInvoices.map((invoice, invoiceIndex) => (
+                <TableRow
+                  key={invoice._id}
+                  className={
+                    invoiceIndex % 2 === 1
+                      ? "bg-muted/60 hover:bg-muted/70"
+                      : undefined
+                  }
+                >
                   <TableCell className="font-semibold">
                     {invoice.invoiceNumber}
                   </TableCell>

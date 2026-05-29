@@ -284,7 +284,7 @@ export function OutstandingManager({
               </TableCell>
             </TableRow>
           ) : (
-            filteredSales.map((sale) => {
+            filteredSales.map((sale, saleIndex) => {
               const paymentDate = sale.outstanding?.paymentDate
               const paymentDateLabel = paymentDate
                 ? formatInKigali(paymentDate, {
@@ -295,7 +295,14 @@ export function OutstandingManager({
                 : "-"
 
               return (
-                <TableRow key={sale._id}>
+                <TableRow
+                  key={sale._id}
+                  className={
+                    saleIndex % 2 === 1
+                      ? "bg-muted/60 hover:bg-muted/70"
+                      : undefined
+                  }
+                >
                   <TableCell>{sale.createdAtLabel ?? "-"}</TableCell>
                   <TableCell className="whitespace-normal">
                     {sale.outstanding?.customerName ?? "-"}

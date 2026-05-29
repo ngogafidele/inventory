@@ -59,6 +59,10 @@ type SaleClient = {
   notes: string
   paymentStatus?: "paid" | "unpaid"
   paymentMethod?: "cash" | "bank" | "mobile"
+  customer?: {
+    name?: string
+    phone?: string
+  }
   outstanding?: {
     customerName?: string
     customerPhone?: string
@@ -77,9 +81,12 @@ type DraftItem = {
 }
 
 type OutstandingDraft = {
-  customerName: string
-  customerPhone: string
   paymentDate: string
+}
+
+type CustomerDraft = {
+  name: string
+  phone: string
 }
 
 const emptyDraft: DraftItem = {
@@ -108,11 +115,13 @@ export function SalesManager({
   products,
   currentUserLabel,
   isAdmin,
+  initialCustomer,
 }: {
   initialSales: SaleClient[]
   products: ProductOption[]
   currentUserLabel: string
   isAdmin: boolean
+  initialCustomer?: CustomerDraft
 }) {
   const router = useRouter()
   const [sales, setSales] = useState(initialSales)
@@ -126,10 +135,12 @@ export function SalesManager({
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "bank" | "mobile"
   >("cash")
+  const [customerDraft, setCustomerDraft] = useState<CustomerDraft>({
+    name: initialCustomer?.name ?? "",
+    phone: initialCustomer?.phone ?? "",
+  })
   const [outstandingOpen, setOutstandingOpen] = useState(false)
   const [outstandingDraft, setOutstandingDraft] = useState<OutstandingDraft>({
-    customerName: "",
-    customerPhone: "",
     paymentDate: "",
   })
   const [error, setError] = useState<string | null>(null)
@@ -177,8 +188,8 @@ export function SalesManager({
     if (!query) return sales
 
     return sales.filter((sale) => {
-      const name = sale.outstanding?.customerName?.toLowerCase() ?? ""
-      const phone = sale.outstanding?.customerPhone?.toLowerCase() ?? ""
+      const name = getSaleCustomerName(sale).toLowerCase()
+      const phone = getSaleCustomerPhone(sale).toLowerCase()
       const normalizedName = normalizeSearchText(name)
       const normalizedPhone = normalizeSearchText(phone)
 
@@ -238,9 +249,11 @@ export function SalesManager({
     setNotes("")
     setPaymentStatus("paid")
     setPaymentMethod("cash")
+    setCustomerDraft({
+      name: "",
+      phone: "",
+    })
     setOutstandingDraft({
-      customerName: "",
-      customerPhone: "",
       paymentDate: "",
     })
     setError(null)
@@ -252,6 +265,14 @@ export function SalesManager({
 
   const isSoldBelowCost = (item: SaleItemClient) => {
     return item.basePrice !== undefined && item.sellingPrice < item.basePrice
+  }
+
+  function getSaleCustomerName(sale: SaleClient) {
+    return sale.customer?.name?.trim() || sale.outstanding?.customerName || ""
+  }
+
+  function getSaleCustomerPhone(sale: SaleClient) {
+    return sale.customer?.phone?.trim() || sale.outstanding?.customerPhone || ""
   }
 
   const updateProductQuantities = (
@@ -308,9 +329,11 @@ export function SalesManager({
     setNotes(sale.notes ?? "")
     setPaymentStatus(sale.paymentStatus ?? "paid")
     setPaymentMethod(sale.paymentMethod ?? "cash")
+    setCustomerDraft({
+      name: getSaleCustomerName(sale),
+      phone: getSaleCustomerPhone(sale),
+    })
     setOutstandingDraft({
-      customerName: sale.outstanding?.customerName ?? "",
-      customerPhone: sale.outstanding?.customerPhone ?? "",
       paymentDate: sale.outstanding?.paymentDate ?? "",
     })
     setError(null)
@@ -379,11 +402,11 @@ export function SalesManager({
 
     try {
       if (paymentStatus === "unpaid") {
-        if (!outstanding?.customerName.trim()) {
+        if (!customerDraft.name.trim()) {
           setError("Customer name is required for unpaid sales.")
           return false
         }
-        if (!outstanding?.customerPhone.trim()) {
+        if (!customerDraft.phone.trim()) {
           setError("Customer phone is required for unpaid sales.")
           return false
         }
@@ -404,11 +427,18 @@ export function SalesManager({
             notes: notes.trim(),
             paymentStatus,
             paymentMethod: paymentStatus === "paid" ? paymentMethod : undefined,
+            customer:
+              customerDraft.name.trim() || customerDraft.phone.trim()
+                ? {
+                    name: customerDraft.name.trim(),
+                    phone: customerDraft.phone.trim(),
+                  }
+                : undefined,
             outstanding:
               paymentStatus === "unpaid"
                 ? {
-                    customerName: outstanding?.customerName.trim(),
-                    customerPhone: outstanding?.customerPhone.trim(),
+                    customerName: customerDraft.name.trim(),
+                    customerPhone: customerDraft.phone.trim(),
                     paymentDate: outstanding?.paymentDate,
                   }
                 : undefined,
@@ -423,6 +453,12 @@ export function SalesManager({
       }
 
       const savedSale = normalizeSaleResponse(body.data as SaleClient, previousSale)
+      if (!getSaleCustomerName(savedSale) && customerDraft.name.trim()) {
+        savedSale.customer = {
+          name: customerDraft.name.trim(),
+          phone: customerDraft.phone.trim(),
+        }
+      }
       updateProductQuantities(previousSale?.items ?? [], savedSale.items)
       setSales((current) => {
         if (previousSale) {
@@ -600,6 +636,36 @@ export function SalesManager({
 
         <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1 text-sm">
+            Customer name
+            <Input
+              value={customerDraft.name}
+              placeholder="Optional for paid sales"
+              onChange={(event) =>
+                setCustomerDraft((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+            />
+          </label>
+
+          <label className="grid gap-1 text-sm">
+            Customer phone
+            <Input
+              value={customerDraft.phone}
+              placeholder="Optional for paid sales"
+              onChange={(event) =>
+                setCustomerDraft((current) => ({
+                  ...current,
+                  phone: event.target.value,
+                }))
+              }
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1 text-sm">
             Payment status
             <Select
               value={paymentStatus}
@@ -672,30 +738,6 @@ export function SalesManager({
           </DialogHeader>
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
-              Customer name
-              <Input
-                value={outstandingDraft.customerName}
-                onChange={(event) =>
-                  setOutstandingDraft((current) => ({
-                    ...current,
-                    customerName: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Customer phone
-              <Input
-                value={outstandingDraft.customerPhone}
-                onChange={(event) =>
-                  setOutstandingDraft((current) => ({
-                    ...current,
-                    customerPhone: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
               Payment date
               <Input
                 type="date"
@@ -767,9 +809,9 @@ export function SalesManager({
               </TableCell>
             </TableRow>
           ) : (
-            paginatedSales.map((sale) => {
-              const customerName = sale.paymentStatus === "unpaid" ? sale.outstanding?.customerName ?? "-" : "-"
-              const customerPhone = sale.paymentStatus === "unpaid" ? sale.outstanding?.customerPhone ?? "-" : "-"
+            paginatedSales.map((sale, saleIndex) => {
+              const customerName = getSaleCustomerName(sale) || "-"
+              const customerPhone = getSaleCustomerPhone(sale) || "-"
               const items = sale.items.length
                 ? sale.items
                 : [
@@ -785,7 +827,14 @@ export function SalesManager({
               return (
                 <Fragment key={sale._id}>
                   {items.map((item, itemIndex) => (
-                    <TableRow key={`${sale._id}-${item.productId}-${itemIndex}`}>
+                    <TableRow
+                      key={`${sale._id}-${item.productId}-${itemIndex}`}
+                      className={
+                        saleIndex % 2 === 1
+                          ? "bg-muted/60 hover:bg-muted/70"
+                          : undefined
+                      }
+                    >
                       {itemIndex === 0 ? (
                         <TableCell rowSpan={rowSpan}>
                           {sale.createdAtLabel ?? "-"}

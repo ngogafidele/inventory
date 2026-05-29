@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
+import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateProductSchema } from "@/lib/db/validators/product"
@@ -88,7 +89,12 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = CreateProductSchema.parse(await request.json())
-    const { categoryId: _categoryId, ...productInput } = payload
+    const {
+      categoryId: _categoryId,
+      supplierName,
+      supplierPhone,
+      ...productInput
+    } = payload
 
     await connectToDatabase()
 
@@ -109,6 +115,21 @@ export async function POST(request: NextRequest) {
       sku: await generateProductSku(store, payload.name),
       store,
     })
+
+    if (supplierName && supplierPhone && product.quantity > 0) {
+      await ProductReceipt.create({
+        store,
+        productId: product._id,
+        sku: product.sku,
+        supplierName,
+        supplierPhone,
+        quantity: product.quantity,
+        unitCost: product.costPrice,
+        totalCost: product.quantity * product.costPrice,
+        receivedAt: new Date(),
+        receivedBy: session.userId,
+      })
+    }
 
     await syncLowStockAlert({
       store,

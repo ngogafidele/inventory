@@ -10,9 +10,23 @@ export const CreateProductSchema = z
     lowStockThreshold: z.number().int().min(0).optional().default(0),
     costPrice: z.number().min(0),
     price: z.number().min(0),
+    supplierName: z.string().trim().optional(),
+    supplierPhone: z.string().trim().optional(),
     categoryId: objectIdSchema.optional(),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    const hasSupplierName = Boolean(value.supplierName)
+    const hasSupplierPhone = Boolean(value.supplierPhone)
+
+    if (hasSupplierName !== hasSupplierPhone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Supplier name and phone must be provided together.",
+        path: hasSupplierName ? ["supplierPhone"] : ["supplierName"],
+      })
+    }
+  })
 
 export const UpdateProductSchema = z
   .object({

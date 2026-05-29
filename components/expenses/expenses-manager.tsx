@@ -414,8 +414,15 @@ export function ExpensesManager({
               </TableCell>
             </TableRow>
           ) : (
-            filteredExpenses.map((expense) => (
-              <TableRow key={expense._id}>
+            filteredExpenses.map((expense, expenseIndex) => (
+              <TableRow
+                key={expense._id}
+                className={
+                  expenseIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>
                   {expense.dateLabel ??
                     (expense.date

@@ -1,6 +1,6 @@
 // Aggregates administrator dashboard metrics for a selected branch.
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth/middleware"
+import { requireAdmin } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
@@ -88,9 +88,12 @@ function getKigaliTodayRange() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { authorized, session } = await requireAuth(request)
+    const { authorized, session } = await requireAdmin(request)
     if (!authorized || !session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, error: "Admin only" },
+        { status: 403 }
+      )
     }
 
     const store = resolveStoreFromRequest(request, session)

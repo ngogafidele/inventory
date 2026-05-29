@@ -26,6 +26,7 @@ type OutstandingSale = {
     unit?: string
     quantity: number
     basePrice?: number
+    sellingPrice?: number
     lineTotal?: number
   }>
   outstanding?: {

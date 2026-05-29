@@ -193,8 +193,15 @@ export function DashboardStats({ store }: DashboardStatsProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                stats.recentSales.map((sale) => (
-                  <TableRow key={sale._id}>
+                stats.recentSales.map((sale, saleIndex) => (
+                  <TableRow
+                    key={sale._id}
+                    className={
+                      saleIndex % 2 === 1
+                        ? "bg-muted/60 hover:bg-muted/70"
+                        : undefined
+                    }
+                  >
                     <TableCell>
                       {formatInKigali(sale.createdAt, {
                         year: "numeric",
@@ -241,8 +248,15 @@ export function DashboardStats({ store }: DashboardStatsProps) {
                   </TableCell>
                 </TableRow>
               ) : (
-                stats.topMoving.map((item) => (
-                  <TableRow key={item.sku}>
+                stats.topMoving.map((item, itemIndex) => (
+                  <TableRow
+                    key={item.sku}
+                    className={
+                      itemIndex % 2 === 1
+                        ? "bg-muted/60 hover:bg-muted/70"
+                        : undefined
+                    }
+                  >
                     <TableCell>
                       <p className="font-medium">{item.name}</p>
                       <p className="text-xs text-muted-foreground">{item.sku}</p>

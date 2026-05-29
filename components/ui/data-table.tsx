@@ -32,7 +32,12 @@ export function DataTable<T extends Record<string, unknown>>({
         </thead>
         <tbody>
           {data.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b last:border-0">
+            <tr
+              key={rowIndex}
+              className={`border-b last:border-0 ${
+                rowIndex % 2 === 1 ? "bg-muted/60 hover:bg-muted/70" : ""
+              }`}
+            >
               {columns.map((column) => (
                 <td key={column.header} className="px-3 py-2">
                   {String(row[column.accessor] ?? "")}

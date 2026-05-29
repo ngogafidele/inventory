@@ -118,7 +118,7 @@ export function LoanNotifications() {
             </div>
           ) : (
             <div className="max-h-80 overflow-y-auto">
-              {visibleNotifications.map((notification) => {
+              {visibleNotifications.map((notification, notificationIndex) => {
                 const isOverdue = notification.status === "overdue"
                 const Icon = isOverdue ? AlertTriangle : Clock
 
@@ -126,7 +126,9 @@ export function LoanNotifications() {
                   <Link
                     key={notification.id}
                     href="/outstanding"
-                    className="flex gap-3 border-b border-border/70 px-4 py-3 text-sm transition last:border-b-0 hover:bg-muted/60"
+                    className={`flex gap-3 border-b border-border/70 px-4 py-3 text-sm transition last:border-b-0 hover:bg-muted/70 ${
+                      notificationIndex % 2 === 1 ? "bg-muted/60" : ""
+                    }`}
                     onClick={() => setOpen(false)}
                   >
                     <span

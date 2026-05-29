@@ -689,8 +689,15 @@ export default async function ReportsPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {storeReports.map((report) => (
-              <TableRow key={report.store}>
+            {storeReports.map((report, reportIndex) => (
+              <TableRow
+                key={report.store}
+                className={
+                  reportIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>{STORE_LABELS[report.store]}</TableCell>
                 <TableCell>{formatCurrency(report.revenue)}</TableCell>
                 <TableCell>{formatCurrency(report.expenses)}</TableCell>
@@ -729,8 +736,15 @@ export default async function ReportsPage({
                   </TableCell>
                 </TableRow>
               ) : (
-                netTopMovingProducts.map((product) => (
-                  <TableRow key={product.sku}>
+                netTopMovingProducts.map((product, productIndex) => (
+                  <TableRow
+                    key={product.sku}
+                    className={
+                      productIndex % 2 === 1
+                        ? "bg-muted/60 hover:bg-muted/70"
+                        : undefined
+                    }
+                  >
                     <TableCell>
                       <p className="font-medium">{product.name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -774,8 +788,15 @@ export default async function ReportsPage({
                   </TableCell>
                 </TableRow>
               ) : (
-                recentSales.map((sale) => (
-                  <TableRow key={sale._id.toString()}>
+                recentSales.map((sale, saleIndex) => (
+                  <TableRow
+                    key={sale._id.toString()}
+                    className={
+                      saleIndex % 2 === 1
+                        ? "bg-muted/60 hover:bg-muted/70"
+                        : undefined
+                    }
+                  >
                     <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
                     <TableCell>{STORE_LABELS[sale.store]}</TableCell>
                     <TableCell>

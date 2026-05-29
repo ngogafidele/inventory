@@ -19,12 +19,20 @@ const OutstandingSchema = z
   })
   .strict()
 
+const CustomerSchema = z
+  .object({
+    name: z.string().optional(),
+    phone: z.string().optional(),
+  })
+  .strict()
+
 const SalePayloadSchema = z
   .object({
     items: z.array(SaleItemSchema).min(1),
     notes: z.string().optional(),
     paymentStatus: z.enum(["paid", "unpaid"]).optional(),
     paymentMethod: z.enum(["cash", "bank", "mobile"]).optional(),
+    customer: CustomerSchema.optional(),
     outstanding: OutstandingSchema.optional(),
   })
   .strict()

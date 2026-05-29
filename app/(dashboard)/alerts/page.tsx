@@ -58,8 +58,15 @@ export default async function AlertsPage() {
               </TableCell>
             </TableRow>
           ) : (
-            lowStockProducts.map((product) => (
-              <TableRow key={product._id.toString()}>
+            lowStockProducts.map((product, productIndex) => (
+              <TableRow
+                key={product._id.toString()}
+                className={
+                  productIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
                 <TableCell>

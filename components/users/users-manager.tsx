@@ -340,8 +340,15 @@ export function UsersManager({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user._id}>
+          {users.map((user, userIndex) => (
+            <TableRow
+              key={user._id}
+              className={
+                userIndex % 2 === 1
+                  ? "bg-muted/60 hover:bg-muted/70"
+                  : undefined
+              }
+            >
               <TableCell>{user.name}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell className="capitalize">{user.role}</TableCell>
@@ -394,8 +401,15 @@ export function UsersManager({
                 </TableCell>
               </TableRow>
             ) : (
-              loginLogs.map((log) => (
-                <TableRow key={log._id}>
+              loginLogs.map((log, logIndex) => (
+                <TableRow
+                  key={log._id}
+                  className={
+                    logIndex % 2 === 1
+                      ? "bg-muted/60 hover:bg-muted/70"
+                      : undefined
+                  }
+                >
                   <TableCell>{log.name}</TableCell>
                   <TableCell>{log.email}</TableCell>
                   <TableCell className="capitalize">{log.role}</TableCell>

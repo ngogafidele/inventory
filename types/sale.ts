@@ -15,6 +15,10 @@ export type Sale = {
   totalAmount: number
   paymentStatus?: "paid" | "unpaid"
   paymentMethod?: "cash" | "bank" | "mobile"
+  customer?: {
+    name?: string
+    phone?: string
+  }
   outstanding?: {
     customerName: string
     customerPhone?: string

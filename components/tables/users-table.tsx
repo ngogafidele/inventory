@@ -19,8 +19,13 @@ export function UsersTable({ rows }: { rows: UsersTableRow[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
+        {rows.map((row, rowIndex) => (
+          <TableRow
+            key={row.id}
+            className={
+              rowIndex % 2 === 1 ? "bg-muted/60 hover:bg-muted/70" : undefined
+            }
+          >
             <TableCell>{row.name}</TableCell>
             <TableCell>{row.email}</TableCell>
             <TableCell className="capitalize">{row.role}</TableCell>

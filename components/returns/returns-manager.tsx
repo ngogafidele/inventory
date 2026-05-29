@@ -508,8 +508,15 @@ export function ReturnsManager({
               </TableCell>
             </TableRow>
           ) : (
-            paginatedReturns.map((entry) => (
-              <TableRow key={entry._id}>
+            paginatedReturns.map((entry, returnIndex) => (
+              <TableRow
+                key={entry._id}
+                className={
+                  returnIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>{entry.createdAtLabel ?? "-"}</TableCell>
                 <TableCell>
                   <div className="space-y-1">

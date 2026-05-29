@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
+import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
 import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
@@ -176,7 +177,12 @@ export async function DELETE(
 
     await connectToDatabase()
 
-    const [saleReference, returnReference, adjustmentReference] =
+    const [
+      saleReference,
+      returnReference,
+      adjustmentReference,
+      receiptReference,
+    ] =
       await Promise.all([
         Sale.exists({ store, "items.productId": id }),
         ReturnModel.exists({
@@ -187,14 +193,20 @@ export async function DELETE(
           ],
         }),
         StockAdjustment.exists({ store, productId: id }),
+        ProductReceipt.exists({ store, productId: id }),
       ])
 
-    if (saleReference || returnReference || adjustmentReference) {
+    if (
+      saleReference ||
+      returnReference ||
+      adjustmentReference ||
+      receiptReference
+    ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "This product is referenced by sales, returns, or stock history and cannot be deleted.",
+            "This product is referenced by sales, returns, receipts, or stock history and cannot be deleted.",
         },
         { status: 409 }
       )

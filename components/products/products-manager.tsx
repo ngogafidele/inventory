@@ -3,7 +3,8 @@
 // Manages product records, catalog actions, and branch inventory display.
 import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
-import { FileText } from "lucide-react"
+import { formatKigaliDateInput } from "@/lib/utils/time"
+import { FileText, PackagePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,6 +33,9 @@ type ProductClient = {
   lowStockThreshold: number
   costPrice: number
   price: number
+  lastRestock?: string
+  lastRestockLabel?: string
+  supplierName?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -49,6 +53,16 @@ type FormState = {
   lowStockThreshold: string
   costPrice: string
   price: string
+  supplierName: string
+  supplierPhone: string
+}
+
+type ReceiveFormState = {
+  supplierName: string
+  supplierPhone: string
+  quantity: string
+  unitCost: string
+  receivedAt: string
 }
 
 const emptyForm: FormState = {
@@ -59,6 +73,18 @@ const emptyForm: FormState = {
   lowStockThreshold: "",
   costPrice: "",
   price: "",
+  supplierName: "",
+  supplierPhone: "",
+}
+
+function getEmptyReceiveForm(): ReceiveFormState {
+  return {
+    supplierName: "",
+    supplierPhone: "",
+    quantity: "",
+    unitCost: "",
+    receivedAt: formatKigaliDateInput(new Date()),
+  }
 }
 
 const PRODUCTS_PER_PAGE = 20
@@ -70,7 +96,13 @@ export function ProductsManager({
   const [products, setProducts] = useState(initialProducts)
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [activeProductId, setActiveProductId] = useState<string | null>(null)
+  const [receiveProduct, setReceiveProduct] = useState<ProductClient | null>(
+    null
+  )
+  const [receiveForm, setReceiveForm] =
+    useState<ReceiveFormState>(getEmptyReceiveForm)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -85,6 +117,13 @@ export function ProductsManager({
     !Number.isNaN(costValue) &&
     !Number.isNaN(priceValue) &&
     priceValue < costValue
+  const receiveQuantityValue = Number(receiveForm.quantity)
+  const receiveUnitCostValue = Number(receiveForm.unitCost)
+  const receiveTotal =
+    Number.isFinite(receiveQuantityValue) &&
+    Number.isFinite(receiveUnitCostValue)
+      ? Math.max(0, receiveQuantityValue) * Math.max(0, receiveUnitCostValue)
+      : 0
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -143,12 +182,103 @@ export function ProductsManager({
     setDialogOpen(true)
   }
 
+  const openReceive = (product: ProductClient) => {
+    setReceiveProduct(product)
+    setReceiveForm({
+      ...getEmptyReceiveForm(),
+      unitCost: String(product.costPrice ?? 0),
+    })
+    setError(null)
+    setReceiveDialogOpen(true)
+  }
+
+  const submitReceive = async () => {
+    if (!receiveProduct) return
+
+    const supplierName = receiveForm.supplierName.trim()
+    const supplierPhone = receiveForm.supplierPhone.trim()
+    const quantity = Number(receiveForm.quantity)
+    const unitCost = Number(receiveForm.unitCost)
+
+    if (!supplierName || !supplierPhone || !receiveForm.receivedAt) {
+      setError("Supplier name, phone, and received date are required.")
+      return
+    }
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1 ||
+      Number.isNaN(unitCost) ||
+      unitCost < 0
+    ) {
+      setError("Quantity must be at least 1 and cost must be 0 or more.")
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const response = await fetch(
+        `/api/products/${receiveProduct._id}/receipts`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            supplierName,
+            supplierPhone,
+            quantity,
+            unitCost,
+            receivedAt: receiveForm.receivedAt,
+          }),
+        }
+      )
+      const body = await response.json()
+
+      if (!response.ok || !body?.success) {
+        setError(body?.error ?? "Failed to receive product.")
+        return
+      }
+
+      const updatedProduct = body.data.product as ProductClient
+      const receipt = body.data.receipt as
+        | { supplierName?: string; receivedAt?: string }
+        | undefined
+      setProducts((current) =>
+        current.map((product) =>
+          product._id === receiveProduct._id
+            ? {
+                ...updatedProduct,
+                lastRestock: receipt?.receivedAt,
+                lastRestockLabel: receiveForm.receivedAt,
+                supplierName: receipt?.supplierName ?? supplierName,
+              }
+            : product
+        )
+      )
+      setReceiveDialogOpen(false)
+      setReceiveProduct(null)
+      setReceiveForm(getEmptyReceiveForm())
+    } catch {
+      setError("Failed to receive product.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const submitForm = async () => {
     const trimmedName = formState.name.trim()
     const trimmedUnit = formState.unit.trim()
+    const supplierName = formState.supplierName.trim()
+    const supplierPhone = formState.supplierPhone.trim()
 
     if (!trimmedName || !trimmedUnit) {
       setError("Please fill all required fields.")
+      return
+    }
+
+    if (!activeProductId && Boolean(supplierName) !== Boolean(supplierPhone)) {
+      setError("Supplier name and phone must be provided together.")
       return
     }
 
@@ -162,6 +292,9 @@ export function ProductsManager({
       lowStockThreshold: Number(formState.lowStockThreshold || 0),
       costPrice: Number(formState.costPrice || 0),
       price: Number(formState.price || 0),
+      ...(!activeProductId && supplierName && supplierPhone
+        ? { supplierName, supplierPhone }
+        : {}),
     }
 
     try {
@@ -181,14 +314,23 @@ export function ProductsManager({
       }
 
       const updated = body.data as ProductClient
+      const productForList =
+        !activeProductId && supplierName && supplierPhone && updated.quantity > 0
+          ? {
+              ...updated,
+              lastRestock: new Date().toISOString(),
+              lastRestockLabel: "Today",
+              supplierName,
+            }
+          : updated
 
       setProducts((current) => {
         if (activeProductId) {
           return current.map((item) =>
-            item._id === activeProductId ? updated : item
+            item._id === activeProductId ? productForList : item
           )
         }
-        return [updated, ...current]
+        return [productForList, ...current]
       })
       setCurrentPage(1)
 
@@ -375,6 +517,34 @@ export function ProductsManager({
                       />
                     </label>
                   </div>
+                  {!activeProductId ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1 text-sm">
+                        Supplier name
+                        <Input
+                          value={formState.supplierName}
+                          onChange={(event) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              supplierName: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        Supplier phone
+                        <Input
+                          value={formState.supplierPhone}
+                          onChange={(event) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              supplierPhone: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="grid gap-1 text-sm">
                       Selling Price
@@ -423,6 +593,114 @@ export function ProductsManager({
         </div>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <Dialog
+        open={receiveDialogOpen}
+        onOpenChange={(open) => {
+            setReceiveDialogOpen(open)
+          if (!open) {
+            setReceiveProduct(null)
+            setReceiveForm(getEmptyReceiveForm())
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Receive {receiveProduct?.name ?? "product"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              Supplier name
+              <Input
+                value={receiveForm.supplierName}
+                onChange={(event) =>
+                  setReceiveForm((prev) => ({
+                    ...prev,
+                    supplierName: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Supplier phone
+              <Input
+                value={receiveForm.supplierPhone}
+                onChange={(event) =>
+                  setReceiveForm((prev) => ({
+                    ...prev,
+                    supplierPhone: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                Quantity
+                <Input
+                  type="number"
+                  min={1}
+                  value={receiveForm.quantity}
+                  onChange={(event) =>
+                    setReceiveForm((prev) => ({
+                      ...prev,
+                      quantity: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Unit cost
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={receiveForm.unitCost}
+                  onChange={(event) =>
+                    setReceiveForm((prev) => ({
+                      ...prev,
+                      unitCost: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <label className="grid gap-1 text-sm">
+              Received date
+              <Input
+                type="date"
+                value={receiveForm.receivedAt}
+                onChange={(event) =>
+                  setReceiveForm((prev) => ({
+                    ...prev,
+                    receivedAt: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <div className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/40 px-4 py-3 text-sm">
+              <span className="text-muted-foreground">Supplied goods cost</span>
+              <span className="font-semibold text-foreground">
+                {formatCurrency(receiveTotal)}
+              </span>
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReceiveDialogOpen(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitReceive} disabled={submitting}>
+              {submitting ? "Receiving..." : "Receive"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Table>
         <TableHeader>
           <TableRow>
@@ -433,6 +711,8 @@ export function ProductsManager({
             <TableHead>Low Stock Threshold</TableHead>
             <TableHead>Cost Price</TableHead>
             <TableHead>Selling Price</TableHead>
+            <TableHead>Last Restock</TableHead>
+            <TableHead>Supplier</TableHead>
             {isAdmin ? <TableHead className="text-right">Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
@@ -440,15 +720,22 @@ export function ProductsManager({
           {paginatedProducts.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isAdmin ? 8 : 7}
+                colSpan={isAdmin ? 10 : 9}
                 className="text-muted-foreground"
               >
                 No products found.
               </TableCell>
             </TableRow>
           ) : (
-            paginatedProducts.map((product) => (
-              <TableRow key={product._id.toString()}>
+            paginatedProducts.map((product, productIndex) => (
+              <TableRow
+                key={product._id.toString()}
+                className={
+                  productIndex % 2 === 1
+                    ? "bg-muted/60 hover:bg-muted/70"
+                    : undefined
+                }
+              >
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
                 <TableCell>
@@ -474,9 +761,20 @@ export function ProductsManager({
                     ) : null}
                   </div>
                 </TableCell>
+                <TableCell>{product.lastRestockLabel ?? "-"}</TableCell>
+                <TableCell>{product.supplierName ?? "-"}</TableCell>
                 {isAdmin ? (
                   <TableCell className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openReceive(product)}
+                        disabled={submitting}
+                      >
+                        <PackagePlus className="size-4" />
+                        Receive
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"

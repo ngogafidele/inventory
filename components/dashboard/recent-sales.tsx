@@ -16,10 +16,12 @@ export function RecentSales({ items }: { items: RecentSale[] }) {
         <h3 className="text-lg font-semibold text-foreground">Latest</h3>
       </div>
       <div className="space-y-3">
-        {items.map((item) => (
+        {items.map((item, itemIndex) => (
           <div
             key={item.id}
-            className="flex items-center justify-between text-sm"
+            className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-sm ${
+              itemIndex % 2 === 1 ? "bg-muted/60 hover:bg-muted/70" : ""
+            }`}
           >
             <div>
               <p className="font-medium text-foreground">{item.customer}</p>
