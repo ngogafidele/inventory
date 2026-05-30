@@ -176,6 +176,8 @@ export function ProductsManager({
       lowStockThreshold: String(product.lowStockThreshold ?? 0),
       costPrice: String(product.costPrice ?? 0),
       price: String(product.price ?? 0),
+      supplierName: "",
+      supplierPhone: "",
     })
     setActiveProductId(product._id)
     setError(null)
@@ -269,8 +271,8 @@ export function ProductsManager({
   const submitForm = async () => {
     const trimmedName = formState.name.trim()
     const trimmedUnit = formState.unit.trim()
-    const supplierName = formState.supplierName.trim()
-    const supplierPhone = formState.supplierPhone.trim()
+    const supplierName = formState.supplierName?.trim() ?? ""
+    const supplierPhone = formState.supplierPhone?.trim() ?? ""
 
     if (!trimmedName || !trimmedUnit) {
       setError("Please fill all required fields.")
