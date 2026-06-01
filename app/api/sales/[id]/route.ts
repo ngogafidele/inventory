@@ -38,6 +38,10 @@ type ProductForEdit = {
   lowStockThreshold?: number
 }
 
+type ExistingLoanPayment = {
+  amount?: number
+}
+
 function addQuantity(map: Map<string, number>, productId: string, quantity: number) {
   map.set(productId, (map.get(productId) ?? 0) + quantity)
 }
@@ -54,6 +58,11 @@ function getRestockQuantities(items: SaleItemForRestock[]) {
     addQuantity(quantities, item.productId.toString(), item.quantity)
   )
   return quantities
+}
+
+function getAmountPaidFromPayments(payments: ExistingLoanPayment[] | undefined) {
+  if (!Array.isArray(payments)) return 0
+  return payments.reduce((sum, payment) => sum + (payment.amount ?? 0), 0)
 }
 
 async function applyStockChanges(
@@ -209,6 +218,8 @@ export async function PATCH(
       {
         paymentStatus: "paid",
         paymentMethod: payload.paymentMethod,
+        remainingBalance: 0,
+        amountPaid: existingSale.totalAmount,
         ...(customerFromOutstanding && !existingSale.customer
           ? { customer: customerFromOutstanding }
           : {}),
@@ -230,6 +241,7 @@ export async function PATCH(
         { $set: { customer: customerFromOutstanding } }
       )
     }
+    await Invoice.updateOne({ saleId: sale._id, store }, { status: "paid" })
 
     const saleResponse =
       typeof sale.toObject === "function" ? sale.toObject() : sale
@@ -393,6 +405,14 @@ export async function PUT(
         sale.paymentStatus = paymentStatus
         sale.paymentMethod =
           paymentStatus === "paid" ? payload.paymentMethod : undefined
+        const existingPayments = sale.payments as ExistingLoanPayment[] | undefined
+        const amountPaid = getAmountPaidFromPayments(existingPayments)
+        if (paymentStatus === "unpaid" && amountPaid > totalAmount) {
+          throw new Error("Existing payments exceed the updated sale total.")
+        }
+        sale.amountPaid = paymentStatus === "unpaid" ? amountPaid : totalAmount
+        sale.remainingBalance =
+          paymentStatus === "unpaid" ? totalAmount - amountPaid : 0
         sale.customer =
           customer.name || customer.phone
             ? {

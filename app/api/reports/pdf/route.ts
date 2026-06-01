@@ -311,7 +311,9 @@ export async function GET(request: NextRequest) {
         {
           $group: {
             _id: "$store",
-            outstanding: { $sum: "$totalAmount" },
+            outstanding: {
+              $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
+            },
           },
         },
       ]),

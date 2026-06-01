@@ -14,6 +14,7 @@ import type { LoanNotification } from "@/types/loan-notification"
 type NotificationSale = {
   _id: { toString(): string }
   totalAmount: number
+  remainingBalance?: number
   outstanding?: {
     customerName?: string
     customerPhone?: string
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       paymentStatus: "unpaid",
       "outstanding.paymentDate": { $lt: tomorrowStart },
     })
-      .select("totalAmount outstanding")
+      .select("totalAmount remainingBalance outstanding")
       .sort({ "outstanding.paymentDate": 1, createdAt: -1 })
       .lean<NotificationSale[]>()
 
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
           customerName:
             sale.outstanding?.customerName?.trim() || "Unknown customer",
           customerPhone: sale.outstanding?.customerPhone,
-          amount: sale.totalAmount,
+          amount: sale.remainingBalance ?? sale.totalAmount,
           paymentDateLabel: formatInKigali(paymentDate, {
             year: "numeric",
             month: "short",

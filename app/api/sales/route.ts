@@ -193,6 +193,10 @@ export async function POST(request: NextRequest) {
                     }
                   : undefined,
               outstanding: paymentStatus === "unpaid" ? outstanding : undefined,
+              payments: [],
+              amountPaid: 0,
+              remainingBalance:
+                paymentStatus === "unpaid" ? totalAmount : 0,
               notes: payload.notes ?? "",
             },
           ],

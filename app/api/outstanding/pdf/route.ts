@@ -21,6 +21,14 @@ type OutstandingSale = {
   _id: { toString(): string }
   createdAt?: Date
   totalAmount: number
+  amountPaid?: number
+  remainingBalance?: number
+  payments?: Array<{
+    amount: number
+    paymentMethod: "cash" | "bank" | "mobile"
+    paidAt?: Date
+    notes?: string
+  }>
   items: Array<{
     name: string
     unit?: string
@@ -64,6 +72,24 @@ function slugifyCustomerName(value: string) {
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+function getAmountPaid(sale: OutstandingSale) {
+  if (typeof sale.amountPaid === "number") return roundMoney(sale.amountPaid)
+  return roundMoney(
+    (sale.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0)
+  )
+}
+
+function getRemainingBalance(sale: OutstandingSale) {
+  if (typeof sale.remainingBalance === "number") {
+    return roundMoney(sale.remainingBalance)
+  }
+  return Math.max(0, roundMoney(sale.totalAmount - getAmountPaid(sale)))
 }
 
 export async function GET(request: NextRequest) {
@@ -117,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     if (sales.length === 0) {
       return NextResponse.json(
-        { success: false, error: "No outstanding sales found." },
+        { success: false, error: "No loans found." },
         { status: 404 }
       )
     }
@@ -166,7 +192,15 @@ export async function GET(request: NextRequest) {
     }
 
     const totalOutstanding = sales.reduce(
+      (sum, sale) => sum + getRemainingBalance(sale),
+      0
+    )
+    const totalLoanAmount = sales.reduce(
       (sum, sale) => sum + sale.totalAmount,
+      0
+    )
+    const totalPaid = sales.reduce(
+      (sum, sale) => sum + getAmountPaid(sale),
       0
     )
 
@@ -177,6 +211,16 @@ export async function GET(request: NextRequest) {
         customerName,
         customerPhone: customerPhone || undefined,
         rows,
+        payments: sales.flatMap((sale) =>
+          (sale.payments ?? []).map((payment) => ({
+            paidAt: payment.paidAt,
+            amount: payment.amount,
+            paymentMethod: payment.paymentMethod,
+            notes: payment.notes,
+          }))
+        ),
+        totalLoanAmount,
+        totalPaid,
         totalOutstanding,
       },
       { name: "B Ikaze Hardware", address: STORE_ADDRESSES[store] }

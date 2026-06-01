@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import {
   Boxes,
   Coins,
+  Clock,
   Package,
   PackageSearch,
   ReceiptText,
@@ -38,6 +39,7 @@ type StatsResponse = {
   stockValue: number
   revenueToday: number
   costOfSalesToday: number
+  loansToday: number
   grossProfitToday: number
   expensesToday: number
   profitToday: number
@@ -119,6 +121,13 @@ export function DashboardStats({ store }: DashboardStatsProps) {
       icon: Coins,
       className: "border-emerald-200 bg-emerald-50 text-emerald-950",
       iconClassName: "text-emerald-700",
+    },
+    {
+      label: "Today's Loans",
+      value: formatCurrency(stats.loansToday),
+      icon: Clock,
+      className: "border-orange-200 bg-orange-50 text-orange-950",
+      iconClassName: "text-orange-700",
     },
     {
       label: "Cost of Sales",

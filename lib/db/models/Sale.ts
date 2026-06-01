@@ -33,6 +33,21 @@ const CustomerSchema = new Schema(
   { _id: false }
 )
 
+const LoanPaymentSchema = new Schema(
+  {
+    amount: { type: Number, required: true, min: 0 },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "bank", "mobile"],
+      required: true,
+    },
+    paidAt: { type: Date, required: true, default: Date.now },
+    receivedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    notes: { type: String, default: "" },
+  },
+  { _id: false }
+)
+
 const SaleSchema = new Schema(
   {
     store: {
@@ -55,6 +70,9 @@ const SaleSchema = new Schema(
     },
     customer: { type: CustomerSchema, default: undefined },
     outstanding: { type: OutstandingSchema, default: undefined },
+    payments: { type: [LoanPaymentSchema], default: [] },
+    amountPaid: { type: Number, required: true, default: 0, min: 0 },
+    remainingBalance: { type: Number, required: true, default: 0, min: 0 },
     notes: { type: String, default: "" },
   },
   { timestamps: true }

@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
       salesToday,
       invoiceCount,
       unpaidCount,
+      loansToday,
     ] = await Promise.all([
       Product.countDocuments({ store }),
       Product.countDocuments({
@@ -126,6 +127,17 @@ export async function GET(request: NextRequest) {
       Sale.countDocuments(todayFilter),
       Invoice.countDocuments({ store }),
       Invoice.countDocuments({ store, status: "unpaid" }),
+      Sale.aggregate<DashboardMoneyTotal>([
+        { $match: { ...todayFilter, paymentStatus: "unpaid" } },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
+            },
+          },
+        },
+      ]),
     ])
 
     const sales = await Sale.aggregate<DashboardMoneyTotal>([
@@ -188,9 +200,16 @@ export async function GET(request: NextRequest) {
       },
     ])
 
-    const unpaidTotals = await Invoice.aggregate<DashboardMoneyTotal>([
-      { $match: { store, status: "unpaid" } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } },
+    const unpaidTotals = await Sale.aggregate<DashboardMoneyTotal>([
+      { $match: { store, paymentStatus: "unpaid" } },
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
+          },
+        },
+      },
     ])
 
     const todaySalesTotals = await Sale.aggregate<DashboardRevenueTotal>([
@@ -374,6 +393,7 @@ export async function GET(request: NextRequest) {
         revenue: (sales[0]?.total || 0) - returnedRevenue,
         revenueToday,
         costOfSalesToday,
+        loansToday: loansToday[0]?.total || 0,
         grossProfitToday,
         expensesToday: expensesTodayTotal,
         profitToday: grossProfitToday - expensesTodayTotal,

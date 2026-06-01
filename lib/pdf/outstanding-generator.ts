@@ -32,13 +32,23 @@ type OutstandingSaleRow = {
   amount: number
 }
 
+type LoanPaymentRow = {
+  paidAt?: Date | string
+  amount: number
+  paymentMethod: "cash" | "bank" | "mobile"
+  notes?: string
+}
+
 type OutstandingPdfPayload = {
   statementNumber: string
   generatedAt?: Date | string
   customerName: string
   customerPhone?: string
+  totalLoanAmount: number
+  totalPaid: number
   totalOutstanding: number
   rows: OutstandingSaleRow[]
+  payments?: LoanPaymentRow[]
 }
 
 type StoreInfo = {
@@ -205,6 +215,11 @@ function formatDate(value: Date | string | undefined) {
   }).format(new Date(value))
 }
 
+function formatPaymentMethod(value: LoanPaymentRow["paymentMethod"]) {
+  if (value === "mobile") return "Mobile Money"
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
 function truncateToWidth(
   doc: OutstandingPdfDocument,
   value: string | undefined,
@@ -259,7 +274,7 @@ export function generateOutstandingCustomerPDF(
   const titleFont = "Helvetica-Bold"
   const bodyFont = "Helvetica"
   doc.font(titleFont).fontSize(22)
-  const titleHeight = doc.heightOfString("Outstanding Statement", { width: 200 })
+  const titleHeight = doc.heightOfString("Loan Statement", { width: 200 })
   doc.font(bodyFont).fontSize(10)
   const stmtHeight = doc.heightOfString(String(payload.statementNumber ?? ""), { width: 200 })
   const dateHeight = doc.heightOfString(`Date: ${formatDate(payload.generatedAt)}`, { width: 200 })
@@ -358,6 +373,66 @@ export function generateOutstandingCustomerPDF(
     y += TABLE_ROW_HEIGHT + 2
   })
 
+  if (payload.payments?.length) {
+    if (y > 620) {
+      doc.addPage()
+      y = 56
+    }
+
+    y += 12
+    boldText(doc).fontSize(11).text("Payments Received", 48, y)
+    y += 20
+
+    doc
+      .rect(48, y, 499, 24)
+      .fillColor("#eef3f8")
+      .fill()
+      .font("Helvetica-Bold")
+      .fillColor(PRINT_HEADER_TEXT)
+      .fontSize(9)
+      .text("Date", 54, y + 8)
+      .text("Method", 150, y + 8)
+      .text("Notes", 266, y + 8)
+      .text("Amount", 478, y + 8)
+
+    y += 32
+
+    payload.payments.forEach((payment, index) => {
+      if (y + TABLE_ROW_HEIGHT > 700) {
+        doc.addPage()
+        y = 56
+      }
+
+      doc
+        .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
+        .rect(48, y - 6, 499, TABLE_ROW_HEIGHT)
+        .fill()
+        .font("Helvetica")
+        .fillColor(PRINT_TEXT)
+        .fontSize(9)
+        .text(truncateToWidth(doc, formatDate(payment.paidAt), 86), 54, y, {
+          width: 86,
+        })
+        .text(
+          truncateToWidth(doc, formatPaymentMethod(payment.paymentMethod), 100),
+          150,
+          y,
+          { width: 100 }
+        )
+        .text(truncateToWidth(doc, payment.notes, 190), 266, y, {
+          width: 190,
+        })
+        .text(
+          truncateToWidth(doc, formatCurrency(payment.amount), 60),
+          478,
+          y,
+          { width: 60 }
+        )
+
+      y += TABLE_ROW_HEIGHT + 2
+    })
+  }
+
   if (y > 660) {
     doc.addPage()
     y = 56
@@ -372,13 +447,21 @@ export function generateOutstandingCustomerPDF(
     .fontSize(12)
     .fillColor(PRINT_TEXT)
     .text("Total Loans", 330, y + 16)
-    .text(formatCurrency(payload.totalOutstanding), 448, y + 16, {
+    .text(formatCurrency(payload.totalLoanAmount), 448, y + 16, {
+      width: 90,
+    })
+    .text("Paid", 330, y + 34)
+    .text(formatCurrency(payload.totalPaid), 448, y + 34, {
+      width: 90,
+    })
+    .text("Remaining", 330, y + 52)
+    .text(formatCurrency(payload.totalOutstanding), 448, y + 52, {
       width: 90,
     })
 
-  drawStamp(doc, y)
+  drawStamp(doc, y + 42)
 
-  const paymentBlockY = y + 56
+  const paymentBlockY = y + 96
   doc
     .font("Helvetica-Bold")
     .fontSize(9)

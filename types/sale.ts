@@ -15,6 +15,14 @@ export type Sale = {
   totalAmount: number
   paymentStatus?: "paid" | "unpaid"
   paymentMethod?: "cash" | "bank" | "mobile"
+  amountPaid?: number
+  remainingBalance?: number
+  payments?: Array<{
+    amount: number
+    paymentMethod: "cash" | "bank" | "mobile"
+    paidAt?: string
+    notes?: string
+  }>
   customer?: {
     name?: string
     phone?: string

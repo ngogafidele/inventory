@@ -389,12 +389,14 @@ export default async function ReportsPage({
           paymentStatus: "unpaid",
         },
       },
-      {
-        $group: {
-          _id: "$store",
-          outstanding: { $sum: "$totalAmount" },
+        {
+          $group: {
+            _id: "$store",
+            outstanding: {
+              $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
+            },
+          },
         },
-      },
     ]),
     Sale.aggregate<TopMovingProduct>([
       { $match: { store: currentStore, createdAt: periodFilter } },
@@ -607,7 +609,7 @@ export default async function ReportsPage({
       className: "border-lime-200 bg-lime-50 text-lime-950",
     },
     {
-      label: "Outstanding",
+      label: "Loans",
       value: formatCurrency(totals.outstanding),
       className:
         totals.outstanding > 0
@@ -685,7 +687,7 @@ export default async function ReportsPage({
               <TableHead>Profit</TableHead>
               <TableHead>Sales</TableHead>
               <TableHead>Products</TableHead>
-              <TableHead>Outstanding</TableHead>
+              <TableHead>Loans</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
