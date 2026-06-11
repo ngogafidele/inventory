@@ -552,18 +552,6 @@ export async function DELETE(
       )
     }
 
-    const invoice = await Invoice.findOne({ saleId: sale._id, store })
-    if (invoice) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Cannot delete a sale that already has an invoice. Delete the invoice first.",
-        },
-        { status: 409 }
-      )
-    }
-
     const saleItems = sale.items as SaleItemForRestock[]
     const restockQuantities = getRestockQuantities(saleItems)
     const productIds = Array.from(restockQuantities.keys())
@@ -602,6 +590,10 @@ export async function DELETE(
         }
 
         await sale.deleteOne({ session: dbSession })
+        await Invoice.deleteMany(
+          { saleId: sale._id, store },
+          { session: dbSession }
+        )
       })
     } finally {
       await dbSession.endSession()

@@ -353,7 +353,7 @@ export function SalesManager({
   const deleteSale = async (sale: SaleClient) => {
     if (
       !confirm(
-        "Delete this sale? The sold quantities will be returned to inventory."
+        "Delete this sale? The sold quantities will be returned to inventory, and any linked invoice will also be deleted."
       )
     ) {
       return
