@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
-import { AlertTriangle, FilePlus2, Pencil } from "lucide-react"
+import { AlertTriangle, FilePlus2, Pencil, Trash2 } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -167,6 +167,7 @@ export function SalesManager({
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false)
+  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [search, setSearch] = useState("")
 
@@ -346,6 +347,48 @@ export function SalesManager({
       setInvoiceError("Failed to create invoice.")
     } finally {
       setInvoiceSubmitting(false)
+    }
+  }
+
+  const deleteSale = async (sale: SaleClient) => {
+    if (
+      !confirm(
+        "Delete this sale? The sold quantities will be returned to inventory."
+      )
+    ) {
+      return
+    }
+
+    setDeletingSaleId(sale._id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/sales/${sale._id}`, {
+        method: "DELETE",
+      })
+      const body = await response.json().catch(() => null)
+
+      if (!response.ok || !body?.success) {
+        setError(body?.error ?? "Failed to delete sale.")
+        return
+      }
+
+      updateProductQuantities(sale.items, [])
+      setSales((current) => current.filter((item) => item._id !== sale._id))
+      setInvoicedSaleIds((current) => {
+        const next = new Set(current)
+        next.delete(sale._id)
+        return next
+      })
+      if (activeSaleId === sale._id) {
+        resetForm()
+      }
+      refreshLoanNotifications()
+      router.refresh()
+    } catch {
+      setError("Failed to delete sale.")
+    } finally {
+      setDeletingSaleId(null)
     }
   }
 
@@ -1095,15 +1138,30 @@ export function SalesManager({
                                   : "Invoice"}
                               </Button>
                               {isAdmin ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openEdit(sale)}
-                                >
-                                  <Pencil className="size-4" />
-                                  Edit
-                                </Button>
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEdit(sale)}
+                                    disabled={deletingSaleId === sale._id}
+                                  >
+                                    <Pencil className="size-4" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => deleteSale(sale)}
+                                    disabled={deletingSaleId === sale._id}
+                                  >
+                                    <Trash2 className="size-4" />
+                                    {deletingSaleId === sale._id
+                                      ? "Deleting..."
+                                      : "Delete"}
+                                  </Button>
+                                </>
                               ) : null}
                             </div>
                           </TableCell>
