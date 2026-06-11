@@ -273,6 +273,12 @@ function drawMetrics(doc: ReportPdfDocument, y: number, totals: ReturnType<typeo
       border: "#7fc99a",
     },
     {
+      label: "Cost of Sales",
+      value: formatCurrency(totals.costOfSales),
+      fill: "#e0f2fe",
+      border: "#7bb7d7",
+    },
+    {
       label: "Expenses",
       value: formatCurrency(totals.expenses),
       fill: "#ffe3e6",
@@ -344,7 +350,7 @@ function drawMetrics(doc: ReportPdfDocument, y: number, totals: ReturnType<typeo
       })
   })
 
-  return y + 112
+  return y + Math.ceil(metrics.length / 4) * 54 + 4
 }
 
 export function generateReportPDF(payload: ReportPdfPayload) {
