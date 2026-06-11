@@ -1,7 +1,7 @@
 "use client"
 
 // Manages sale recording, editing, payment state, and visible sales history.
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
-import { AlertTriangle, Pencil } from "lucide-react"
+import { AlertTriangle, FilePlus2, Pencil } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -89,6 +89,13 @@ type CustomerDraft = {
   phone: string
 }
 
+type InvoiceDraft = {
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  status: "paid" | "unpaid"
+}
+
 const emptyDraft: DraftItem = {
   productId: "",
   quantity: "",
@@ -115,12 +122,14 @@ export function SalesManager({
   products,
   currentUserLabel,
   isAdmin,
+  initialInvoicedSaleIds,
   initialCustomer,
 }: {
   initialSales: SaleClient[]
   products: ProductOption[]
   currentUserLabel: string
   isAdmin: boolean
+  initialInvoicedSaleIds: string[]
   initialCustomer?: CustomerDraft
 }) {
   const router = useRouter()
@@ -143,8 +152,21 @@ export function SalesManager({
   const [outstandingDraft, setOutstandingDraft] = useState<OutstandingDraft>({
     paymentDate: "",
   })
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
+  const [invoiceSale, setInvoiceSale] = useState<SaleClient | null>(null)
+  const [invoiceDraft, setInvoiceDraft] = useState<InvoiceDraft>({
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    status: "unpaid",
+  })
+  const [invoicedSaleIds, setInvoicedSaleIds] = useState(
+    () => new Set(initialInvoicedSaleIds)
+  )
   const [error, setError] = useState<string | null>(null)
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [search, setSearch] = useState("")
 
@@ -209,16 +231,6 @@ export function SalesManager({
   const visibleStart = filteredSales.length === 0 ? 0 : pageStart + 1
   const visibleEnd = Math.min(pageStart + SALES_PER_PAGE, filteredSales.length)
 
-  useEffect(() => {
-    if (currentPage > pageCount) {
-      setCurrentPage(pageCount)
-    }
-  }, [currentPage, pageCount])
-
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [search])
-
   const setDraftItem = (
     index: number,
     key: keyof DraftItem,
@@ -273,6 +285,68 @@ export function SalesManager({
 
   function getSaleCustomerPhone(sale: SaleClient) {
     return sale.customer?.phone?.trim() || sale.outstanding?.customerPhone || ""
+  }
+
+  const openInvoiceDialog = (sale: SaleClient) => {
+    setInvoiceSale(sale)
+    setInvoiceDraft({
+      customerName: getSaleCustomerName(sale),
+      customerEmail: "",
+      customerPhone: getSaleCustomerPhone(sale),
+      status: sale.paymentStatus === "paid" ? "paid" : "unpaid",
+    })
+    setInvoiceError(null)
+    setInvoiceDialogOpen(true)
+  }
+
+  const closeInvoiceDialog = () => {
+    setInvoiceDialogOpen(false)
+    setInvoiceSale(null)
+    setInvoiceError(null)
+  }
+
+  const createInvoice = async () => {
+    if (!invoiceSale) return
+
+    if (!invoiceDraft.customerName.trim()) {
+      setInvoiceError("Customer name is required for an invoice.")
+      return
+    }
+
+    setInvoiceSubmitting(true)
+    setInvoiceError(null)
+
+    try {
+      const response = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          saleId: invoiceSale._id,
+          customerName: invoiceDraft.customerName.trim(),
+          customerEmail: invoiceDraft.customerEmail.trim() || undefined,
+          customerPhone: invoiceDraft.customerPhone.trim() || undefined,
+          status: invoiceDraft.status,
+        }),
+      })
+
+      const body = await response.json()
+      if (!response.ok || !body?.success) {
+        setInvoiceError(body?.error ?? "Failed to create invoice.")
+        return
+      }
+
+      setInvoicedSaleIds((current) => {
+        const next = new Set(current)
+        next.add(invoiceSale._id)
+        return next
+      })
+      closeInvoiceDialog()
+      router.refresh()
+    } catch {
+      setInvoiceError("Failed to create invoice.")
+    } finally {
+      setInvoiceSubmitting(false)
+    }
   }
 
   const updateProductQuantities = (
@@ -777,10 +851,123 @@ export function SalesManager({
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={invoiceDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setInvoiceDialogOpen(true)
+          } else {
+            closeInvoiceDialog()
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create invoice from sale</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {invoiceSale ? (
+              <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-sm">
+                <p className="font-medium">
+                  {invoiceSale.createdAtLabel ?? "Sale"} -{" "}
+                  {formatCurrency(invoiceSale.totalAmount)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {invoiceSale.items.length} item
+                  {invoiceSale.items.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            ) : null}
+            <label className="grid gap-1 text-sm">
+              Customer name
+              <Input
+                value={invoiceDraft.customerName}
+                onChange={(event) =>
+                  setInvoiceDraft((current) => ({
+                    ...current,
+                    customerName: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                Customer phone
+                <Input
+                  value={invoiceDraft.customerPhone}
+                  onChange={(event) =>
+                    setInvoiceDraft((current) => ({
+                      ...current,
+                      customerPhone: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Customer email
+                <Input
+                  type="email"
+                  value={invoiceDraft.customerEmail}
+                  onChange={(event) =>
+                    setInvoiceDraft((current) => ({
+                      ...current,
+                      customerEmail: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <label className="grid gap-1 text-sm">
+              Invoice status
+              <Select
+                value={invoiceDraft.status}
+                onValueChange={(value) =>
+                  setInvoiceDraft((current) => ({
+                    ...current,
+                    status: value as "paid" | "unpaid",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unpaid">Unpaid</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            {invoiceError ? (
+              <p className="text-sm text-destructive">{invoiceError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeInvoiceDialog}
+              disabled={invoiceSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={createInvoice}
+              disabled={invoiceSubmitting}
+            >
+              {invoiceSubmitting ? "Creating..." : "Create Invoice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="w-full sm:max-w-sm">
         <Input
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value)
+            setCurrentPage(1)
+          }}
           placeholder="Search by customer name or phone"
           aria-label="Search sales by customer name or phone"
         />
@@ -798,13 +985,13 @@ export function SalesManager({
             <TableHead>Total</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Logged By</TableHead>
-            {isAdmin ? <TableHead>Actions</TableHead> : null}
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {paginatedSales.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 10 : 9} className="text-muted-foreground">
+              <TableCell colSpan={10} className="text-muted-foreground">
                 {search.trim() ? "No matching sales found." : "No sales recorded yet."}
               </TableCell>
             </TableRow>
@@ -893,19 +1080,33 @@ export function SalesManager({
                           <TableCell rowSpan={rowSpan}>
                             {sale.createdByName ?? "Unknown User"}
                           </TableCell>
-                          {isAdmin ? (
-                            <TableCell rowSpan={rowSpan}>
+                          <TableCell rowSpan={rowSpan}>
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => openEdit(sale)}
+                                onClick={() => openInvoiceDialog(sale)}
+                                disabled={invoicedSaleIds.has(sale._id)}
                               >
-                                <Pencil className="size-4" />
-                                Edit
+                                <FilePlus2 className="size-4" />
+                                {invoicedSaleIds.has(sale._id)
+                                  ? "Invoiced"
+                                  : "Invoice"}
                               </Button>
-                            </TableCell>
-                          ) : null}
+                              {isAdmin ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openEdit(sale)}
+                                >
+                                  <Pencil className="size-4" />
+                                  Edit
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
                         </>
                       ) : null}
                     </TableRow>

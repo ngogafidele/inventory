@@ -2,6 +2,7 @@
 import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"
 import { Product } from "@/lib/db/models/Product"
+import { Invoice } from "@/lib/db/models/Invoice"
 import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
@@ -55,6 +56,10 @@ type SalesPageProduct = {
   costPrice?: number
 }
 
+type SalesPageInvoice = {
+  saleId?: { toString(): string }
+}
+
 function isPopulatedSaleUser(
   value: SalesPageSale["createdBy"]
 ): value is PopulatedSaleUser {
@@ -85,6 +90,9 @@ export default async function SalesPage({
   const products = await Product.find({ store })
     .sort({ name: 1 })
     .lean<SalesPageProduct[]>()
+  const invoices = await Invoice.find({ store, sourceType: "sale" })
+    .select("saleId")
+    .lean<SalesPageInvoice[]>()
 
   const serializedSales = sales.map((sale) => ({
     ...sale,
@@ -143,6 +151,9 @@ export default async function SalesPage({
       products={serializedProducts}
       currentUserLabel={session.email}
       isAdmin={session.isAdmin}
+      initialInvoicedSaleIds={invoices
+        .map((invoice) => invoice.saleId?.toString())
+        .filter((saleId): saleId is string => Boolean(saleId))}
       initialCustomer={{
         name: resolvedSearchParams.customerName ?? "",
         phone: resolvedSearchParams.customerPhone ?? "",
