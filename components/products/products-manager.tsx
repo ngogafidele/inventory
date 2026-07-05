@@ -4,8 +4,12 @@
 import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
-import { FileText, PackagePlus } from "lucide-react"
+import { Activity, FileText, PackagePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  ProductMonitorDialog,
+  type MonitorProduct,
+} from "@/components/products/product-monitor-dialog"
 import {
   Dialog,
   DialogContent,
@@ -101,6 +105,10 @@ export function ProductsManager({
   )
   const [receiveForm, setReceiveForm] =
     useState<ReceiveFormState>(getEmptyReceiveForm)
+  const [monitorProduct, setMonitorProduct] = useState<MonitorProduct | null>(
+    null
+  )
+  const [monitorOpen, setMonitorOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -182,6 +190,16 @@ export function ProductsManager({
     setActiveProductId(product._id)
     setError(null)
     setDialogOpen(true)
+  }
+
+  const openMonitor = (product: ProductClient) => {
+    setMonitorProduct({
+      _id: product._id,
+      name: product.name,
+      sku: product.sku,
+      unit: product.unit ?? "pcs",
+    })
+    setMonitorOpen(true)
   }
 
   const openReceive = (product: ProductClient) => {
@@ -703,6 +721,14 @@ export function ProductsManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ProductMonitorDialog
+        product={monitorProduct}
+        open={monitorOpen}
+        onOpenChange={(open) => {
+          setMonitorOpen(open)
+          if (!open) setMonitorProduct(null)
+        }}
+      />
       <Table>
         <TableHeader>
           <TableRow>
@@ -768,6 +794,14 @@ export function ProductsManager({
                 {isAdmin ? (
                   <TableCell className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openMonitor(product)}
+                      >
+                        <Activity className="size-4" />
+                        Monitor
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
