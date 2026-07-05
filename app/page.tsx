@@ -53,6 +53,23 @@ export default function Home() {
 
   return (
     <div className="brand-auth-surface min-h-screen">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+        style={{ zIndex: 0 }}
+      >
+        <Image
+          src="/images/auth-background.webp"
+          alt=""
+          fill
+          priority
+          quality={55}
+          sizes="100vw"
+          className="object-cover opacity-52"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(247,249,252,0.54)_0%,rgba(247,249,252,0.34)_48%,rgba(247,249,252,0.22)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--brand-navy)_6%,transparent),transparent_50%,color-mix(in_srgb,var(--brand-orange)_4%,transparent))]" />
+      </div>
       <main className="mx-auto grid min-h-screen max-w-6xl items-center gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-10">
         <section className="order-2 space-y-8 lg:order-1">
           <div className="flex items-center gap-4">
