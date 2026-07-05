@@ -82,6 +82,11 @@
   --sidebar-accent-foreground: #00183d;
   --sidebar-border: #d8dee8;
   --sidebar-ring: #f08010;
+  /* Chart series colors validated for CVD separation and 3:1 contrast on the light card surface. */
+  --viz-revenue: #1c5cab;
+  --viz-cost: #eb6834;
+  --viz-profit: #006300;
+  --viz-loss: #d03b3b;
 }
 
 .dark {
@@ -116,6 +121,11 @@
   --sidebar-accent-foreground: #f7f9fc;
   --sidebar-border: #1f3555;
   --sidebar-ring: #f08010;
+  /* Chart series colors re-stepped for the dark card surface (#0b1a33), validated as a set. */
+  --viz-revenue: #3987e5;
+  --viz-cost: #d95926;
+  --viz-profit: #00a651;
+  --viz-loss: #e66767;
 }
 
 @layer base {

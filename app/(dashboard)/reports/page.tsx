@@ -12,6 +12,7 @@ import { Expense } from "@/lib/db/models/Expense"
 import { STORE_LABELS } from "@/lib/utils/constants"
 import { formatCurrency } from "@/lib/utils/format"
 import {
+  KIGALI_TIME_ZONE,
   formatInKigali,
   formatKigaliDateInput,
   getKigaliDateParts,
@@ -20,6 +21,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ReportPrintButton } from "@/components/reports/report-print-button"
+import {
+  DailyTrendChart,
+  ProfitBridgeChart,
+  TopProductsChart,
+  type DailyTrendPoint,
+} from "@/components/reports/report-charts"
 import {
   Table,
   TableBody,
@@ -88,6 +95,23 @@ type ExpenseTotals = {
 type OutstandingSaleTotals = {
   _id: StoreKey
   outstanding: number
+}
+
+type DailySaleTotals = {
+  _id: string
+  revenue: number
+  grossProfit: number
+}
+
+type DailyReturnTotals = {
+  _id: string
+  revenue: number
+  grossProfit: number
+}
+
+type DailyExpenseTotals = {
+  _id: string
+  expenses: number
 }
 
 type SearchParams = Promise<{
@@ -265,6 +289,9 @@ export default async function ReportsPage({
     topMovingProducts,
     returnedProductTotals,
     recentSales,
+    dailySaleTotals,
+    dailyReturnTotals,
+    dailyExpenseTotals,
   ] = await Promise.all([
     Product.aggregate<ProductTotals>([
       { $match: { store: currentStore } },
@@ -491,6 +518,88 @@ export default async function ReportsPage({
       .sort({ createdAt: -1 })
       .limit(8)
       .lean<RecentSale[]>(),
+    Sale.aggregate<DailySaleTotals>([
+      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$createdAt",
+              timezone: KIGALI_TIME_ZONE,
+            },
+          },
+          revenue: { $sum: "$items.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$items.lineTotal",
+                { $multiply: ["$items.basePrice", "$items.quantity"] },
+              ],
+            },
+          },
+        },
+      },
+    ]),
+    ReturnModel.aggregate<DailyReturnTotals>([
+      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $unwind: "$returnItems" },
+      {
+        $lookup: {
+          from: "products",
+          localField: "returnItems.productId",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$createdAt",
+              timezone: KIGALI_TIME_ZONE,
+            },
+          },
+          revenue: { $sum: "$returnItems.lineTotal" },
+          grossProfit: {
+            $sum: {
+              $subtract: [
+                "$returnItems.lineTotal",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$returnItems.basePrice",
+                        { $ifNull: ["$product.costPrice", 0] },
+                      ],
+                    },
+                    "$returnItems.quantity",
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    ]),
+    Expense.aggregate<DailyExpenseTotals>([
+      { $match: { store: currentStore, date: periodFilter } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$date",
+              timezone: KIGALI_TIME_ZONE,
+            },
+          },
+          expenses: { $sum: "$amount" },
+        },
+      },
+    ]),
   ])
 
   const productMap = new Map(productTotals.map((item) => [item._id, item]))
@@ -562,6 +671,31 @@ export default async function ReportsPage({
     .filter((product) => product.soldQuantity !== 0 || product.revenue !== 0)
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 8)
+  const dailySaleMap = new Map(dailySaleTotals.map((item) => [item._id, item]))
+  const dailyReturnMap = new Map(
+    dailyReturnTotals.map((item) => [item._id, item])
+  )
+  const dailyExpenseMap = new Map(
+    dailyExpenseTotals.map((item) => [item._id, item])
+  )
+  const dailyTrend: DailyTrendPoint[] = []
+  for (let day = range.from; day < range.endExclusive; day = addDays(day, 1)) {
+    const key = formatKigaliDateInput(day)
+    const daySales = dailySaleMap.get(key)
+    const dayReturns = dailyReturnMap.get(key)
+    const dayExpenses = dailyExpenseMap.get(key)
+    const revenue = (daySales?.revenue ?? 0) - (dayReturns?.revenue ?? 0)
+    const grossProfit =
+      (daySales?.grossProfit ?? 0) - (dayReturns?.grossProfit ?? 0)
+
+    dailyTrend.push({
+      date: key,
+      label: formatInKigali(day, { month: "short", day: "2-digit" }),
+      revenue,
+      costOfSales: revenue - grossProfit,
+      profit: grossProfit - (dayExpenses?.expenses ?? 0),
+    })
+  }
   const fromLabel = formatDateOnly(range.from)
   const toLabel = formatDateOnly(range.to)
   const cards = [
@@ -667,6 +801,80 @@ export default async function ReportsPage({
             </p>
           </div>
         ))}
+      </div>
+
+      <section className="space-y-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            Daily Trend
+          </p>
+          <h3 className="text-lg font-semibold">
+            Revenue, Cost &amp; Profit by Day
+          </h3>
+        </div>
+        <DailyTrendChart data={dailyTrend} />
+        <details className="text-sm">
+          <summary className="text-xs text-muted-foreground">
+            View daily figures as a table
+          </summary>
+          <div className="mt-2 max-h-72 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Revenue</TableHead>
+                  <TableHead>Cost of Sales</TableHead>
+                  <TableHead>Profit</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyTrend.map((point) => (
+                  <TableRow key={point.date}>
+                    <TableCell>{point.label}</TableCell>
+                    <TableCell>{formatCurrency(point.revenue)}</TableCell>
+                    <TableCell>{formatCurrency(point.costOfSales)}</TableCell>
+                    <TableCell>{formatCurrency(point.profit)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </details>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="space-y-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              Financial Breakdown
+            </p>
+            <h3 className="text-lg font-semibold">From Revenue to Profit</h3>
+          </div>
+          <ProfitBridgeChart
+            totals={{
+              revenue: totals.revenue,
+              costOfSales: totals.costOfSales,
+              expenses: totals.expenses,
+              profit: totals.profit,
+            }}
+          />
+        </section>
+
+        <section className="space-y-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              Product Performance
+            </p>
+            <h3 className="text-lg font-semibold">Top Products by Revenue</h3>
+          </div>
+          <TopProductsChart
+            data={netTopMovingProducts.map((product) => ({
+              sku: product.sku,
+              name: product.name,
+              revenue: product.revenue,
+            }))}
+          />
+        </section>
       </div>
 
       <section className="space-y-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
