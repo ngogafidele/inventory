@@ -44,6 +44,8 @@ type SalesPageSale = {
     paymentDate?: Date
   }
   items: SalesPageSaleItem[]
+  deletedAt?: Date
+  deletedBy?: PopulatedSaleUser | { toString(): string }
 }
 
 type SalesPageProduct = {
@@ -83,18 +85,25 @@ export default async function SalesPage({
   const resolvedSearchParams = searchParams ? await searchParams : {}
 
   await connectToDatabase()
-  const sales = await Sale.find({ store })
-    .populate("createdBy", "name email")
-    .sort({ createdAt: -1 })
-    .lean<SalesPageSale[]>()
-  const products = await Product.find({ store })
-    .sort({ name: 1 })
-    .lean<SalesPageProduct[]>()
-  const invoices = await Invoice.find({ store, sourceType: "sale" })
-    .select("saleId")
-    .lean<SalesPageInvoice[]>()
+  const [sales, deletedSales, products, invoices] = await Promise.all([
+    Sale.find({ store, deletedAt: null })
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 })
+      .lean<SalesPageSale[]>(),
+    session.isAdmin
+      ? Sale.find({ store, deletedAt: { $ne: null } })
+          .populate("createdBy", "name email")
+          .populate("deletedBy", "name email")
+          .sort({ deletedAt: -1 })
+          .lean<SalesPageSale[]>()
+      : Promise.resolve<SalesPageSale[]>([]),
+    Product.find({ store }).sort({ name: 1 }).lean<SalesPageProduct[]>(),
+    Invoice.find({ store, sourceType: "sale", deletedAt: null })
+      .select("saleId")
+      .lean<SalesPageInvoice[]>(),
+  ])
 
-  const serializedSales = sales.map((sale) => ({
+  const serializeSale = (sale: SalesPageSale) => ({
     ...sale,
     _id: sale._id.toString(),
     createdAt: sale.createdAt?.toISOString(),
@@ -133,6 +142,21 @@ export default async function SalesPage({
       ...item,
       productId: item.productId.toString(),
     })),
+  })
+
+  const serializedSales = sales.map(serializeSale)
+  const serializedDeletedSales = deletedSales.map((sale) => ({
+    ...serializeSale(sale),
+    deletedAtLabel: sale.deletedAt
+      ? formatInKigali(sale.deletedAt, {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+        })
+      : "-",
+    deletedByName: isPopulatedSaleUser(sale.deletedBy)
+      ? sale.deletedBy.name ?? sale.deletedBy.email ?? "Unknown User"
+      : "Unknown User",
   }))
 
   const serializedProducts = products.map((product) => ({
@@ -148,6 +172,7 @@ export default async function SalesPage({
   return (
     <SalesManager
       initialSales={serializedSales}
+      initialDeletedSales={serializedDeletedSales}
       products={serializedProducts}
       currentUserLabel={session.email}
       isAdmin={session.isAdmin}

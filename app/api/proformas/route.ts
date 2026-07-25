@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     await connectToDatabase()
 
     const sale = payload.saleId
-      ? await Sale.findOne({ _id: payload.saleId, store })
+      ? await Sale.findOne({ _id: payload.saleId, store, deletedAt: null })
       : null
 
     if (payload.saleId && !sale) {

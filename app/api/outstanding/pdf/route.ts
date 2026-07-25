@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
     const query: Record<string, unknown> = {
       store,
       paymentStatus: "unpaid",
+      deletedAt: null,
       "outstanding.customerName": nameRegex,
     }
 

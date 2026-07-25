@@ -582,7 +582,7 @@ export function ProductsManager({
                         }
                       />
                       {showPriceWarning ? (
-                        <span className="text-xs text-amber-600">
+                        <span className="text-xs text-warning">
                           Warning: selling price is below cost price.
                         </span>
                       ) : null}
@@ -770,7 +770,7 @@ export function ProductsManager({
                   <div className="flex items-center gap-2">
                     <span>{product.quantity}</span>
                     {product.quantity <= (product.lowStockThreshold ?? 0) ? (
-                      <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      <span className="rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                         Low
                       </span>
                     ) : null}
@@ -783,7 +783,7 @@ export function ProductsManager({
                   <div className="flex items-center gap-2">
                     <span>{formatCurrency(product.price)}</span>
                     {product.price < (product.costPrice ?? 0) ? (
-                      <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      <span className="rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                         Below cost
                       </span>
                     ) : null}

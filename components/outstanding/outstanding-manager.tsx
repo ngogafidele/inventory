@@ -3,7 +3,7 @@
 // Manages receivable searches, settlements, statements, and admin corrections.
 import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CreditCard, Download, Search, Trash2 } from "lucide-react"
+import { CreditCard, Download, RotateCcw, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -64,6 +64,11 @@ type OutstandingSale = {
   }>
 }
 
+type DeletedOutstandingSale = OutstandingSale & {
+  deletedByName?: string
+  deletedAtLabel?: string
+}
+
 function summarizeItems(items: OutstandingItem[]) {
   if (!items.length) return "-"
   return items
@@ -108,13 +113,18 @@ function refreshLoanNotifications() {
 
 export function OutstandingManager({
   initialSales,
+  initialDeletedSales,
   isAdmin,
 }: {
   initialSales: OutstandingSale[]
+  initialDeletedSales: DeletedOutstandingSale[]
   isAdmin: boolean
 }) {
   const router = useRouter()
   const [sales, setSales] = useState(initialSales)
+  const [deletedSales, setDeletedSales] = useState(initialDeletedSales)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -293,6 +303,36 @@ export function OutstandingManager({
     }
   }
 
+  const restoreLoan = async (sale: DeletedOutstandingSale) => {
+    setRestoreError(null)
+    setRestoringId(sale._id)
+
+    try {
+      const response = await fetch(`/api/sales/${sale._id}/restore`, {
+        method: "POST",
+      })
+      const body = await response.json().catch(() => null)
+
+      if (!response.ok || !body?.success) {
+        setRestoreError(body?.error ?? "Failed to restore loan.")
+        return
+      }
+
+      const { deletedByName: _deletedByName, deletedAtLabel: _deletedAtLabel, ...restored } =
+        sale
+      setDeletedSales((current) =>
+        current.filter((item) => item._id !== sale._id)
+      )
+      setSales((current) => [restored, ...current])
+      refreshLoanNotifications()
+      router.refresh()
+    } catch {
+      setRestoreError("Failed to restore loan.")
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -461,6 +501,81 @@ export function OutstandingManager({
         </TableBody>
       </Table>
 
+      {isAdmin ? (
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div>
+            <h3 className="text-lg font-semibold">Deleted Loans</h3>
+            <p className="text-sm text-muted-foreground">
+              Retained for records and excluded from all business numbers.
+              Restoring returns a loan to the active list and re-applies its
+              stock movement.
+            </p>
+          </div>
+
+          {restoreError ? (
+            <p className="text-sm text-destructive">{restoreError}</p>
+          ) : null}
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Sale Date</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Total Loan</TableHead>
+                <TableHead>Remaining</TableHead>
+                <TableHead>Deleted By</TableHead>
+                <TableHead>Deleted On</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deletedSales.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-muted-foreground">
+                    No deleted loans.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                deletedSales.map((sale) => (
+                  <TableRow key={sale._id}>
+                    <TableCell>{sale.createdAtLabel ?? "-"}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      {sale.outstanding?.customerName ?? "-"}
+                    </TableCell>
+                    <TableCell>
+                      {sale.outstanding?.customerPhone ?? "-"}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      {summarizeItems(sale.items)}
+                    </TableCell>
+                    <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
+                    <TableCell>
+                      {formatCurrency(getRemainingBalance(sale))}
+                    </TableCell>
+                    <TableCell>{sale.deletedByName ?? "-"}</TableCell>
+                    <TableCell>{sale.deletedAtLabel ?? "-"}</TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => restoreLoan(sale)}
+                        disabled={restoringId === sale._id}
+                      >
+                        <RotateCcw className="size-4" />
+                        {restoringId === sale._id ? "Restoring..." : "Restore"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </section>
+      ) : null}
+
       <Dialog
         open={paymentTarget !== null}
         onOpenChange={(open) => {
@@ -583,8 +698,9 @@ export function OutstandingManager({
             <DialogHeader>
               <DialogTitle>Delete loan?</DialogTitle>
               <DialogDescription>
-                This will delete the loan sale and return its items to stock.
-                This action cannot be undone.
+                This removes the loan from active records and business numbers
+                and returns its items to stock. You can restore it later from
+                Deleted Loans.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

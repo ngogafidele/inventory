@@ -450,7 +450,7 @@ export function ReturnsManager({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Stock Impact</p>
-                <p className="text-base font-semibold text-emerald-600">
+                <p className="text-base font-semibold text-success">
                   Returned items added back to stock
                 </p>
               </div>

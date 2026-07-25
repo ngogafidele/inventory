@@ -92,7 +92,7 @@ export async function GET(
       StockAdjustment.find({ store, productId: id })
         .select("quantityChange reason createdAt")
         .lean<{ quantityChange: number; reason: string; createdAt: Date }[]>(),
-      Sale.find({ store, "items.productId": id })
+      Sale.find({ store, "items.productId": id, deletedAt: null })
         .select("items paymentStatus createdAt")
         .lean<
           {

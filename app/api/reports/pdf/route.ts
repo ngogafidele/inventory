@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
         },
       ]),
       Sale.aggregate<SaleTotals>([
-        { $match: { store, createdAt: periodFilter } },
+        { $match: { store, deletedAt: null, createdAt: periodFilter } },
         { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
         {
           $group: {
@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
         },
       ]),
       Invoice.aggregate<InvoiceTotals>([
-        { $match: { store, issuedAt: periodFilter } },
+        { $match: { store, deletedAt: null, issuedAt: periodFilter } },
         {
           $group: {
             _id: "$store",
@@ -304,6 +304,7 @@ export async function GET(request: NextRequest) {
         {
           $match: {
             store,
+            deletedAt: null,
             createdAt: periodFilter,
             paymentStatus: "unpaid",
           },
@@ -318,7 +319,7 @@ export async function GET(request: NextRequest) {
         },
       ]),
       Sale.aggregate<TopMovingProduct>([
-        { $match: { store, createdAt: periodFilter } },
+        { $match: { store, deletedAt: null, createdAt: periodFilter } },
         { $unwind: "$items" },
         {
           $group: {
@@ -405,7 +406,7 @@ export async function GET(request: NextRequest) {
           },
         },
       ]),
-      Sale.find({ store, createdAt: periodFilter })
+      Sale.find({ store, deletedAt: null, createdAt: periodFilter })
         .select("store items totalAmount createdAt")
         .sort({ createdAt: -1 })
         .limit(8)

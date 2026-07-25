@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
     }
 
     await connectToDatabase()
-    const sales = await Sale.find({ store }).sort({ createdAt: -1 })
+    const sales = await Sale.find({ store, deletedAt: null }).sort({
+      createdAt: -1,
+    })
 
     return NextResponse.json({ success: true, data: sales })
   } catch (error) {
@@ -156,7 +158,7 @@ export async function POST(request: NextRequest) {
     let sale
     const dbSession = await db.startSession()
     try {
-      await dbSession.withTransaction(async () => {
+      sale = await dbSession.withTransaction(async () => {
         // Goods leave inventory when sold, including sales awaiting payment.
         for (const [productId, quantity] of requestedQuantities.entries()) {
           const result = await Product.updateOne(
@@ -202,11 +204,11 @@ export async function POST(request: NextRequest) {
           ],
           { session: dbSession }
         )
-        sale = createdSales[0]
+        const createdSale = createdSales[0]
 
         if (customer.name || customer.phone) {
           await Sale.collection.updateOne(
-            { _id: sale._id, store },
+            { _id: createdSale._id, store },
             {
               $set: {
                 customer: {
@@ -218,9 +220,15 @@ export async function POST(request: NextRequest) {
             { session: dbSession }
           )
         }
+
+        return createdSale
       })
     } finally {
       await dbSession.endSession()
+    }
+
+    if (!sale) {
+      throw new Error("Failed to create sale")
     }
 
     try {

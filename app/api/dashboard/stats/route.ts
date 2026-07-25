@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
     const today = getKigaliTodayRange()
     const todayFilter = {
       store,
+      deletedAt: null,
       createdAt: { $gte: today.start, $lt: today.end },
     }
 
@@ -123,10 +124,10 @@ export async function GET(request: NextRequest) {
         store,
         $expr: { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
       }),
-      Sale.countDocuments({ store }),
+      Sale.countDocuments({ store, deletedAt: null }),
       Sale.countDocuments(todayFilter),
-      Invoice.countDocuments({ store }),
-      Invoice.countDocuments({ store, status: "unpaid" }),
+      Invoice.countDocuments({ store, deletedAt: null }),
+      Invoice.countDocuments({ store, status: "unpaid", deletedAt: null }),
       Sale.aggregate<DashboardMoneyTotal>([
         { $match: { ...todayFilter, paymentStatus: "unpaid" } },
         {
@@ -141,7 +142,7 @@ export async function GET(request: NextRequest) {
     ])
 
     const sales = await Sale.aggregate<DashboardMoneyTotal>([
-      { $match: { store } },
+      { $match: { store, deletedAt: null } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } },
     ])
 
@@ -201,7 +202,7 @@ export async function GET(request: NextRequest) {
     ])
 
     const unpaidTotals = await Sale.aggregate<DashboardMoneyTotal>([
-      { $match: { store, paymentStatus: "unpaid" } },
+      { $match: { store, paymentStatus: "unpaid", deletedAt: null } },
       {
         $group: {
           _id: null,
@@ -297,14 +298,14 @@ export async function GET(request: NextRequest) {
       .limit(8)
       .lean<DashboardLowStockProduct[]>()
 
-    const recentSales = await Sale.find({ store })
+    const recentSales = await Sale.find({ store, deletedAt: null })
       .select("totalAmount items createdAt")
       .sort({ createdAt: -1 })
       .limit(6)
       .lean<DashboardRecentSale[]>()
 
     const topMoving = await Sale.aggregate<DashboardTopMovingProduct>([
-      { $match: { store } },
+      { $match: { store, deletedAt: null } },
       { $unwind: "$items" },
       {
         $group: {

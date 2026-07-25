@@ -309,7 +309,7 @@ export default async function ReportsPage({
       },
     ]),
     Sale.aggregate<SaleTotals>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore, deletedAt: null, createdAt: periodFilter } },
       { $unwind: { path: "$items", preserveNullAndEmptyArrays: true } },
       {
         $group: {
@@ -374,7 +374,7 @@ export default async function ReportsPage({
       },
     ]),
     Invoice.aggregate<InvoiceTotals>([
-      { $match: { store: currentStore, issuedAt: periodFilter } },
+      { $match: { store: currentStore, deletedAt: null, issuedAt: periodFilter } },
       {
         $group: {
           _id: "$store",
@@ -412,6 +412,7 @@ export default async function ReportsPage({
       {
         $match: {
           store: currentStore,
+          deletedAt: null,
           createdAt: periodFilter,
           paymentStatus: "unpaid",
         },
@@ -426,7 +427,7 @@ export default async function ReportsPage({
         },
     ]),
     Sale.aggregate<TopMovingProduct>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore, deletedAt: null, createdAt: periodFilter } },
       { $unwind: "$items" },
       {
         $group: {
@@ -513,13 +514,13 @@ export default async function ReportsPage({
         },
       },
     ]),
-    Sale.find({ store: currentStore, createdAt: periodFilter })
+    Sale.find({ store: currentStore, deletedAt: null, createdAt: periodFilter })
       .select("store items totalAmount createdAt")
       .sort({ createdAt: -1 })
       .limit(8)
       .lean<RecentSale[]>(),
     Sale.aggregate<DailySaleTotals>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore, deletedAt: null, createdAt: periodFilter } },
       { $unwind: "$items" },
       {
         $group: {

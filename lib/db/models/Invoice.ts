@@ -40,6 +40,9 @@ const InvoiceSchema = new Schema(
     },
     issuedAt: { type: Date, default: Date.now },
     dueDate: { type: Date },
+    // Mirrors the soft-delete state of the source sale.
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true }
 )
@@ -48,6 +51,7 @@ InvoiceSchema.index({ store: 1 })
 InvoiceSchema.index({ store: 1, invoiceNumber: 1 }, { unique: true })
 InvoiceSchema.index({ store: 1, saleId: 1 })
 InvoiceSchema.index({ store: 1, proformaId: 1 })
+InvoiceSchema.index({ store: 1, deletedAt: 1 })
 
 export type InvoiceDocument = mongoose.InferSchemaType<typeof InvoiceSchema>
 

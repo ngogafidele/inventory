@@ -74,6 +74,9 @@ const SaleSchema = new Schema(
     amountPaid: { type: Number, required: true, default: 0, min: 0 },
     remainingBalance: { type: Number, required: true, default: 0, min: 0 },
     notes: { type: String, default: "" },
+    // A deleted sale is retained for audit but excluded from every business number.
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true }
 )
@@ -81,6 +84,8 @@ const SaleSchema = new Schema(
 SaleSchema.index({ store: 1 })
 // Supports the loan queue ordered by expected collection date.
 SaleSchema.index({ store: 1, paymentStatus: 1, "outstanding.paymentDate": 1 })
+// Separates active records from the retained (soft-deleted) set.
+SaleSchema.index({ store: 1, deletedAt: 1 })
 
 export type SaleDocument = mongoose.InferSchemaType<typeof SaleSchema>
 

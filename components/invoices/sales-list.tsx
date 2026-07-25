@@ -81,8 +81,8 @@ function formatDate(date: string | undefined) {
 function StatusBadge({ status }: { status: InvoiceStatus }) {
   const classes =
     status === "paid"
-      ? "bg-green-100 text-green-800 border-green-200"
-      : "bg-amber-100 text-amber-800 border-amber-200"
+      ? "bg-success/10 text-success border-success/30"
+      : "bg-warning/10 text-warning border-warning/30"
 
   return (
     <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${classes}`}>

@@ -207,6 +207,13 @@ export async function PATCH(
       )
     }
 
+    if (existingSale.deletedAt) {
+      return NextResponse.json(
+        { success: false, error: "Cannot update a deleted sale. Restore it first." },
+        { status: 400 }
+      )
+    }
+
     const customerFromOutstanding = existingSale.outstanding
       ? {
           name: existingSale.outstanding.customerName ?? "",
@@ -289,6 +296,13 @@ export async function PUT(
       return NextResponse.json(
         { success: false, error: "Sale not found" },
         { status: 404 }
+      )
+    }
+
+    if (sale.deletedAt) {
+      return NextResponse.json(
+        { success: false, error: "Cannot update a deleted sale. Restore it first." },
+        { status: 400 }
       )
     }
 
@@ -545,6 +559,13 @@ export async function DELETE(
       )
     }
 
+    if (sale.deletedAt) {
+      return NextResponse.json(
+        { success: false, error: "Sale is already deleted" },
+        { status: 400 }
+      )
+    }
+
     if (loanOnly && sale.paymentStatus !== "unpaid") {
       return NextResponse.json(
         { success: false, error: "Only unpaid loan sales can be deleted here." },
@@ -574,7 +595,8 @@ export async function DELETE(
     const dbSession = await db.startSession()
     try {
       await dbSession.withTransaction(async () => {
-        // Removing a recorded sale reverses its physical stock movement.
+        // Soft-deleting a recorded sale reverses its physical stock movement
+        // while retaining the record itself for audit and possible restore.
         if (restockQuantities.size > 0) {
           await Product.bulkWrite(
             Array.from(restockQuantities.entries()).map(
@@ -589,9 +611,19 @@ export async function DELETE(
           )
         }
 
-        await sale.deleteOne({ session: dbSession })
-        await Invoice.deleteMany(
-          { saleId: sale._id, store },
+        const deletionMeta = {
+          deletedAt: new Date(),
+          deletedBy: session.userId,
+        }
+        await Sale.updateOne(
+          { _id: sale._id, store },
+          { $set: deletionMeta },
+          { session: dbSession }
+        )
+        // The linked invoice follows its source sale out of the active set.
+        await Invoice.updateMany(
+          { saleId: sale._id, store, deletedAt: null },
+          { $set: deletionMeta },
           { session: dbSession }
         )
       })

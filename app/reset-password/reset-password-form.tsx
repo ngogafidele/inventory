@@ -59,7 +59,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <div
           className={
             isSuccess
-              ? "mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700"
+              ? "mb-4 rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success"
               : "mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
           }
         >

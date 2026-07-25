@@ -41,6 +41,8 @@ type OutstandingSale = {
   payments?: LoanPayment[]
   items: OutstandingSaleItem[]
   outstanding?: OutstandingDetails
+  deletedAt?: Date
+  deletedBy?: PopulatedSaleUser | { toString(): string }
 }
 
 function isPopulatedSaleUser(
@@ -72,15 +74,29 @@ export default async function OutstandingPage() {
   const store = getCurrentStore(session)
 
   await connectToDatabase()
-  const sales = await Sale.find({
-    store,
-    paymentStatus: "unpaid",
-  })
-    .populate("createdBy", "name email")
-    .sort({ "outstanding.paymentDate": 1, createdAt: -1 })
-    .lean<OutstandingSale[]>()
+  const [sales, deletedSales] = await Promise.all([
+    Sale.find({
+      store,
+      paymentStatus: "unpaid",
+      deletedAt: null,
+    })
+      .populate("createdBy", "name email")
+      .sort({ "outstanding.paymentDate": 1, createdAt: -1 })
+      .lean<OutstandingSale[]>(),
+    session.isAdmin
+      ? Sale.find({
+          store,
+          paymentStatus: "unpaid",
+          deletedAt: { $ne: null },
+        })
+          .populate("createdBy", "name email")
+          .populate("deletedBy", "name email")
+          .sort({ deletedAt: -1 })
+          .lean<OutstandingSale[]>()
+      : Promise.resolve<OutstandingSale[]>([]),
+  ])
 
-  const serializedSales = sales.map((sale) => ({
+  const serializeLoan = (sale: OutstandingSale) => ({
     _id: sale._id.toString(),
     createdAt: sale.createdAt?.toISOString(),
     createdAtLabel: sale.createdAt
@@ -114,11 +130,27 @@ export default async function OutstandingPage() {
           paymentDate: sale.outstanding.paymentDate?.toISOString(),
         }
       : undefined,
+  })
+
+  const serializedSales = sales.map(serializeLoan)
+  const serializedDeletedSales = deletedSales.map((sale) => ({
+    ...serializeLoan(sale),
+    deletedAtLabel: sale.deletedAt
+      ? formatInKigali(sale.deletedAt, {
+          year: "numeric",
+          month: "short",
+          day: "2-digit",
+        })
+      : "-",
+    deletedByName: isPopulatedSaleUser(sale.deletedBy)
+      ? sale.deletedBy.name ?? sale.deletedBy.email ?? "Unknown User"
+      : "Unknown User",
   }))
 
   return (
     <OutstandingManager
       initialSales={serializedSales}
+      initialDeletedSales={serializedDeletedSales}
       isAdmin={session.isAdmin}
     />
   )

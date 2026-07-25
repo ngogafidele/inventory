@@ -356,8 +356,8 @@ export function ProductMonitorDialog({
                                 <span
                                   className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${
                                     isIn
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-rose-50 text-rose-700"
+                                      ? "bg-success/10 text-success"
+                                      : "bg-warning/10 text-warning"
                                   }`}
                                 >
                                   {isIn ? (
@@ -371,7 +371,7 @@ export function ProductMonitorDialog({
                               <TableCell>{event.reason}</TableCell>
                               <TableCell
                                 className={`text-right font-medium ${
-                                  isIn ? "text-emerald-700" : "text-rose-700"
+                                  isIn ? "text-success" : "text-warning"
                                 }`}
                               >
                                 {isIn ? "+" : "−"}

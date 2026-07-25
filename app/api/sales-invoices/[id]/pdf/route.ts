@@ -33,7 +33,7 @@ export async function GET(
 
     const { id } = await context.params
     await connectToDatabase()
-    const invoice = await Invoice.findOne({ _id: id, store })
+    const invoice = await Invoice.findOne({ _id: id, store, deletedAt: null })
 
     if (!invoice) {
       return NextResponse.json(

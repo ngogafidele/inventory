@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
-import { AlertTriangle, FilePlus2, Pencil, Trash2 } from "lucide-react"
+import { AlertTriangle, FilePlus2, Pencil, RotateCcw, Trash2 } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -73,6 +73,11 @@ type SaleClient = {
   createdAt?: string
 }
 
+type DeletedSaleClient = SaleClient & {
+  deletedByName?: string
+  deletedAtLabel?: string
+}
+
 type DraftItem = {
   productId: string
   quantity: string
@@ -119,6 +124,7 @@ function refreshLoanNotifications() {
 
 export function SalesManager({
   initialSales,
+  initialDeletedSales,
   products,
   currentUserLabel,
   isAdmin,
@@ -126,6 +132,7 @@ export function SalesManager({
   initialCustomer,
 }: {
   initialSales: SaleClient[]
+  initialDeletedSales: DeletedSaleClient[]
   products: ProductOption[]
   currentUserLabel: string
   isAdmin: boolean
@@ -134,6 +141,9 @@ export function SalesManager({
 }) {
   const router = useRouter()
   const [sales, setSales] = useState(initialSales)
+  const [deletedSales, setDeletedSales] = useState(initialDeletedSales)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const [productOptions, setProductOptions] = useState(products)
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraft])
   const [activeSaleId, setActiveSaleId] = useState<string | null>(null)
@@ -353,7 +363,7 @@ export function SalesManager({
   const deleteSale = async (sale: SaleClient) => {
     if (
       !confirm(
-        "Delete this sale? The sold quantities will be returned to inventory, and any linked invoice will also be deleted."
+        "Delete this sale? The sold quantities return to inventory and any linked invoice is hidden too. You can restore it later from Deleted Sales."
       )
     ) {
       return
@@ -430,6 +440,42 @@ export function SalesManager({
     createdAtLabel: sale.createdAtLabel ?? previous?.createdAtLabel,
     createdByName: sale.createdByName ?? previous?.createdByName ?? currentUserLabel,
   })
+
+  const restoreSale = async (sale: DeletedSaleClient) => {
+    setRestoreError(null)
+    setRestoringId(sale._id)
+
+    try {
+      const response = await fetch(`/api/sales/${sale._id}/restore`, {
+        method: "POST",
+      })
+      const body = await response.json().catch(() => null)
+
+      if (!response.ok || !body?.success) {
+        setRestoreError(body?.error ?? "Failed to restore sale.")
+        return
+      }
+
+      const { deletedByName: _deletedByName, deletedAtLabel: _deletedAtLabel, ...restored } =
+        sale
+      // Restoring re-applies the original stock deduction.
+      updateProductQuantities([], restored.items)
+      setDeletedSales((current) =>
+        current.filter((item) => item._id !== sale._id)
+      )
+      setSales((current) =>
+        [restored, ...current].sort((a, b) =>
+          (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
+        )
+      )
+      refreshLoanNotifications()
+      router.refresh()
+    } catch {
+      setRestoreError("Failed to restore sale.")
+    } finally {
+      setRestoringId(null)
+    }
+  }
 
   const openEdit = (sale: SaleClient) => {
     setActiveSaleId(sale._id)
@@ -1113,8 +1159,8 @@ export function SalesManager({
                             <span
                               className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
                                 sale.paymentStatus === "unpaid"
-                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700"
-                                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                                  ? "border-warning/30 bg-warning/10 text-warning"
+                                  : "border-success/30 bg-success/10 text-success"
                               }`}
                             >
                               {getStatusLabel(sale.paymentStatus)}
@@ -1203,6 +1249,82 @@ export function SalesManager({
           </Button>
         </div>
       </div>
+
+      {isAdmin ? (
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div>
+            <h3 className="text-lg font-semibold">Deleted Sales</h3>
+            <p className="text-sm text-muted-foreground">
+              Retained for records and excluded from all business numbers.
+              Restoring returns a sale to the active list and re-applies its
+              stock movement.
+            </p>
+          </div>
+
+          {restoreError ? (
+            <p className="text-sm text-destructive">{restoreError}</p>
+          ) : null}
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Items Sold</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Deleted By</TableHead>
+                <TableHead>Deleted On</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deletedSales.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-muted-foreground">
+                    No deleted sales.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                deletedSales.map((sale) => (
+                  <TableRow key={sale._id}>
+                    <TableCell>{sale.createdAtLabel ?? "-"}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      {getSaleCustomerName(sale) || "-"}
+                    </TableCell>
+                    <TableCell className="whitespace-normal wrap-break-word">
+                      {sale.items
+                        .map(
+                          (item) =>
+                            `${getItemLabel(item)} (${item.quantity} ${
+                              item.unit ?? "pcs"
+                            })`
+                        )
+                        .join(", ")}
+                    </TableCell>
+                    <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
+                    <TableCell>{getStatusLabel(sale.paymentStatus)}</TableCell>
+                    <TableCell>{sale.deletedByName ?? "-"}</TableCell>
+                    <TableCell>{sale.deletedAtLabel ?? "-"}</TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => restoreSale(sale)}
+                        disabled={restoringId === sale._id}
+                      >
+                        <RotateCcw className="size-4" />
+                        {restoringId === sale._id ? "Restoring..." : "Restore"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </section>
+      ) : null}
     </div>
   )
 }

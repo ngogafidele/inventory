@@ -135,7 +135,7 @@ export function LoanNotifications() {
                       className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${
                         isOverdue
                           ? "bg-destructive/10 text-destructive"
-                          : "bg-amber-500/10 text-amber-700"
+                          : "bg-warning/10 text-warning"
                       }`}
                     >
                       <Icon className="size-4" />
@@ -149,7 +149,7 @@ export function LoanNotifications() {
                           className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold ${
                             isOverdue
                               ? "border-destructive/30 bg-destructive/10 text-destructive"
-                              : "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                              : "border-warning/30 bg-warning/10 text-warning"
                           }`}
                         >
                           {isOverdue ? "Overdue" : "Due"}

@@ -38,7 +38,9 @@ export async function GET(request: NextRequest) {
     }
 
     await connectToDatabase()
-    const invoices = await Invoice.find({ store }).sort({ issuedAt: -1 })
+    const invoices = await Invoice.find({ store, deletedAt: null }).sort({
+      issuedAt: -1,
+    })
 
     return NextResponse.json({ success: true, data: invoices })
   } catch (error) {
@@ -71,7 +73,11 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase()
 
-    const sale = await Sale.findOne({ _id: payload.saleId, store })
+    const sale = await Sale.findOne({
+      _id: payload.saleId,
+      store,
+      deletedAt: null,
+    })
     if (!sale) {
       return NextResponse.json(
         { success: false, error: "Sale not found" },

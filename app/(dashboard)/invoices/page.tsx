@@ -16,7 +16,7 @@ export default async function InvoicesPage() {
   const store = getCurrentStore(session)
 
   await connectToDatabase()
-  const sales = await Sale.find({ store })
+  const sales = await Sale.find({ store, deletedAt: null })
     .select("totalAmount createdAt")
     .sort({ createdAt: -1 })
     .lean<InvoicePageSale[]>()

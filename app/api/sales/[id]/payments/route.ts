@@ -87,6 +87,7 @@ export async function POST(
       _id: id,
       store,
       paymentStatus: "unpaid",
+      deletedAt: null,
     }).lean<LoanSaleForPayment | null>()
 
     if (!sale) {
@@ -154,7 +155,7 @@ export async function POST(
     }
 
     const updatedSale = await Sale.findOneAndUpdate(
-      { _id: sale._id, store, paymentStatus: "unpaid" },
+      { _id: sale._id, store, paymentStatus: "unpaid", deletedAt: null },
       update,
       { new: true }
     )

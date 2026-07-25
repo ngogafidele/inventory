@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     const sales = await Sale.find({
       store,
       paymentStatus: "unpaid",
+      deletedAt: null,
       "outstanding.paymentDate": { $lt: tomorrowStart },
     })
       .select("totalAmount remainingBalance outstanding")

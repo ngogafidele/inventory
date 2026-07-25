@@ -85,7 +85,9 @@ export default async function CustomersSuppliersPage() {
 
   await connectToDatabase()
   const [sales, receipts] = await Promise.all([
-    Sale.find({ store }).sort({ createdAt: -1 }).lean<CustomerSale[]>(),
+    Sale.find({ store, deletedAt: null })
+      .sort({ createdAt: -1 })
+      .lean<CustomerSale[]>(),
     ProductReceipt.find({ store })
       .populate("productId", "name sku unit")
       .sort({ receivedAt: -1, createdAt: -1 })
