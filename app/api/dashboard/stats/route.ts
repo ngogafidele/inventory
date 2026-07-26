@@ -9,6 +9,7 @@ import { Sale } from "@/lib/db/models/Sale"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Expense } from "@/lib/db/models/Expense"
 import { formatKigaliDateInput, parseKigaliDateInput } from "@/lib/utils/time"
+import { getPaymentMethodTotals } from "@/lib/db/payments"
 
 type DashboardSaleItem = {
   quantity: number
@@ -371,6 +372,11 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.soldQuantity - a.soldQuantity)
       .slice(0, 6)
 
+    const paymentsByMethod = await getPaymentMethodTotals(store, {
+      $gte: today.start,
+      $lt: today.end,
+    })
+
     const returnedRevenue = returns[0]?.revenue || 0
     const returnedRevenueToday = todayReturnTotals[0]?.revenue || 0
     const returnedGrossProfitToday = todayReturnTotals[0]?.grossProfit || 0
@@ -417,6 +423,7 @@ export async function GET(request: NextRequest) {
           ),
         })),
         topMoving: netTopMovingProducts,
+        paymentsByMethod,
       },
     })
   } catch (error) {

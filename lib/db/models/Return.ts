@@ -22,6 +22,11 @@ const ReturnSchema = new Schema(
       enum: ["store1", "store2"],
       required: true,
     },
+    // Links a return to the sale it reverses, so reports can attribute it to
+    // the sale's period. saleDate is denormalized from the sale's createdAt so
+    // reporting never needs a join and survives a later soft-delete of the sale.
+    saleId: { type: Schema.Types.ObjectId, ref: "Sale", default: null },
+    saleDate: { type: Date, default: null },
     returnItems: { type: [ReturnItemSchema], required: true },
     replacementItems: { type: [ReturnItemSchema], default: [] },
     totalReturnAmount: { type: Number, required: true, min: 0 },
@@ -33,6 +38,9 @@ const ReturnSchema = new Schema(
 )
 
 ReturnSchema.index({ store: 1, createdAt: -1 })
+// Supports report attribution by the reversed sale's date.
+ReturnSchema.index({ store: 1, saleDate: -1 })
+ReturnSchema.index({ store: 1, saleId: 1 })
 
 export type ReturnDocument = mongoose.InferSchemaType<typeof ReturnSchema>
 

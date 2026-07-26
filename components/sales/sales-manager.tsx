@@ -4,6 +4,7 @@
 import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils/format"
+import { formatKigaliDateInput } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -180,6 +181,8 @@ export function SalesManager({
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [search, setSearch] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
 
   const productMap = useMemo(
     () => new Map(productOptions.map((product) => [product._id, product])),
@@ -218,9 +221,14 @@ export function SalesManager({
   const filteredSales = useMemo(() => {
     const query = search.trim().toLowerCase()
     const normalizedQuery = normalizeSearchText(search.trim())
-    if (!query) return sales
 
     return sales.filter((sale) => {
+      const saleDate = sale.createdAt ? formatKigaliDateInput(sale.createdAt) : ""
+      if (dateFrom && (!saleDate || saleDate < dateFrom)) return false
+      if (dateTo && (!saleDate || saleDate > dateTo)) return false
+
+      if (!query) return true
+
       const name = getSaleCustomerName(sale).toLowerCase()
       const phone = getSaleCustomerPhone(sale).toLowerCase()
       const normalizedName = normalizeSearchText(name)
@@ -233,7 +241,32 @@ export function SalesManager({
         normalizedPhone.includes(normalizedQuery)
       )
     })
-  }, [sales, search])
+  }, [sales, search, dateFrom, dateTo])
+
+  const filteredDeletedSales = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    const normalizedQuery = normalizeSearchText(search.trim())
+
+    return deletedSales.filter((sale) => {
+      const saleDate = sale.createdAt ? formatKigaliDateInput(sale.createdAt) : ""
+      if (dateFrom && (!saleDate || saleDate < dateFrom)) return false
+      if (dateTo && (!saleDate || saleDate > dateTo)) return false
+
+      if (!query) return true
+
+      const name = getSaleCustomerName(sale).toLowerCase()
+      const phone = getSaleCustomerPhone(sale).toLowerCase()
+      const normalizedName = normalizeSearchText(name)
+      const normalizedPhone = normalizeSearchText(phone)
+
+      return (
+        name.includes(query) ||
+        phone.includes(query) ||
+        normalizedName.includes(normalizedQuery) ||
+        normalizedPhone.includes(normalizedQuery)
+      )
+    })
+  }, [deletedSales, search, dateFrom, dateTo])
 
   const pageCount = Math.max(1, Math.ceil(filteredSales.length / SALES_PER_PAGE))
   const safeCurrentPage = Math.min(currentPage, pageCount)
@@ -442,6 +475,14 @@ export function SalesManager({
   })
 
   const restoreSale = async (sale: DeletedSaleClient) => {
+    if (
+      !confirm(
+        "Restore this sale? It returns to the active list and business numbers, and its sold quantities are deducted from inventory again."
+      )
+    ) {
+      return
+    }
+
     setRestoreError(null)
     setRestoringId(sale._id)
 
@@ -1050,16 +1091,59 @@ export function SalesManager({
         </DialogContent>
       </Dialog>
 
-      <div className="w-full sm:max-w-sm">
-        <Input
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value)
-            setCurrentPage(1)
-          }}
-          placeholder="Search by customer name or phone"
-          aria-label="Search sales by customer name or phone"
-        />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="w-full sm:max-w-sm">
+          <Input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setCurrentPage(1)
+            }}
+            placeholder="Search by customer name or phone"
+            aria-label="Search sales by customer name or phone"
+          />
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-sm">
+            From
+            <Input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(event) => {
+                setDateFrom(event.target.value)
+                setCurrentPage(1)
+              }}
+              aria-label="Filter sales from date"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            To
+            <Input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(event) => {
+                setDateTo(event.target.value)
+                setCurrentPage(1)
+              }}
+              aria-label="Filter sales to date"
+            />
+          </label>
+          {dateFrom || dateTo ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDateFrom("")
+                setDateTo("")
+                setCurrentPage(1)
+              }}
+            >
+              Clear dates
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <Table>
@@ -1081,7 +1165,9 @@ export function SalesManager({
           {paginatedSales.length === 0 ? (
             <TableRow>
               <TableCell colSpan={10} className="text-muted-foreground">
-                {search.trim() ? "No matching sales found." : "No sales recorded yet."}
+                {search.trim() || dateFrom || dateTo
+                  ? "No matching sales found."
+                  : "No sales recorded yet."}
               </TableCell>
             </TableRow>
           ) : (
@@ -1279,14 +1365,16 @@ export function SalesManager({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deletedSales.length === 0 ? (
+              {filteredDeletedSales.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-muted-foreground">
-                    No deleted sales.
+                    {dateFrom || dateTo || search.trim()
+                      ? "No matching deleted sales."
+                      : "No deleted sales."}
                   </TableCell>
                 </TableRow>
               ) : (
-                deletedSales.map((sale) => (
+                filteredDeletedSales.map((sale) => (
                   <TableRow key={sale._id}>
                     <TableCell>{sale.createdAtLabel ?? "-"}</TableCell>
                     <TableCell className="whitespace-normal">

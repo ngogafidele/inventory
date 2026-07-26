@@ -12,6 +12,7 @@ export const ReturnItemSchema = z
 
 export const CreateReturnSchema = z
   .object({
+    saleId: objectIdSchema,
     returnItems: z.array(ReturnItemSchema).min(1),
     notes: z.string().optional(),
   })

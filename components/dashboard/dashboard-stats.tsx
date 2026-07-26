@@ -3,12 +3,15 @@
 // Fetches and presents administrator metrics for the selected store.
 import { useEffect, useState } from "react"
 import {
+  Banknote,
   Boxes,
   Coins,
   Clock,
+  Landmark,
   Package,
   PackageSearch,
   ReceiptText,
+  Smartphone,
   TrendingUp,
   Warehouse,
   Wallet,
@@ -65,6 +68,11 @@ type StatsResponse = {
     soldQuantity: number
     salesValue: number
   }>
+  paymentsByMethod: {
+    cash: number
+    bank: number
+    mobile: number
+  }
 }
 
 export function DashboardStats({ store }: DashboardStatsProps) {
@@ -153,6 +161,27 @@ export function DashboardStats({ store }: DashboardStatsProps) {
           : "border-amber-200 bg-amber-50 text-amber-950",
       iconClassName:
         stats.profitToday >= 0 ? "text-teal-700" : "text-amber-700",
+    },
+    {
+      label: "Cash Payments",
+      value: formatCurrency(stats.paymentsByMethod.cash),
+      icon: Banknote,
+      className: "border-green-200 bg-green-50 text-green-950",
+      iconClassName: "text-green-700",
+    },
+    {
+      label: "Bank Payments",
+      value: formatCurrency(stats.paymentsByMethod.bank),
+      icon: Landmark,
+      className: "border-blue-200 bg-blue-50 text-blue-950",
+      iconClassName: "text-blue-700",
+    },
+    {
+      label: "Mobile Money",
+      value: formatCurrency(stats.paymentsByMethod.mobile),
+      icon: Smartphone,
+      className: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950",
+      iconClassName: "text-fuchsia-700",
     },
   ]
 

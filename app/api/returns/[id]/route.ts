@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ReturnModel } from "@/lib/db/models/Return"
+import { Sale } from "@/lib/db/models/Sale"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { UpdateReturnSchema } from "@/lib/db/validators/return"
@@ -23,6 +24,30 @@ type ProductDocumentLike = {
   price: number
   costPrice?: number
   lowStockThreshold?: number
+}
+
+type SoldInfo = {
+  name: string
+  sku: string
+  unit: string
+  basePrice: number
+  soldQuantity: number
+}
+
+type SaleForReturn = {
+  _id: { toString(): string }
+  items: Array<{
+    productId: { toString(): string }
+    name: string
+    sku: string
+    unit?: string
+    quantity: number
+    basePrice: number
+  }>
+}
+
+type PriorReturn = {
+  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
 }
 
 export async function PUT(
@@ -70,6 +95,82 @@ export async function PUT(
           unitPrice: item.unitPrice,
         }))
 
+    // Sale-linked returns stay capped by what the sale sold (minus other
+    // returns against it); legacy returns without a sale keep free-form edits.
+    const linkedSaleId = existingReturn.saleId
+      ? existingReturn.saleId.toString()
+      : null
+    let soldMap: Map<string, SoldInfo> | null = null
+    if (linkedSaleId) {
+      const sale = await Sale.findOne({ _id: linkedSaleId, store }).lean<SaleForReturn | null>()
+      if (!sale) {
+        return NextResponse.json(
+          { success: false, error: "Linked sale not found" },
+          { status: 404 }
+        )
+      }
+
+      const resolvedSoldMap = new Map<string, SoldInfo>()
+      sale.items.forEach((item) => {
+        const key = item.productId.toString()
+        const existing = resolvedSoldMap.get(key)
+        if (existing) {
+          existing.soldQuantity += item.quantity
+        } else {
+          resolvedSoldMap.set(key, {
+            name: item.name,
+            sku: item.sku,
+            unit: item.unit ?? "pcs",
+            basePrice: item.basePrice,
+            soldQuantity: item.quantity,
+          })
+        }
+      })
+      soldMap = resolvedSoldMap
+
+      const otherReturns = await ReturnModel.find({
+        store,
+        saleId: linkedSaleId,
+        _id: { $ne: existingReturn._id },
+      })
+        .select("returnItems")
+        .lean<PriorReturn[]>()
+      const otherReturned = new Map<string, number>()
+      otherReturns.forEach((entry) => {
+        entry.returnItems.forEach((item) => {
+          const key = item.productId.toString()
+          otherReturned.set(key, (otherReturned.get(key) ?? 0) + item.quantity)
+        })
+      })
+
+      const requested = new Map<string, number>()
+      returnItemsInput.forEach((item) => {
+        requested.set(
+          item.productId,
+          (requested.get(item.productId) ?? 0) + item.quantity
+        )
+      })
+      for (const [productId, quantity] of requested.entries()) {
+        const sold = resolvedSoldMap.get(productId)
+        if (!sold) {
+          return NextResponse.json(
+            { success: false, error: "A returned item was not part of the linked sale." },
+            { status: 400 }
+          )
+        }
+        const remaining = sold.soldQuantity - (otherReturned.get(productId) ?? 0)
+        if (quantity > remaining) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Cannot return more than was sold for ${sold.name}. ${Math.max(0, remaining)} remaining.`,
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     const allProductIds = Array.from(
       new Set(
         [
@@ -103,16 +204,17 @@ export async function PUT(
         throw new Error("Product not found")
       }
 
+      const sold = soldMap?.get(item.productId)
       const lineTotal = item.unitPrice * item.quantity
       totalReturnAmount += lineTotal
 
       return {
         productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
+        name: sold?.name ?? product.name,
+        sku: sold?.sku ?? product.sku,
+        unit: sold?.unit ?? product.unit ?? "pcs",
         quantity: item.quantity,
-        basePrice: product.costPrice ?? product.price,
+        basePrice: sold?.basePrice ?? product.costPrice ?? product.price,
         unitPrice: item.unitPrice,
         lineTotal,
       }

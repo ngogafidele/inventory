@@ -220,20 +220,39 @@ export async function PATCH(
           phone: existingSale.outstanding.customerPhone ?? "",
         }
       : null
-    const sale = await Sale.findOneAndUpdate(
-      { _id: id, store },
-      {
-        paymentStatus: "paid",
-        paymentMethod: payload.paymentMethod,
-        remainingBalance: 0,
-        amountPaid: existingSale.totalAmount,
-        ...(customerFromOutstanding && !existingSale.customer
-          ? { customer: customerFromOutstanding }
-          : {}),
-        $unset: { outstanding: "" },
-      },
-      { new: true }
-    )
+
+    // Record the settled balance as a payment so it shows in the payment-method
+    // breakdown; otherwise this direct settlement leaves no trace in payments[].
+    const alreadyPaid =
+      typeof existingSale.amountPaid === "number" ? existingSale.amountPaid : 0
+    const settlementAmount =
+      Math.round((existingSale.totalAmount - alreadyPaid) * 100) / 100
+
+    const update: Record<string, unknown> = {
+      paymentStatus: "paid",
+      paymentMethod: payload.paymentMethod,
+      remainingBalance: 0,
+      amountPaid: existingSale.totalAmount,
+      ...(customerFromOutstanding && !existingSale.customer
+        ? { customer: customerFromOutstanding }
+        : {}),
+      $unset: { outstanding: "" },
+    }
+    if (settlementAmount > 0) {
+      update.$push = {
+        payments: {
+          amount: settlementAmount,
+          paymentMethod: payload.paymentMethod,
+          paidAt: new Date(),
+          receivedBy: session.userId,
+          notes: "Loan settled",
+        },
+      }
+    }
+
+    const sale = await Sale.findOneAndUpdate({ _id: id, store }, update, {
+      new: true,
+    })
 
     if (!sale) {
       return NextResponse.json(

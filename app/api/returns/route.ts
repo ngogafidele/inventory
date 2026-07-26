@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ReturnModel } from "@/lib/db/models/Return"
+import { Sale } from "@/lib/db/models/Sale"
+import { Types } from "mongoose"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateReturnSchema } from "@/lib/db/validators/return"
@@ -17,6 +19,24 @@ type ProductDocumentLike = {
   price: number
   costPrice?: number
   lowStockThreshold?: number
+}
+
+type SaleForReturn = {
+  _id: Types.ObjectId
+  createdAt?: Date
+  items: Array<{
+    productId: { toString(): string }
+    name: string
+    sku: string
+    unit?: string
+    quantity: number
+    basePrice: number
+    sellingPrice: number
+  }>
+}
+
+type PriorReturn = {
+  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
 }
 
 export async function GET(request: NextRequest) {
@@ -71,12 +91,84 @@ export async function POST(request: NextRequest) {
 
     const db = await connectToDatabase()
 
-    const productIds = Array.from(
-      new Set(
-        payload.returnItems.map((item) => item.productId)
-      )
-    )
+    // A return must reverse a real, active sale in this store.
+    const sale = await Sale.findOne({
+      _id: payload.saleId,
+      store,
+      deletedAt: null,
+    }).lean<SaleForReturn | null>()
 
+    if (!sale) {
+      return NextResponse.json(
+        { success: false, error: "Sale not found" },
+        { status: 404 }
+      )
+    }
+
+    // What the sale sold, aggregated per product.
+    const soldMap = new Map<
+      string,
+      { name: string; sku: string; unit: string; basePrice: number; soldQuantity: number }
+    >()
+    sale.items.forEach((item) => {
+      const key = item.productId.toString()
+      const existing = soldMap.get(key)
+      if (existing) {
+        existing.soldQuantity += item.quantity
+      } else {
+        soldMap.set(key, {
+          name: item.name,
+          sku: item.sku,
+          unit: item.unit ?? "pcs",
+          basePrice: item.basePrice,
+          soldQuantity: item.quantity,
+        })
+      }
+    })
+
+    // Quantities already returned against this sale cap what remains returnable.
+    const priorReturns = await ReturnModel.find({ store, saleId: sale._id })
+      .select("returnItems")
+      .lean<PriorReturn[]>()
+    const alreadyReturned = new Map<string, number>()
+    priorReturns.forEach((entry) => {
+      entry.returnItems.forEach((item) => {
+        const key = item.productId.toString()
+        alreadyReturned.set(key, (alreadyReturned.get(key) ?? 0) + item.quantity)
+      })
+    })
+
+    // Requested quantities per product across all lines.
+    const requested = new Map<string, number>()
+    payload.returnItems.forEach((item) => {
+      requested.set(
+        item.productId,
+        (requested.get(item.productId) ?? 0) + item.quantity
+      )
+    })
+
+    for (const [productId, quantity] of requested.entries()) {
+      const sold = soldMap.get(productId)
+      if (!sold) {
+        return NextResponse.json(
+          { success: false, error: "A returned item was not part of the selected sale." },
+          { status: 400 }
+        )
+      }
+      const remaining = sold.soldQuantity - (alreadyReturned.get(productId) ?? 0)
+      if (quantity > remaining) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot return more than was sold for ${sold.name}. ${Math.max(0, remaining)} remaining.`,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Load the products so stock can be restored and low-stock alerts resynced.
+    const productIds = Array.from(requested.keys())
     const products = await Product.find({ _id: { $in: productIds }, store })
     if (products.length !== productIds.length) {
       return NextResponse.json(
@@ -91,21 +183,22 @@ export async function POST(request: NextRequest) {
 
     let totalReturnAmount = 0
     const returnItems = payload.returnItems.map((item) => {
-      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
-      if (!product) {
-        throw new Error("Product not found")
+      const sold = soldMap.get(item.productId)
+      if (!sold) {
+        throw new Error("A returned item was not part of the selected sale.")
       }
 
       const lineTotal = item.unitPrice * item.quantity
       totalReturnAmount += lineTotal
 
       return {
-        productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
+        productId: item.productId,
+        name: sold.name,
+        sku: sold.sku,
+        unit: sold.unit,
         quantity: item.quantity,
-        basePrice: product.costPrice ?? product.price,
+        // Cost basis comes from the sale so report gross profit stays consistent.
+        basePrice: sold.basePrice,
         unitPrice: item.unitPrice,
         lineTotal,
       }
@@ -146,6 +239,9 @@ export async function POST(request: NextRequest) {
           [
             {
               store,
+              saleId: sale._id,
+              // Denormalized so reports attribute the return to the sale's period.
+              saleDate: sale.createdAt ?? new Date(),
               returnItems,
               replacementItems: [],
               totalReturnAmount,

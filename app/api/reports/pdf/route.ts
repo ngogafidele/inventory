@@ -9,6 +9,7 @@ import { Product } from "@/lib/db/models/Product"
 import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
+import { getPaymentMethodTotals } from "@/lib/db/payments"
 import {
   formatInKigali,
   formatKigaliDateInput,
@@ -229,7 +230,9 @@ export async function GET(request: NextRequest) {
         },
       ]),
       ReturnModel.aggregate<ReturnTotals>([
-        { $match: { store, createdAt: periodFilter } },
+        { $match: { store } },
+        { $addFields: { effectiveDate: { $ifNull: ["$saleDate", "$createdAt"] } } },
+        { $match: { effectiveDate: periodFilter } },
         { $unwind: "$returnItems" },
         {
           $lookup: {
@@ -354,7 +357,9 @@ export async function GET(request: NextRequest) {
         },
       ]),
       ReturnModel.aggregate<ReturnedProductTotals>([
-        { $match: { store, createdAt: periodFilter } },
+        { $match: { store } },
+        { $addFields: { effectiveDate: { $ifNull: ["$saleDate", "$createdAt"] } } },
+        { $match: { effectiveDate: periodFilter } },
         { $unwind: "$returnItems" },
         {
           $lookup: {
@@ -425,6 +430,8 @@ export async function GET(request: NextRequest) {
       outstandingSalesTotals.map((item) => [item._id, item])
     )
 
+    const paymentTotals = await getPaymentMethodTotals(store, periodFilter)
+
     const reports = [store].map((reportStore) => {
       const products = productMap.get(reportStore)
       const sales = saleMap.get(reportStore)
@@ -454,6 +461,9 @@ export async function GET(request: NextRequest) {
         unpaidInvoices: invoices?.unpaidInvoices ?? 0,
         outstanding: outstandingSales?.outstanding ?? 0,
         adjustments: adjustments?.adjustments ?? 0,
+        cash: paymentTotals.cash,
+        bank: paymentTotals.bank,
+        mobile: paymentTotals.mobile,
       } satisfies StoreReport
     })
 

@@ -39,6 +39,9 @@ export type StoreReport = {
   unpaidInvoices: number
   outstanding: number
   adjustments: number
+  cash: number
+  bank: number
+  mobile: number
 }
 
 export type TopMovingProduct = {
@@ -142,6 +145,9 @@ function sumReports(reports: StoreReport[]) {
       unpaidInvoices: total.unpaidInvoices + report.unpaidInvoices,
       outstanding: total.outstanding + report.outstanding,
       adjustments: total.adjustments + report.adjustments,
+      cash: total.cash + report.cash,
+      bank: total.bank + report.bank,
+      mobile: total.mobile + report.mobile,
     }),
     {
       products: 0,
@@ -156,6 +162,9 @@ function sumReports(reports: StoreReport[]) {
       unpaidInvoices: 0,
       outstanding: 0,
       adjustments: 0,
+      cash: 0,
+      bank: 0,
+      mobile: 0,
     }
   )
 }
@@ -319,6 +328,24 @@ function drawMetrics(doc: ReportPdfDocument, y: number, totals: ReturnType<typeo
       value: formatCurrency(totals.outstanding),
       fill: totals.outstanding > 0 ? "#ffe9d6" : "#eef2f7",
       border: totals.outstanding > 0 ? "#e4a166" : "#b9c3d0",
+    },
+    {
+      label: "Cash Payments",
+      value: formatCurrency(totals.cash),
+      fill: "#dcf5e3",
+      border: "#7cc596",
+    },
+    {
+      label: "Bank Payments",
+      value: formatCurrency(totals.bank),
+      fill: "#dce9fb",
+      border: "#7ba3dd",
+    },
+    {
+      label: "Mobile Money",
+      value: formatCurrency(totals.mobile),
+      fill: "#f6e2fb",
+      border: "#c78ad9",
     },
   ]
 

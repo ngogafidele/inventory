@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { formatCurrency } from "@/lib/utils/format"
-import { formatInKigali } from "@/lib/utils/time"
+import { formatInKigali, formatKigaliDateInput } from "@/lib/utils/time"
 
 type OutstandingItem = {
   name: string
@@ -125,7 +125,11 @@ export function OutstandingManager({
   const [deletedSales, setDeletedSales] = useState(initialDeletedSales)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  const [restoreTarget, setRestoreTarget] =
+    useState<DeletedOutstandingSale | null>(null)
   const [search, setSearch] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -139,24 +143,40 @@ export function OutstandingManager({
     "cash" | "bank" | "mobile"
   >("cash")
 
+  const matchesFilters = (sale: OutstandingSale, query: string, normalizedQuery: string) => {
+    const saleDate = sale.createdAt ? formatKigaliDateInput(sale.createdAt) : ""
+    if (dateFrom && (!saleDate || saleDate < dateFrom)) return false
+    if (dateTo && (!saleDate || saleDate > dateTo)) return false
+
+    if (!query) return true
+
+    const name = sale.outstanding?.customerName?.toLowerCase() ?? ""
+    const phone = sale.outstanding?.customerPhone?.toLowerCase() ?? ""
+    const normalizedName = normalizeSearchText(name)
+    const normalizedPhone = normalizeSearchText(phone)
+    return (
+      name.includes(query) ||
+      phone.includes(query) ||
+      normalizedName.includes(normalizedQuery) ||
+      normalizedPhone.includes(normalizedQuery)
+    )
+  }
+
   const filteredSales = useMemo(() => {
     const query = search.trim().toLowerCase()
     const normalizedQuery = normalizeSearchText(search.trim())
-    if (!query) return sales
+    return sales.filter((sale) => matchesFilters(sale, query, normalizedQuery))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sales, search, dateFrom, dateTo])
 
-    return sales.filter((sale) => {
-      const name = sale.outstanding?.customerName?.toLowerCase() ?? ""
-      const phone = sale.outstanding?.customerPhone?.toLowerCase() ?? ""
-      const normalizedName = normalizeSearchText(name)
-      const normalizedPhone = normalizeSearchText(phone)
-      return (
-        name.includes(query) ||
-        phone.includes(query) ||
-        normalizedName.includes(normalizedQuery) ||
-        normalizedPhone.includes(normalizedQuery)
-      )
-    })
-  }, [sales, search])
+  const filteredDeletedSales = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    const normalizedQuery = normalizeSearchText(search.trim())
+    return deletedSales.filter((sale) =>
+      matchesFilters(sale, query, normalizedQuery)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deletedSales, search, dateFrom, dateTo])
 
   const totalOutstanding = useMemo(() => {
     return filteredSales.reduce(
@@ -333,6 +353,12 @@ export function OutstandingManager({
     }
   }
 
+  const handleRestore = async () => {
+    if (!restoreTarget) return
+    await restoreLoan(restoreTarget)
+    setRestoreTarget(null)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -354,6 +380,41 @@ export function OutstandingManager({
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-1 text-sm">
+          From
+          <Input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(event) => setDateFrom(event.target.value)}
+            aria-label="Filter loans from date"
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          To
+          <Input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(event) => setDateTo(event.target.value)}
+            aria-label="Filter loans to date"
+          />
+        </label>
+        {dateFrom || dateTo ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDateFrom("")
+              setDateTo("")
+            }}
+          >
+            Clear dates
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -531,14 +592,16 @@ export function OutstandingManager({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deletedSales.length === 0 ? (
+              {filteredDeletedSales.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-muted-foreground">
-                    No deleted loans.
+                    {dateFrom || dateTo || search.trim()
+                      ? "No matching deleted loans."
+                      : "No deleted loans."}
                   </TableCell>
                 </TableRow>
               ) : (
-                deletedSales.map((sale) => (
+                filteredDeletedSales.map((sale) => (
                   <TableRow key={sale._id}>
                     <TableCell>{sale.createdAtLabel ?? "-"}</TableCell>
                     <TableCell className="whitespace-normal">
@@ -561,7 +624,7 @@ export function OutstandingManager({
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => restoreLoan(sale)}
+                        onClick={() => setRestoreTarget(sale)}
                         disabled={restoringId === sale._id}
                       >
                         <RotateCcw className="size-4" />
@@ -719,6 +782,44 @@ export function OutstandingManager({
                 disabled={deletingId !== null}
               >
                 {deletingId ? "Deleting..." : "Delete Loan"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {isAdmin ? (
+        <Dialog
+          open={restoreTarget !== null}
+          onOpenChange={(open) => {
+            if (!open && !restoringId) {
+              setRestoreTarget(null)
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Restore loan?</DialogTitle>
+              <DialogDescription>
+                This returns the loan to the active list and business numbers,
+                and deducts its items from stock again.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRestoreTarget(null)}
+                disabled={restoringId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleRestore}
+                disabled={restoringId !== null}
+              >
+                {restoringId ? "Restoring..." : "Restore Loan"}
               </Button>
             </DialogFooter>
           </DialogContent>

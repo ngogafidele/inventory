@@ -2,12 +2,12 @@
 
 // Manages return transactions and the associated stock-restoration UI.
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatInKigali } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ProductSearchSelect } from "@/components/products/product-search-select"
 import {
   Table,
   TableBody,
@@ -19,13 +19,21 @@ import {
 
 const RETURNS_PER_PAGE = 20
 
-type ProductOption = {
-  _id: string
+type SaleOptionItem = {
+  productId: string
   name: string
   sku: string
   unit: string
-  price: number
-  quantity: number
+  sellingPrice: number
+  returnableQuantity: number
+}
+
+type SaleOption = {
+  _id: string
+  dateLabel: string
+  customerName: string
+  totalAmount: number
+  items: SaleOptionItem[]
 }
 
 type ReturnItemClient = {
@@ -41,6 +49,7 @@ type ReturnItemClient = {
 
 type ReturnClient = {
   _id: string
+  saleId?: string
   returnItems: ReturnItemClient[]
   totalReturnAmount: number
   notes?: string
@@ -49,59 +58,39 @@ type ReturnClient = {
   createdAt?: string
 }
 
-type DraftItem = {
+type ReturnLine = {
   productId: string
+  name: string
+  sku: string
+  unit: string
+  maxQuantity: number
   quantity: string
   unitPrice: string
 }
 
-const emptyDraft: DraftItem = {
-  productId: "",
-  quantity: "",
-  unitPrice: "",
-}
-
-function computeTotal(items: DraftItem[]) {
-  return items.reduce((sum, item) => {
-    const quantity = Number(item.quantity)
-    const unitPrice = Number(item.unitPrice)
-    if (Number.isNaN(quantity) || Number.isNaN(unitPrice)) {
-      return sum
-    }
-    return sum + quantity * unitPrice
-  }, 0)
-}
-
-function buildNetMap(returnItems: ReturnItemClient[]) {
-  const netChanges = new Map<string, number>()
-  returnItems.forEach((item) => {
-    const current = netChanges.get(item.productId) ?? 0
-    netChanges.set(item.productId, current + item.quantity)
-  })
-  return netChanges
-}
-
 export function ReturnsManager({
   initialReturns,
-  products,
+  sales,
   currentUserLabel,
 }: {
   initialReturns: ReturnClient[]
-  products: ProductOption[]
+  sales: SaleOption[]
   currentUserLabel: string
 }) {
+  const router = useRouter()
   const [returns, setReturns] = useState(initialReturns)
-  const [returnDraftItems, setReturnDraftItems] = useState<DraftItem[]>([emptyDraft])
   const [notes, setNotes] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [activeReturnId, setActiveReturnId] = useState<string | null>(null)
+  const [selectedSaleId, setSelectedSaleId] = useState("")
+  const [returnLines, setReturnLines] = useState<ReturnLine[]>([])
 
-  const productMap = useMemo(
-    () => new Map(products.map((product) => [product._id, product])),
-    [products]
+  const saleMap = useMemo(
+    () => new Map(sales.map((sale) => [sale._id, sale])),
+    [sales]
   )
 
   const pageCount = Math.max(1, Math.ceil(returns.length / RETURNS_PER_PAGE))
@@ -117,30 +106,9 @@ export function ReturnsManager({
     }
   }, [currentPage, pageCount])
 
-  const setDraftItem = (
-    index: number,
-    key: keyof DraftItem,
-    value: string
-  ) => {
-    setReturnDraftItems((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [key]: value } : item
-      )
-    )
-  }
-
-  const addDraftItem = () => {
-    setReturnDraftItems((current) => [...current, emptyDraft])
-  }
-
-  const removeDraftItem = (index: number) => {
-    setReturnDraftItems((current) =>
-      current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index)
-    )
-  }
-
   const resetForm = () => {
-    setReturnDraftItems([emptyDraft])
+    setSelectedSaleId("")
+    setReturnLines([])
     setNotes("")
     setError(null)
     setActiveReturnId(null)
@@ -151,104 +119,136 @@ export function ReturnsManager({
     setFormOpen(true)
   }
 
-  const openEdit = (entry: ReturnClient) => {
-    setReturnDraftItems(
-      entry.returnItems.map((item) => ({
+  const selectSale = (saleId: string) => {
+    setSelectedSaleId(saleId)
+    setError(null)
+    const sale = saleMap.get(saleId)
+    if (!sale) {
+      setReturnLines([])
+      return
+    }
+    setReturnLines(
+      sale.items.map((item) => ({
         productId: item.productId,
-        quantity: String(item.quantity),
-        unitPrice: String(item.unitPrice),
+        name: item.name,
+        sku: item.sku,
+        unit: item.unit,
+        maxQuantity: item.returnableQuantity,
+        quantity: "",
+        unitPrice: String(item.sellingPrice),
       }))
     )
+  }
+
+  const openEdit = (entry: ReturnClient) => {
+    const sale = entry.saleId ? saleMap.get(entry.saleId) : undefined
+    setActiveReturnId(entry._id)
+    setSelectedSaleId(entry.saleId ?? "")
     setNotes(entry.notes ?? "")
     setError(null)
-    setActiveReturnId(entry._id)
+    setReturnLines(
+      entry.returnItems.map((item) => {
+        const saleItem = sale?.items.find(
+          (candidate) => candidate.productId === item.productId
+        )
+        // The sale's returnableQuantity already excludes this return, so the
+        // editable cap is that remainder plus what this return currently holds.
+        const cap = (saleItem?.returnableQuantity ?? 0) + item.quantity
+        return {
+          productId: item.productId,
+          name: item.name ?? saleItem?.name ?? "Item",
+          sku: item.sku ?? saleItem?.sku ?? "",
+          unit: item.unit ?? saleItem?.unit ?? "pcs",
+          maxQuantity: cap,
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
+        }
+      })
+    )
     setFormOpen(true)
   }
 
-  const returnTotal = computeTotal(returnDraftItems)
-
-  const getItemLabel = (item: ReturnItemClient) => {
-    return item.name?.trim() || item.sku?.trim() || "Unnamed item"
+  const setLine = (
+    index: number,
+    key: "quantity" | "unitPrice",
+    value: string
+  ) => {
+    setReturnLines((current) =>
+      current.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, [key]: value } : line
+      )
+    )
   }
 
-  const validateItems = (items: DraftItem[]) => {
-    return items.map((item) => ({
-      productId: item.productId,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
-    }))
-  }
+  const returnTotal = returnLines.reduce((sum, line) => {
+    const quantity = Number(line.quantity)
+    const unitPrice = Number(line.unitPrice)
+    if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice)) return sum
+    return sum + Math.max(0, quantity) * Math.max(0, unitPrice)
+  }, 0)
+
+  const getItemLabel = (item: ReturnItemClient) =>
+    item.name?.trim() || item.sku?.trim() || "Unnamed item"
+
+  const selectedSale = selectedSaleId ? saleMap.get(selectedSaleId) : undefined
 
   const submitReturn = async () => {
     setError(null)
 
-    const returnItems = validateItems(returnDraftItems)
-
-    if (returnItems.some((item) => !item.productId)) {
-      setError("Select a product for each return line.")
+    if (!activeReturnId && !selectedSaleId) {
+      setError("Select the sale being returned.")
       return
     }
 
-    const hasInvalidReturn = returnItems.some(
-      (item) =>
-        Number.isNaN(item.quantity) ||
-        item.quantity < 1 ||
-        Number.isNaN(item.unitPrice) ||
-        item.unitPrice < 0
-    )
-
-    if (hasInvalidReturn) {
-      setError("Quantity must be at least 1 and price must be 0 or more.")
-      return
-    }
-
-    const newReturnItems: ReturnItemClient[] = returnItems.map((item) => ({
-      productId: item.productId,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      lineTotal: item.unitPrice * item.quantity,
+    const parsedLines = returnLines.map((line) => ({
+      productId: line.productId,
+      name: line.name,
+      maxQuantity: line.maxQuantity,
+      quantity: line.quantity.trim() === "" ? 0 : Number(line.quantity),
+      unitPrice: Number(line.unitPrice),
     }))
 
-    const newNetMap = buildNetMap(newReturnItems)
-    const existingEntry = activeReturnId
-      ? returns.find((entry) => entry._id === activeReturnId)
-      : null
-    const oldNetMap = existingEntry
-      ? buildNetMap(existingEntry.returnItems)
-      : new Map<string, number>()
+    const activeLines = parsedLines.filter((line) => line.quantity > 0)
+    if (activeLines.length === 0) {
+      setError("Enter a quantity for at least one item.")
+      return
+    }
 
-    const allProductIds = new Set([
-      ...Array.from(newNetMap.keys()),
-      ...Array.from(oldNetMap.keys()),
-    ])
-
-    for (const productId of allProductIds) {
-      const product = productMap.get(productId)
-      if (!product) {
-        setError("One selected product is no longer available.")
+    for (const line of activeLines) {
+      if (!Number.isInteger(line.quantity) || line.quantity < 1) {
+        setError("Quantities must be whole numbers of at least 1.")
         return
       }
-      const oldNet = oldNetMap.get(productId) ?? 0
-      const newNet = newNetMap.get(productId) ?? 0
-      const delta = newNet - oldNet
-      if (product.quantity + delta < 0) {
-        setError(`Insufficient stock for ${product.name}.`)
+      if (Number.isNaN(line.unitPrice) || line.unitPrice < 0) {
+        setError("Unit price must be 0 or more.")
+        return
+      }
+      if (line.quantity > line.maxQuantity) {
+        setError(
+          `Cannot return more than ${line.maxQuantity} of ${line.name}.`
+        )
         return
       }
     }
 
-    setSubmitting(true)
+    const returnItems = activeLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+    }))
 
+    setSubmitting(true)
     try {
       const response = await fetch(
         activeReturnId ? `/api/returns/${activeReturnId}` : "/api/returns",
         {
           method: activeReturnId ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            returnItems,
-            notes: notes.trim(),
-          }),
+          body: JSON.stringify(
+            activeReturnId
+              ? { returnItems, notes: notes.trim() }
+              : { saleId: selectedSaleId, returnItems, notes: notes.trim() }
+          ),
         }
       )
 
@@ -276,13 +276,17 @@ export function ReturnsManager({
 
       setReturns((current) =>
         activeReturnId
-          ? current.map((entry) => (entry._id === activeReturnId ? normalized : entry))
+          ? current.map((entry) =>
+              entry._id === activeReturnId ? normalized : entry
+            )
           : [normalized, ...current]
       )
 
       setFormOpen(false)
       resetForm()
       setCurrentPage(1)
+      // Refresh so remaining returnable quantities reflect this return.
+      router.refresh()
     } catch {
       setError("Failed to record return.")
     } finally {
@@ -310,81 +314,12 @@ export function ReturnsManager({
       }
 
       setReturns((current) => current.filter((entry) => entry._id !== returnId))
+      router.refresh()
     } catch {
       setError("Failed to delete return.")
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const renderItemRows = (items: DraftItem[]) => {
-    return items.map((item, index) => {
-      const selectedProduct = item.productId ? productMap.get(item.productId) : null
-      return (
-        <div
-          key={`return-${index}-${item.productId}`}
-          className="grid gap-3 rounded-lg border border-border/80 p-3 md:grid-cols-[1.6fr_0.8fr_1fr_auto]"
-        >
-          <label className="grid gap-1 text-sm">
-            Product
-            <ProductSearchSelect
-              products={products}
-              value={item.productId}
-              onValueChange={(value) => {
-                const product = productMap.get(value)
-                setDraftItem(index, "productId", value)
-                if (product) {
-                  setDraftItem(index, "unitPrice", String(product.price))
-                }
-              }}
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            Quantity
-            <Input
-              type="number"
-              min={1}
-              placeholder="e.g. 2"
-              value={item.quantity}
-              onChange={(event) =>
-                setDraftItem(index, "quantity", event.target.value)
-              }
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            Unit Price
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="e.g. 1200"
-              value={item.unitPrice}
-              onChange={(event) =>
-                setDraftItem(index, "unitPrice", event.target.value)
-              }
-            />
-          </label>
-
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              onClick={() => removeDraftItem(index)}
-              disabled={items.length === 1}
-            >
-              Remove
-            </Button>
-          </div>
-
-          {selectedProduct ? (
-            <p className="md:col-span-4 text-xs text-muted-foreground">
-              Current stock: {selectedProduct.quantity} {selectedProduct.unit}
-            </p>
-          ) : null}
-        </div>
-      )
-    })
   }
 
   return (
@@ -399,11 +334,17 @@ export function ReturnsManager({
             Logged in as: {currentUserLabel}
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} disabled={sales.length === 0}>
           <Plus className="size-4" />
           Add Return
         </Button>
       </div>
+
+      {sales.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          There are no sales with items available to return.
+        </p>
+      ) : null}
 
       {formOpen ? (
         <section className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
@@ -430,16 +371,86 @@ export function ReturnsManager({
           </div>
 
           <div className="space-y-5">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="text-lg font-semibold">Returned Items</h4>
-                <Button variant="outline" onClick={addDraftItem}
+            {activeReturnId ? (
+              selectedSale ? (
+                <p className="text-sm text-muted-foreground">
+                  Return from sale: {selectedSale.dateLabel}
+                  {selectedSale.customerName
+                    ? ` · ${selectedSale.customerName}`
+                    : ""}
+                </p>
+              ) : null
+            ) : (
+              <label className="grid gap-1 text-sm">
+                Sale being returned
+                <select
+                  value={selectedSaleId}
+                  onChange={(event) => selectSale(event.target.value)}
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                >
+                  <option value="">Select a sale…</option>
+                  {sales.map((sale) => (
+                    <option key={sale._id} value={sale._id}>
+                      {sale.dateLabel} · {sale.customerName || "Walk-in"} ·{" "}
+                      {formatCurrency(sale.totalAmount)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {returnLines.length > 0 ? (
+              <div className="space-y-3">
+                <h4 className="text-lg font-semibold">Items to return</h4>
+                {returnLines.map((line, index) => (
+                  <div
+                    key={line.productId}
+                    className="grid gap-3 rounded-lg border border-border/80 p-3 md:grid-cols-[1.6fr_0.8fr_1fr]"
                   >
-                  Add Item
-                </Button>
+                    <div className="grid gap-1 text-sm">
+                      <span className="font-medium">{line.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {line.sku ? `${line.sku} · ` : ""}Returnable:{" "}
+                        {line.maxQuantity} {line.unit}
+                      </span>
+                    </div>
+
+                    <label className="grid gap-1 text-sm">
+                      Quantity
+                      <Input
+                        type="number"
+                        min={0}
+                        max={line.maxQuantity}
+                        placeholder="0"
+                        value={line.quantity}
+                        onChange={(event) =>
+                          setLine(index, "quantity", event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-sm">
+                      Unit Price
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={line.unitPrice}
+                        onChange={(event) =>
+                          setLine(index, "unitPrice", event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                ))}
               </div>
-              {renderItemRows(returnDraftItems)}
-            </div>
+            ) : !activeReturnId ? (
+              <p className="text-sm text-muted-foreground">
+                {selectedSaleId
+                  ? "This sale has no items left to return."
+                  : "Select a sale to choose items to return."}
+              </p>
+            ) : null}
 
             <div className="grid gap-3 rounded-lg border border-border/80 p-3 text-sm md:grid-cols-2">
               <div>
@@ -482,13 +493,19 @@ export function ReturnsManager({
               Cancel
             </Button>
             <Button type="button" onClick={submitReturn} disabled={submitting}>
-              {submitting ? "Saving..." : "Save"}
+              {submitting
+                ? "Saving..."
+                : activeReturnId
+                  ? "Save Changes"
+                  : "Record Return"}
             </Button>
           </div>
         </section>
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {!formOpen && error ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : null}
 
       <Table>
         <TableHeader>

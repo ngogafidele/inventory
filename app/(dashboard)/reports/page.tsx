@@ -9,6 +9,7 @@ import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { Expense } from "@/lib/db/models/Expense"
+import { getPaymentMethodTotals } from "@/lib/db/payments"
 import { STORE_LABELS } from "@/lib/utils/constants"
 import { formatCurrency } from "@/lib/utils/format"
 import {
@@ -337,7 +338,9 @@ export default async function ReportsPage({
       },
     ]),
     ReturnModel.aggregate<ReturnTotals>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore } },
+      { $addFields: { effectiveDate: { $ifNull: ["$saleDate", "$createdAt"] } } },
+      { $match: { effectiveDate: periodFilter } },
       { $unwind: "$returnItems" },
       {
         $lookup: {
@@ -462,7 +465,9 @@ export default async function ReportsPage({
       },
     ]),
     ReturnModel.aggregate<ReturnedProductTotals>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore } },
+      { $addFields: { effectiveDate: { $ifNull: ["$saleDate", "$createdAt"] } } },
+      { $match: { effectiveDate: periodFilter } },
       { $unwind: "$returnItems" },
       {
         $lookup: {
@@ -544,7 +549,9 @@ export default async function ReportsPage({
       },
     ]),
     ReturnModel.aggregate<DailyReturnTotals>([
-      { $match: { store: currentStore, createdAt: periodFilter } },
+      { $match: { store: currentStore } },
+      { $addFields: { effectiveDate: { $ifNull: ["$saleDate", "$createdAt"] } } },
+      { $match: { effectiveDate: periodFilter } },
       { $unwind: "$returnItems" },
       {
         $lookup: {
@@ -560,7 +567,7 @@ export default async function ReportsPage({
           _id: {
             $dateToString: {
               format: "%Y-%m-%d",
-              date: "$createdAt",
+              date: "$effectiveDate",
               timezone: KIGALI_TIME_ZONE,
             },
           },
@@ -699,6 +706,7 @@ export default async function ReportsPage({
   }
   const fromLabel = formatDateOnly(range.from)
   const toLabel = formatDateOnly(range.to)
+  const paymentTotals = await getPaymentMethodTotals(currentStore, periodFilter)
   const cards = [
     {
       label: "Total Revenue",
@@ -750,6 +758,21 @@ export default async function ReportsPage({
         totals.outstanding > 0
           ? "border-orange-200 bg-orange-50 text-orange-950"
           : "border-slate-200 bg-slate-50 text-slate-950",
+    },
+    {
+      label: "Cash Payments",
+      value: formatCurrency(paymentTotals.cash),
+      className: "border-green-200 bg-green-50 text-green-950",
+    },
+    {
+      label: "Bank Payments",
+      value: formatCurrency(paymentTotals.bank),
+      className: "border-blue-200 bg-blue-50 text-blue-950",
+    },
+    {
+      label: "Mobile Money Payments",
+      value: formatCurrency(paymentTotals.mobile),
+      className: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950",
     },
   ]
 
