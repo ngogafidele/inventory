@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
       currentStore: "store1",
       loginLogId: loginLog._id.toString(),
       lastActivityAt: Date.now(),
+      // Setting the password here counts as proving it, so the new admin is
+      // not challenged again on the way to the dashboard.
+      reauthAt: Date.now(),
     }
 
     const token = createToken(session)

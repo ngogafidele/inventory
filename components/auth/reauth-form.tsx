@@ -108,6 +108,7 @@ export function ReauthForm({
           </label>
 
           <Button
+            type="submit"
             className="h-11 w-full bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-navy)]/90"
             disabled={isPending}
           >

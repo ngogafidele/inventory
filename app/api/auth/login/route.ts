@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
       currentStore: stores[0],
       loginLogId: loginLog._id.toString(),
       lastActivityAt: Date.now(),
+      // Signing in is itself a password check, so it opens the step-up window.
+      // Without this the user would be asked for the same password again the
+      // moment they landed on the dashboard.
+      reauthAt: Date.now(),
     }
 
     const token = createToken(session)

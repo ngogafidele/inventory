@@ -103,11 +103,10 @@ function ConfirmForm({
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
-          variant={confirmVariant}
-          disabled={pending || password.length === 0}
-        >
+        {/* Only disabled while in flight. Gating it on an empty password made
+            it look inert on open, as though there were nothing to press; the
+            input's required attribute handles the empty case instead. */}
+        <Button type="submit" variant={confirmVariant} disabled={pending}>
           {pending ? pendingLabel : confirmLabel}
         </Button>
       </DialogFooter>
