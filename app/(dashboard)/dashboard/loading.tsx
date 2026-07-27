@@ -1,14 +1,15 @@
 // Supplies the dashboard loading state while branch metrics are resolved.
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
+import {
+  PageHeaderSkeleton,
+  PageSkeleton,
+} from "@/components/skeletons/page-skeletons"
 
 export default function Loading() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="h-3 w-36 animate-pulse rounded bg-muted" />
-        <div className="h-8 w-52 animate-pulse rounded bg-muted" />
-      </div>
+    <PageSkeleton label="Loading dashboard" className="space-y-6">
+      <PageHeaderSkeleton />
       <DashboardSkeleton />
-    </div>
+    </PageSkeleton>
   )
 }
