@@ -21,6 +21,7 @@ import {
 } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { IdleGuard } from "@/components/auth/idle-guard"
 import { ReportPrintButton } from "@/components/reports/report-print-button"
 import {
   DailyTrendChart,
@@ -778,6 +779,7 @@ export default async function ReportsPage({
 
   return (
     <div className="space-y-6">
+      <IdleGuard />
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
           {STORE_LABELS[currentStore]} Overview

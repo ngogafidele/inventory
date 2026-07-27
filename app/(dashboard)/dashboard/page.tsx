@@ -1,5 +1,6 @@
 // Renders the administrator-only overview for the currently selected branch.
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
+import { IdleGuard } from "@/components/auth/idle-guard"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { redirect } from "next/navigation"
 
@@ -12,6 +13,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <IdleGuard />
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Store Overview

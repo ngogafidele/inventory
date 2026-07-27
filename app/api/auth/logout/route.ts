@@ -1,29 +1,20 @@
 // Ends an authenticated session and records logout activity.
 import { NextRequest, NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/db/connection"
-import { User } from "@/lib/db/models/User"
-import { UserLoginLog } from "@/lib/db/models/UserLoginLog"
-import { AUTH_COOKIE, getSessionFromRequest } from "@/lib/auth/session"
+import {
+  AUTH_COOKIE,
+  getLapsedSessionFromRequest,
+  getSessionFromRequest,
+} from "@/lib/auth/session"
+import { recordLogout } from "@/lib/auth/logout-log"
 
 export async function POST(request: NextRequest) {
-  const session = getSessionFromRequest(request)
+  // The lapsed fallback covers a user who clicks sign out just after the idle
+  // window closed. If the proxy already recorded it, the guarded write in
+  // recordLogout makes this a no-op.
+  const session =
+    getSessionFromRequest(request) ?? getLapsedSessionFromRequest(request)
   if (session) {
-    try {
-      await connectToDatabase()
-      const logoutAt = new Date()
-      await User.findByIdAndUpdate(session.userId, { lastLogout: logoutAt })
-      if (session.loginLogId) {
-        await UserLoginLog.findByIdAndUpdate(session.loginLogId, { logoutAt })
-      } else {
-        await UserLoginLog.findOneAndUpdate(
-          { userId: session.userId, logoutAt: { $exists: false } },
-          { logoutAt },
-          { sort: { loginAt: -1 } }
-        )
-      }
-    } catch (error) {
-      console.error("[Logout Error]", error)
-    }
+    await recordLogout(session)
   }
 
   const response = NextResponse.json({ success: true })

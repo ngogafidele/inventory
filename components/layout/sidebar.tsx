@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { requiresReauth } from "@/lib/auth/reauth"
 
 const adminOnlyNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -42,7 +43,7 @@ const stockAdjustmentsNavItem = {
 }
 
 const bottomNavItems = [
-  { href: "/reports", label: "Reports", icon: ChartColumn },
+  { href: "/reports", label: "Visual Reports", icon: ChartColumn },
 ]
 
 export function Sidebar({ session }: { session: AuthSession }) {
@@ -70,6 +71,10 @@ export function Sidebar({ session }: { session: AuthSession }) {
           <Link
             key={item.href}
             href={item.href}
+            // Gated routes answer a prefetch with a redirect to /verify, which
+            // the router would then cache and replay after the password had
+            // already been accepted. Not prefetching avoids the whole race.
+            prefetch={requiresReauth(item.href) ? false : undefined}
             className={cn(
               "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition",
               pathname === item.href

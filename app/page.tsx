@@ -13,9 +13,10 @@ import {
   Mail,
   PackageCheck,
 } from "lucide-react"
-import { type FormEvent, useState, useTransition } from "react"
+import { type FormEvent, Suspense, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { IdleNotice } from "@/components/auth/idle-notice"
 
 export default function Home() {
   const router = useRouter()
@@ -122,6 +123,12 @@ export default function Home() {
               Use your staff or admin account to continue to the dashboard.
             </p>
           </div>
+
+          {/* Boundary required: useSearchParams inside would otherwise force
+              the whole login page to render client-side. */}
+          <Suspense fallback={null}>
+            <IdleNotice />
+          </Suspense>
 
           {message ? (
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

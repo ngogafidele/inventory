@@ -44,6 +44,14 @@ export const ResetPasswordSchema = z
   })
   .strict()
 
+// No length floor here: this is checked against an existing hash, so a rule
+// would only reject legacy passwords that predate the current policy.
+export const ReauthSchema = z
+  .object({
+    password: z.string().min(1),
+  })
+  .strict()
+
 export const SetupAdminSchema = z
   .object({
     name: z.string().min(2),
