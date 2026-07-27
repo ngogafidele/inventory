@@ -12,8 +12,10 @@ export const VERIFY_PATH = "/verify"
 export const REAUTH_PATHS = [
   "/dashboard",
   "/reports",
+  "/financial-statements",
   "/api/dashboard",
   "/api/reports",
+  "/api/financial-statements",
 ] as const
 
 export function requiresReauth(pathname: string) {

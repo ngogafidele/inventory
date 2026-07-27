@@ -8,7 +8,12 @@ export const STRICT_IDLE_TIMEOUT_SECONDS = 10 * 60
 // Pages that expose aggregate financial data get a much shorter idle window.
 // The verify gate is included so stepping through it cannot widen the window
 // back to the relaxed timeout on the way in.
-export const STRICT_PATHS = ["/dashboard", "/reports", "/verify"] as const
+export const STRICT_PATHS = [
+  "/dashboard",
+  "/reports",
+  "/financial-statements",
+  "/verify",
+] as const
 
 export function isStrictPath(pathname: string) {
   return STRICT_PATHS.some(

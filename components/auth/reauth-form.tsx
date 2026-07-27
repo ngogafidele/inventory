@@ -54,13 +54,16 @@ export function ReauthForm({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
+    // brand-auth-surface is what defines --brand-navy and the rest of the auth
+    // palette; without it those variables are unset and anything styled with
+    // them renders unstyled. Every other auth screen wraps in it too.
+    <main className="brand-auth-surface flex min-h-screen items-center justify-center p-4">
       <section className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl sm:p-7">
         <div className="mb-6">
-          <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-[var(--brand-navy)] text-white">
+          <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <ShieldCheck className="size-5" />
           </div>
-          <h1 className="text-2xl font-semibold text-[var(--brand-navy)]">
+          <h1 className="text-2xl font-semibold text-foreground">
             Confirm your password
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -107,11 +110,10 @@ export function ReauthForm({
             </div>
           </label>
 
-          <Button
-            type="submit"
-            className="h-11 w-full bg-[var(--brand-navy)] text-white hover:bg-[var(--brand-navy)]/90"
-            disabled={isPending}
-          >
+          {/* Default variant on purpose: it resolves from --primary, which is
+              set on :root as well as by brand-auth-surface, so this button can
+              never render invisible the way a hardcoded brand token could. */}
+          <Button type="submit" className="h-11 w-full" disabled={isPending}>
             {isPending ? "Verifying..." : "Continue"}
           </Button>
         </form>

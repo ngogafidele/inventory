@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   PackageSearch,
   ReceiptText,
+  Scale,
   Users,
   Wrench,
 } from "lucide-react"
@@ -44,6 +45,7 @@ const stockAdjustmentsNavItem = {
 
 const bottomNavItems = [
   { href: "/reports", label: "Visual Reports", icon: ChartColumn },
+  { href: "/financial-statements", label: "Financial Reports", icon: Scale },
 ]
 
 export function Sidebar({ session }: { session: AuthSession }) {
