@@ -7,6 +7,7 @@ import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
+import { verifyActionPassword } from "@/lib/auth/step-up"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { UpdateSaleSchema } from "@/lib/db/validators/sale"
 import { parseKigaliDateInput } from "@/lib/utils/time"
@@ -555,6 +556,13 @@ export async function DELETE(
         { success: false, error: "Admin only" },
         { status: 403 }
       )
+    }
+
+    // Before any lookup, so a wrong password cannot be used to probe which
+    // sale ids exist.
+    const verified = await verifyActionPassword(request, session)
+    if (!verified.ok) {
+      return verified.response
     }
 
     const store = resolveStoreFromRequest(request, session)

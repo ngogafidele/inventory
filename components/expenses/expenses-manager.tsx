@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -82,6 +83,8 @@ export function ExpensesManager({
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const filteredExpenses = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -212,30 +215,35 @@ export function ExpensesManager({
     }
   }
 
-  const handleDelete = async (expenseId: string) => {
-    if (!confirm("Delete this expense?") ) {
-      return
-    }
+  const handleDelete = async (password: string) => {
+    const expenseId = deleteTarget
+    if (!expenseId) return
 
     setSubmitting(true)
     setError(null)
+    setDeleteError(null)
 
     try {
       const response = await fetch(`/api/expenses/${expenseId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete expense.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which expense was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete expense.")
         return
       }
 
       setExpenses((current) =>
         current.filter((expense) => expense._id !== expenseId)
       )
+      setDeleteTarget(null)
     } catch {
-      setError("Failed to delete expense.")
+      setDeleteError("Failed to delete expense.")
     } finally {
       setSubmitting(false)
     }
@@ -457,7 +465,10 @@ export function ExpensesManager({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(expense._id)}
+                      onClick={() => {
+                        setDeleteError(null)
+                        setDeleteTarget(expense._id)
+                      }}
                       disabled={submitting}
                     >
                       <Trash2 className="size-4" />
@@ -470,6 +481,23 @@ export function ExpensesManager({
           )}
         </TableBody>
       </Table>
+
+      <PasswordConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+        title="Delete expense?"
+        description="This removes the expense from records and from business numbers."
+        confirmLabel="Delete Expense"
+        pendingLabel="Deleting..."
+        pending={submitting}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

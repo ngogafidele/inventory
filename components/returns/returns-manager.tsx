@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils/format"
 import { formatInKigali } from "@/lib/utils/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import {
   Table,
   TableBody,
@@ -82,6 +83,8 @@ export function ReturnsManager({
   const [notes, setNotes] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [activeReturnId, setActiveReturnId] = useState<string | null>(null)
@@ -294,29 +297,34 @@ export function ReturnsManager({
     }
   }
 
-  const handleDelete = async (returnId: string) => {
-    if (!confirm("Delete this return?")) {
-      return
-    }
+  const handleDelete = async (password: string) => {
+    const returnId = deleteTarget
+    if (!returnId) return
 
     setSubmitting(true)
     setError(null)
+    setDeleteError(null)
 
     try {
       const response = await fetch(`/api/returns/${returnId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete return.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which return was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete return.")
         return
       }
 
       setReturns((current) => current.filter((entry) => entry._id !== returnId))
+      setDeleteTarget(null)
       router.refresh()
     } catch {
-      setError("Failed to delete return.")
+      setDeleteError("Failed to delete return.")
     } finally {
       setSubmitting(false)
     }
@@ -562,7 +570,10 @@ export function ReturnsManager({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(entry._id)}
+                      onClick={() => {
+                        setDeleteError(null)
+                        setDeleteTarget(entry._id)
+                      }}
                       disabled={submitting}
                     >
                       <Trash2 className="size-4" />
@@ -603,6 +614,23 @@ export function ReturnsManager({
           </Button>
         </div>
       </div>
+
+      <PasswordConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+        title="Delete return?"
+        description="This removes the return from records and from business numbers."
+        confirmLabel="Delete Return"
+        pendingLabel="Deleting..."
+        pending={submitting}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

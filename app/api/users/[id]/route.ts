@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/db/connection"
 import { User } from "@/lib/db/models/User"
 import { requireAdmin } from "@/lib/auth/middleware"
+import { verifyActionPassword } from "@/lib/auth/step-up"
 import { UpdateUserSchema } from "@/lib/db/validators/user"
 import { hashPassword } from "@/lib/auth/hash"
 
@@ -104,12 +105,20 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { authorized } = await requireAdmin(request)
-    if (!authorized) {
+    const { authorized, session } = await requireAdmin(request)
+    if (!authorized || !session) {
       return NextResponse.json(
         { success: false, error: "Admin only" },
         { status: 403 }
       )
+    }
+
+    // Checks the acting admin's own password, not that of the user being
+    // removed. Runs before any lookup, so a wrong password cannot be used to
+    // probe which ids exist.
+    const verified = await verifyActionPassword(request, session)
+    if (!verified.ok) {
+      return verified.response
     }
 
     const { id } = await context.params

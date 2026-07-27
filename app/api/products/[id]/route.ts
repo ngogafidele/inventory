@@ -8,6 +8,7 @@ import { Sale } from "@/lib/db/models/Sale"
 import { StockAdjustment } from "@/lib/db/models/StockAdjustment"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
+import { verifyActionPassword } from "@/lib/auth/step-up"
 import { UpdateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { ZodError } from "zod"
@@ -163,6 +164,13 @@ export async function DELETE(
         { success: false, error: "Admin only" },
         { status: 403 }
       )
+    }
+
+    // Before any lookup, so a wrong password cannot be used to probe which
+    // ids exist.
+    const verified = await verifyActionPassword(request, session)
+    if (!verified.ok) {
+      return verified.response
     }
 
     const { id } = await context.params

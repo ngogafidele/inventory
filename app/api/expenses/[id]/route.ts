@@ -5,6 +5,7 @@ import { connectToDatabase } from "@/lib/db/connection"
 import { Expense } from "@/lib/db/models/Expense"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
+import { verifyActionPassword } from "@/lib/auth/step-up"
 import { UpdateExpenseSchema } from "@/lib/db/validators/expense"
 import { parseKigaliDateInput } from "@/lib/utils/time"
 
@@ -99,6 +100,13 @@ export async function DELETE(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       )
+    }
+
+    // Before any lookup, so a wrong password cannot be used to probe which
+    // ids exist.
+    const verified = await verifyActionPassword(request, session)
+    if (!verified.ok) {
+      return verified.response
     }
 
     const store = resolveStoreFromRequest(request, session)

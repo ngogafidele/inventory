@@ -6,6 +6,7 @@ import { Product } from "@/lib/db/models/Product"
 import { Sale } from "@/lib/db/models/Sale"
 import { requireAdmin } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
+import { verifyActionPassword } from "@/lib/auth/step-up"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 
 type SaleItemForRestore = {
@@ -41,6 +42,13 @@ export async function POST(
         { success: false, error: "Admin only" },
         { status: 403 }
       )
+    }
+
+    // Before any lookup, so a wrong password cannot be used to probe which
+    // ids exist.
+    const verified = await verifyActionPassword(request, session)
+    if (!verified.ok) {
+      return verified.response
     }
 
     const store = resolveStoreFromRequest(request, session)

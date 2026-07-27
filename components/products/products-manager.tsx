@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -113,6 +114,8 @@ export function ProductsManager({
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [catalogDownloading, setCatalogDownloading] = useState(false)
@@ -363,29 +366,34 @@ export function ProductsManager({
     }
   }
 
-  const handleDelete = async (productId: string) => {
-    if (!confirm("Delete this product?")) {
-      return
-    }
+  const handleDelete = async (password: string) => {
+    const productId = deleteTarget
+    if (!productId) return
 
     setSubmitting(true)
     setError(null)
+    setDeleteError(null)
 
     try {
       const response = await fetch(`/api/products/${productId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete product.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which product was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete product.")
         return
       }
 
       setProducts((current) =>
         current.filter((product) => product._id !== productId)
       )
+      setDeleteTarget(null)
     } catch {
-      setError("Failed to delete product.")
+      setDeleteError("Failed to delete product.")
     } finally {
       setSubmitting(false)
     }
@@ -821,7 +829,10 @@ export function ProductsManager({
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleDelete(product._id)}
+                        onClick={() => {
+                          setDeleteError(null)
+                          setDeleteTarget(product._id)
+                        }}
                         disabled={submitting}
                       >
                         Delete
@@ -862,6 +873,23 @@ export function ProductsManager({
           </Button>
         </div>
       </div>
+
+      <PasswordConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+        title="Delete product?"
+        description="This removes the product from the catalogue and from branch inventory."
+        confirmLabel="Delete Product"
+        pendingLabel="Deleting..."
+        pending={submitting}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

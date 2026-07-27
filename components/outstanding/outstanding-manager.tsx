@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import {
   Table,
@@ -134,6 +135,7 @@ export function OutstandingManager({
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<OutstandingSale | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [paymentTarget, setPaymentTarget] = useState<OutstandingSale | null>(
     null
   )
@@ -293,20 +295,25 @@ export function OutstandingManager({
     }
   }
 
-  const deleteLoan = async () => {
+  const deleteLoan = async (password: string) => {
     if (!deleteTarget) return
 
     setError(null)
+    setDeleteError(null)
     setDeletingId(deleteTarget._id)
 
     try {
       const response = await fetch(`/api/sales/${deleteTarget._id}?loan=true`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete loan.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which loan was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete loan.")
         return
       }
 
@@ -317,19 +324,24 @@ export function OutstandingManager({
       refreshLoanNotifications()
       router.refresh()
     } catch {
-      setError("Failed to delete loan.")
+      setDeleteError("Failed to delete loan.")
     } finally {
       setDeletingId(null)
     }
   }
 
-  const restoreLoan = async (sale: DeletedOutstandingSale) => {
+  const restoreLoan = async (
+    sale: DeletedOutstandingSale,
+    password: string
+  ) => {
     setRestoreError(null)
     setRestoringId(sale._id)
 
     try {
       const response = await fetch(`/api/sales/${sale._id}/restore`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
@@ -344,6 +356,7 @@ export function OutstandingManager({
         current.filter((item) => item._id !== sale._id)
       )
       setSales((current) => [restored, ...current])
+      setRestoreTarget(null)
       refreshLoanNotifications()
       router.refresh()
     } catch {
@@ -353,10 +366,11 @@ export function OutstandingManager({
     }
   }
 
-  const handleRestore = async () => {
+  // Only closes on success, so a mistyped password can be corrected without
+  // losing which loan was being restored.
+  const handleRestore = async (password: string) => {
     if (!restoreTarget) return
-    await restoreLoan(restoreTarget)
-    setRestoreTarget(null)
+    await restoreLoan(restoreTarget, password)
   }
 
   return (
@@ -749,81 +763,42 @@ export function OutstandingManager({
       </Dialog>
 
       {isAdmin ? (
-        <Dialog
+        <PasswordConfirmDialog
           open={deleteTarget !== null}
           onOpenChange={(open) => {
             if (!open && !deletingId) {
               setDeleteTarget(null)
+              setDeleteError(null)
             }
           }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete loan?</DialogTitle>
-              <DialogDescription>
-                This removes the loan from active records and business numbers
-                and returns its items to stock. You can restore it later from
-                Deleted Loans.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDeleteTarget(null)}
-                disabled={deletingId !== null}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={deleteLoan}
-                disabled={deletingId !== null}
-              >
-                {deletingId ? "Deleting..." : "Delete Loan"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          title="Delete loan?"
+          description="This removes the loan from active records and business numbers and returns its items to stock. You can restore it later from Deleted Loans."
+          confirmLabel="Delete Loan"
+          pendingLabel="Deleting..."
+          pending={deletingId !== null}
+          error={deleteError}
+          onConfirm={deleteLoan}
+        />
       ) : null}
 
       {isAdmin ? (
-        <Dialog
+        <PasswordConfirmDialog
           open={restoreTarget !== null}
           onOpenChange={(open) => {
             if (!open && !restoringId) {
               setRestoreTarget(null)
+              setRestoreError(null)
             }
           }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Restore loan?</DialogTitle>
-              <DialogDescription>
-                This returns the loan to the active list and business numbers,
-                and deducts its items from stock again.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRestoreTarget(null)}
-                disabled={restoringId !== null}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleRestore}
-                disabled={restoringId !== null}
-              >
-                {restoringId ? "Restoring..." : "Restore Loan"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          title="Restore loan?"
+          description="This returns the loan to the active list and business numbers, and deducts its items from stock again."
+          confirmLabel="Restore Loan"
+          pendingLabel="Restoring..."
+          confirmVariant="default"
+          pending={restoringId !== null}
+          error={restoreError}
+          onConfirm={handleRestore}
+        />
       ) : null}
     </div>
   )

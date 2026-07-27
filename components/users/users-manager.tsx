@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -103,6 +104,8 @@ export function UsersManager({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const resetForm = () => {
     setFormState(emptyForm)
@@ -177,27 +180,32 @@ export function UsersManager({
     }
   }
 
-  const handleDelete = async (userId: string) => {
-    if (!confirm("Delete this user?")) {
-      return
-    }
+  const handleDelete = async (password: string) => {
+    const userId = deleteTarget
+    if (!userId) return
 
     setSubmitting(true)
     setError(null)
+    setDeleteError(null)
 
     try {
       const response = await fetch(`/api/users/${userId}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json()
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete user.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which user was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete user.")
         return
       }
 
       setUsers((current) => current.filter((user) => user._id !== userId))
-    } catch (err) {
-      setError("Failed to delete user.")
+      setDeleteTarget(null)
+    } catch {
+      setDeleteError("Failed to delete user.")
     } finally {
       setSubmitting(false)
     }
@@ -361,7 +369,10 @@ export function UsersManager({
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => handleDelete(user._id)}
+                    onClick={() => {
+                      setDeleteError(null)
+                      setDeleteTarget(user._id)
+                    }}
                     disabled={submitting || user.isAdmin || user._id === currentUserId}
                   >
                     Delete
@@ -423,6 +434,23 @@ export function UsersManager({
           </TableBody>
         </Table>
       </section>
+
+      <PasswordConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+        title="Delete user?"
+        description="This removes the account and its access to the system."
+        confirmLabel="Delete User"
+        pendingLabel="Deleting..."
+        pending={submitting}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

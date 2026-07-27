@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ProductSearchSelect } from "@/components/products/product-search-select"
+import { PasswordConfirmDialog } from "@/components/auth/password-confirm-dialog"
 import { AlertTriangle, FilePlus2, Pencil, RotateCcw, Trash2 } from "lucide-react"
 import {
   Select,
@@ -145,6 +146,9 @@ export function SalesManager({
   const [deletedSales, setDeletedSales] = useState(initialDeletedSales)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<DeletedSaleClient | null>(
+    null
+  )
   const [productOptions, setProductOptions] = useState(products)
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraft])
   const [activeSaleId, setActiveSaleId] = useState<string | null>(null)
@@ -179,6 +183,8 @@ export function SalesManager({
   const [submitting, setSubmitting] = useState(false)
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false)
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SaleClient | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [search, setSearch] = useState("")
   const [dateFrom, setDateFrom] = useState("")
@@ -393,26 +399,26 @@ export function SalesManager({
     }
   }
 
-  const deleteSale = async (sale: SaleClient) => {
-    if (
-      !confirm(
-        "Delete this sale? The sold quantities return to inventory and any linked invoice is hidden too. You can restore it later from Deleted Sales."
-      )
-    ) {
-      return
-    }
+  const deleteSale = async (password: string) => {
+    const sale = deleteTarget
+    if (!sale) return
 
     setDeletingSaleId(sale._id)
     setError(null)
+    setDeleteError(null)
 
     try {
       const response = await fetch(`/api/sales/${sale._id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
       if (!response.ok || !body?.success) {
-        setError(body?.error ?? "Failed to delete sale.")
+        // Kept inside the dialog so a mistyped password can be corrected
+        // without losing which sale was being deleted.
+        setDeleteError(body?.error ?? "Failed to delete sale.")
         return
       }
 
@@ -426,10 +432,11 @@ export function SalesManager({
       if (activeSaleId === sale._id) {
         resetForm()
       }
+      setDeleteTarget(null)
       refreshLoanNotifications()
       router.refresh()
     } catch {
-      setError("Failed to delete sale.")
+      setDeleteError("Failed to delete sale.")
     } finally {
       setDeletingSaleId(null)
     }
@@ -474,14 +481,9 @@ export function SalesManager({
     createdByName: sale.createdByName ?? previous?.createdByName ?? currentUserLabel,
   })
 
-  const restoreSale = async (sale: DeletedSaleClient) => {
-    if (
-      !confirm(
-        "Restore this sale? It returns to the active list and business numbers, and its sold quantities are deducted from inventory again."
-      )
-    ) {
-      return
-    }
+  const restoreSale = async (password: string) => {
+    const sale = restoreTarget
+    if (!sale) return
 
     setRestoreError(null)
     setRestoringId(sale._id)
@@ -489,6 +491,8 @@ export function SalesManager({
     try {
       const response = await fetch(`/api/sales/${sale._id}/restore`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
       })
       const body = await response.json().catch(() => null)
 
@@ -509,6 +513,7 @@ export function SalesManager({
           (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
         )
       )
+      setRestoreTarget(null)
       refreshLoanNotifications()
       router.refresh()
     } catch {
@@ -1285,7 +1290,10 @@ export function SalesManager({
                                     type="button"
                                     variant="destructive"
                                     size="sm"
-                                    onClick={() => deleteSale(sale)}
+                                    onClick={() => {
+                                      setDeleteError(null)
+                                      setDeleteTarget(sale)
+                                    }}
                                     disabled={deletingSaleId === sale._id}
                                   >
                                     <Trash2 className="size-4" />
@@ -1399,7 +1407,10 @@ export function SalesManager({
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => restoreSale(sale)}
+                        onClick={() => {
+                          setRestoreError(null)
+                          setRestoreTarget(sale)
+                        }}
                         disabled={restoringId === sale._id}
                       >
                         <RotateCcw className="size-4" />
@@ -1413,6 +1424,41 @@ export function SalesManager({
           </Table>
         </section>
       ) : null}
+
+      <PasswordConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingSaleId) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
+        }}
+        title="Delete sale?"
+        description="The sold quantities return to inventory and any linked invoice is hidden too. You can restore it later from Deleted Sales."
+        confirmLabel="Delete Sale"
+        pendingLabel="Deleting..."
+        pending={deletingSaleId !== null}
+        error={deleteError}
+        onConfirm={deleteSale}
+      />
+
+      <PasswordConfirmDialog
+        open={restoreTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !restoringId) {
+            setRestoreTarget(null)
+            setRestoreError(null)
+          }
+        }}
+        title="Restore sale?"
+        description="This returns the sale to the active list and business numbers, and its sold quantities are deducted from inventory again."
+        confirmLabel="Restore Sale"
+        pendingLabel="Restoring..."
+        confirmVariant="default"
+        pending={restoringId !== null}
+        error={restoreError}
+        onConfirm={restoreSale}
+      />
     </div>
   )
 }
