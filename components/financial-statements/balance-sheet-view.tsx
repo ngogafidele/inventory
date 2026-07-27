@@ -2,7 +2,7 @@
 
 // Presents the balance sheet as of a date and edits its manual line items.
 import { useCallback, useEffect, useState } from "react"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Download, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { downloadPdf } from "@/lib/utils/pdf-download"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
 import { cn } from "@/lib/utils"
@@ -197,6 +198,7 @@ export function BalanceSheetView() {
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [items, setItems] = useState<ManualItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
@@ -240,6 +242,19 @@ export function BalanceSheetView() {
       cancelled = true
     }
   }, [apply])
+
+  const downloadSheet = async () => {
+    setDownloading(true)
+    // Exports the date the loaded sheet is actually for, so the PDF matches the
+    // screen rather than an unapplied change to the date input.
+    const params = new URLSearchParams({ asOf: sheet?.asOf ?? asOf })
+    const message = await downloadPdf(
+      `/api/financial-statements/balance-sheet/pdf?${params.toString()}`,
+      "balance-sheet.pdf"
+    )
+    if (message) setError(message)
+    setDownloading(false)
+  }
 
   const openCreate = () => {
     setForm(emptyForm(asOf))
@@ -344,7 +359,7 @@ export function BalanceSheetView() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm md:grid-cols-[1fr_auto_auto]">
+      <div className="grid gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm md:grid-cols-[1fr_auto_auto_auto]">
         <label className="space-y-1 text-sm font-medium text-foreground">
           As of
           <Input
@@ -372,6 +387,18 @@ export function BalanceSheetView() {
           >
             <Plus className="size-4" />
             Add item
+          </Button>
+        </div>
+        <div className="flex items-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full md:w-auto"
+            onClick={() => void downloadSheet()}
+            disabled={loading || downloading || !sheet}
+          >
+            <Download className="size-4" />
+            {downloading ? "Preparing..." : "Export PDF"}
           </Button>
         </div>
       </div>

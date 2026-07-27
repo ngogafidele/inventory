@@ -2,8 +2,10 @@
 
 // Presents the income statement for a chosen date range.
 import { useCallback, useEffect, useState } from "react"
+import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { downloadPdf } from "@/lib/utils/pdf-download"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
 import { cn } from "@/lib/utils"
@@ -82,6 +84,7 @@ export function IncomeStatementView() {
   const [statement, setStatement] = useState<IncomeStatement | null>(null)
   const [range, setRange] = useState<{ from: string; to: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const apply = useCallback((result: FetchResult) => {
@@ -122,6 +125,22 @@ export function IncomeStatementView() {
     setStart(next.start)
     setEnd(next.end)
     void load(next.start, next.end)
+  }
+
+  const downloadStatement = async () => {
+    setDownloading(true)
+    // Exports the range the server last reported, so the PDF always matches
+    // what is on screen rather than unapplied edits to the date inputs.
+    const params = new URLSearchParams({
+      start: range?.from ?? start,
+      end: range?.to ?? end,
+    })
+    const message = await downloadPdf(
+      `/api/financial-statements/income-statement/pdf?${params.toString()}`,
+      "income-statement.pdf"
+    )
+    if (message) setError(message)
+    setDownloading(false)
   }
 
   const rows: Row[] = statement
@@ -197,6 +216,18 @@ export function IncomeStatementView() {
             {label}
           </Button>
         ))}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => void downloadStatement()}
+          disabled={loading || downloading || !statement}
+        >
+          <Download className="size-4" />
+          {downloading ? "Preparing..." : "Export PDF"}
+        </Button>
       </div>
 
       {error ? (
