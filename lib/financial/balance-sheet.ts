@@ -324,6 +324,8 @@ async function computeAccountsReceivable(
     {
       $match: {
         $or: [
+          { wasLoan: true },
+          { paymentStatus: "unpaid" },
           { outstanding: { $ne: null, $exists: true } },
           { "paymentsAll.0": { $exists: true } },
         ],
@@ -349,11 +351,60 @@ async function computeAccountsReceivable(
       },
     },
     {
+      $lookup: {
+        from: "returns",
+        let: { saleId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              store,
+              createdAt: { $lt: endExclusive },
+              $expr: { $eq: ["$saleId", "$$saleId"] },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: {
+                $sum: {
+                  $max: [
+                    0,
+                    {
+                      $subtract: [
+                        { $ifNull: ["$totalReturnAmount", 0] },
+                        { $ifNull: ["$totalReplacementAmount", 0] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+        as: "returnCreditRows",
+      },
+    },
+    {
+      $addFields: {
+        returnCreditBefore: {
+          $ifNull: [{ $first: "$returnCreditRows.total" }, 0],
+        },
+      },
+    },
+    {
       $group: {
         _id: null,
         total: {
           $sum: {
-            $max: [0, { $subtract: ["$totalAmount", "$collectedBefore"] }],
+            $max: [
+              0,
+              {
+                $subtract: [
+                  "$totalAmount",
+                  { $add: ["$collectedBefore", "$returnCreditBefore"] },
+                ],
+              },
+            ],
           },
         },
       },

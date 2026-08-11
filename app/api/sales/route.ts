@@ -185,6 +185,7 @@ export async function POST(request: NextRequest) {
               totalAmount,
               createdBy: session.userId,
               paymentStatus,
+              wasLoan: paymentStatus === "unpaid",
               paymentMethod:
                 paymentStatus === "paid" ? payload.paymentMethod : undefined,
               customer:

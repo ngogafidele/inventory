@@ -63,6 +63,7 @@ const SaleSchema = new Schema(
       enum: ["paid", "unpaid"],
       default: "paid",
     },
+    wasLoan: { type: Boolean, required: true, default: false },
     paymentMethod: {
       type: String,
       enum: ["cash", "bank", "mobile"],

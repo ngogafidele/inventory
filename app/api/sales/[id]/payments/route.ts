@@ -25,6 +25,7 @@ type LoanSaleForPayment = {
   amountPaid?: number
   remainingBalance?: number
   payments?: LoanPayment[]
+  wasLoan?: boolean
   customer?: {
     name?: string
     phone?: string
@@ -141,6 +142,7 @@ export async function POST(
       $set: {
         amountPaid,
         remainingBalance: nextRemainingBalance,
+        wasLoan: true,
         ...(isSettled
           ? {
               paymentStatus: "paid",

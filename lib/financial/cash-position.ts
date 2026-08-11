@@ -71,7 +71,12 @@ async function computeCashCollected(
       $addFields: {
         atSale: {
           $cond: [
-            { $eq: ["$paymentStatus", "paid"] },
+            {
+              $and: [
+                { $eq: ["$paymentStatus", "paid"] },
+                { $ne: ["$wasLoan", true] },
+              ],
+            },
             {
               $max: [0, { $subtract: ["$totalAmount", "$instalmentsTotal"] }],
             },
@@ -98,25 +103,93 @@ async function computeNetRefunds(
   const rows = await ReturnModel.aggregate<SumAgg>([
     { $match: { store, createdAt: { $lt: endExclusive } } },
     {
+      $addFields: {
+        netReturn: {
+          $max: [
+            0,
+            {
+              $subtract: [
+                { $ifNull: ["$totalReturnAmount", 0] },
+                { $ifNull: ["$totalReplacementAmount", 0] },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "sales",
+        localField: "saleId",
+        foreignField: "_id",
+        as: "sale",
+      },
+    },
+    { $unwind: { path: "$sale", preserveNullAndEmptyArrays: true } },
+    {
       $group: {
-        _id: null,
-        // Uses the totals stored on the return rather than re-summing line
-        // items, so this cannot drift from the figure the return itself
-        // recorded. Goods swapped for goods move no money; only the excess is
-        // refunded in cash.
-        total: {
+        _id: "$saleId",
+        returnCredit: { $sum: "$netReturn" },
+        sale: { $first: "$sale" },
+      },
+    },
+    {
+      $addFields: {
+        paymentsAll: { $ifNull: ["$sale.payments", []] },
+      },
+    },
+    {
+      $addFields: {
+        paymentsBefore: {
           $sum: {
-            $max: [
-              0,
-              {
-                $subtract: [
-                  { $ifNull: ["$totalReturnAmount", 0] },
-                  { $ifNull: ["$totalReplacementAmount", 0] },
-                ],
+            $map: {
+              input: {
+                $filter: {
+                  input: "$paymentsAll",
+                  as: "payment",
+                  cond: { $lt: ["$$payment.paidAt", endExclusive] },
+                },
               },
-            ],
+              as: "payment",
+              in: "$$payment.amount",
+            },
           },
         },
+        isLoanSale: {
+          $or: [
+            { $eq: ["$sale.wasLoan", true] },
+            { $eq: ["$sale.paymentStatus", "unpaid"] },
+            { $ne: [{ $ifNull: ["$sale.outstanding", null] }, null] },
+            { $gt: [{ $size: "$paymentsAll" }, 0] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        cashRefund: {
+          $cond: [
+            "$isLoanSale",
+            {
+              $max: [
+                0,
+                {
+                  $subtract: [
+                    { $add: ["$paymentsBefore", "$returnCredit"] },
+                    { $ifNull: ["$sale.totalAmount", 0] },
+                  ],
+                },
+              ],
+            },
+            "$returnCredit",
+          ],
+        },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: "$cashRefund" },
       },
     },
   ])

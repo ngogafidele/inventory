@@ -9,6 +9,7 @@ import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { verifyActionPassword } from "@/lib/auth/step-up"
 import { UpdateReturnSchema } from "@/lib/db/validators/return"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { reconcileLoanAfterReturn } from "@/lib/db/loan-reconciliation"
 
 type ReturnItemInput = {
   productId: string
@@ -75,7 +76,7 @@ export async function PUT(
     const { id } = await context.params
     const payload = UpdateReturnSchema.parse(await request.json())
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
     const existingReturn = await ReturnModel.findOne({ _id: id, store })
     if (!existingReturn) {
       return NextResponse.json(
@@ -258,17 +259,6 @@ export async function PUT(
       updates.push({ productId, delta })
     }
 
-    if (updates.length > 0) {
-      await Product.bulkWrite(
-        updates.map((entry) => ({
-          updateOne: {
-            filter: { _id: entry.productId, store },
-            update: { $inc: { quantity: entry.delta } },
-          },
-        }))
-      )
-    }
-
     const updateInput: Record<string, unknown> = {
       returnItems,
       replacementItems: [],
@@ -280,17 +270,38 @@ export async function PUT(
           : existingReturn.notes,
     }
 
-    const updatedReturn = await ReturnModel.findOneAndUpdate(
-      { _id: id, store },
-      updateInput,
-      { returnDocument: "after", runValidators: true }
-    )
+    let updatedReturn
+    const dbSession = await db.startSession()
+    try {
+      await dbSession.withTransaction(async () => {
+        if (updates.length > 0) {
+          await Product.bulkWrite(
+            updates.map((entry) => ({
+              updateOne: {
+                filter: { _id: entry.productId, store },
+                update: { $inc: { quantity: entry.delta } },
+              },
+            })),
+            { session: dbSession }
+          )
+        }
 
-    if (!updatedReturn) {
-      return NextResponse.json(
-        { success: false, error: "Return not found" },
-        { status: 404 }
-      )
+        updatedReturn = await ReturnModel.findOneAndUpdate(
+          { _id: id, store },
+          updateInput,
+          { returnDocument: "after", runValidators: true, session: dbSession }
+        )
+
+        if (!updatedReturn) {
+          throw new Error("Return not found")
+        }
+
+        if (linkedSaleId) {
+          await reconcileLoanAfterReturn(linkedSaleId, store, dbSession)
+        }
+      })
+    } finally {
+      await dbSession.endSession()
     }
 
     try {
@@ -354,7 +365,7 @@ export async function DELETE(
 
     const { id } = await context.params
 
-    await connectToDatabase()
+    const db = await connectToDatabase()
     const existingReturn = await ReturnModel.findOne({ _id: id, store })
 
     if (!existingReturn) {
@@ -363,6 +374,9 @@ export async function DELETE(
         { status: 404 }
       )
     }
+    const linkedSaleId = existingReturn.saleId
+      ? existingReturn.saleId.toString()
+      : null
 
     const productIds = Array.from(
       new Set([
@@ -409,16 +423,27 @@ export async function DELETE(
       delta: -change,
     }))
 
-    await Product.bulkWrite(
-      updates.map((entry) => ({
-        updateOne: {
-          filter: { _id: entry.productId, store },
-          update: { $inc: { quantity: entry.delta } },
-        },
-      }))
-    )
+    const dbSession = await db.startSession()
+    try {
+      await dbSession.withTransaction(async () => {
+        await Product.bulkWrite(
+          updates.map((entry) => ({
+            updateOne: {
+              filter: { _id: entry.productId, store },
+              update: { $inc: { quantity: entry.delta } },
+            },
+          })),
+          { session: dbSession }
+        )
 
-    await existingReturn.deleteOne()
+        await existingReturn.deleteOne({ session: dbSession })
+        if (linkedSaleId) {
+          await reconcileLoanAfterReturn(linkedSaleId, store, dbSession)
+        }
+      })
+    } finally {
+      await dbSession.endSession()
+    }
 
     try {
       await Promise.all(

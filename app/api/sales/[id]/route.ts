@@ -11,6 +11,10 @@ import { verifyActionPassword } from "@/lib/auth/step-up"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { UpdateSaleSchema } from "@/lib/db/validators/sale"
 import { parseKigaliDateInput } from "@/lib/utils/time"
+import {
+  getReturnCreditForSale,
+  reconcileLoanAfterReturn,
+} from "@/lib/db/loan-reconciliation"
 
 type SaleItemForRestock = {
   productId: { toString(): string }
@@ -224,16 +228,26 @@ export async function PATCH(
 
     // Record the settled balance as a payment so it shows in the payment-method
     // breakdown; otherwise this direct settlement leaves no trace in payments[].
-    const alreadyPaid =
-      typeof existingSale.amountPaid === "number" ? existingSale.amountPaid : 0
+    const alreadyPaid = Math.max(
+      typeof existingSale.amountPaid === "number" ? existingSale.amountPaid : 0,
+      getAmountPaidFromPayments(
+        existingSale.payments as ExistingLoanPayment[] | undefined
+      )
+    )
+    const returnCredit = await getReturnCreditForSale(existingSale._id, store)
+    const returnAdjustedTotal = Math.max(
+      0,
+      Math.round((existingSale.totalAmount - returnCredit) * 100) / 100
+    )
     const settlementAmount =
-      Math.round((existingSale.totalAmount - alreadyPaid) * 100) / 100
+      Math.round((returnAdjustedTotal - alreadyPaid) * 100) / 100
 
     const update: Record<string, unknown> = {
       paymentStatus: "paid",
+      wasLoan: existingSale.wasLoan || existingSale.paymentStatus === "unpaid",
       paymentMethod: payload.paymentMethod,
       remainingBalance: 0,
-      amountPaid: existingSale.totalAmount,
+      amountPaid: Math.max(alreadyPaid, returnAdjustedTotal),
       ...(customerFromOutstanding && !existingSale.customer
         ? { customer: customerFromOutstanding }
         : {}),
@@ -437,16 +451,20 @@ export async function PUT(
         sale.items = saleItems
         sale.totalAmount = totalAmount
         sale.paymentStatus = paymentStatus
+        sale.wasLoan = sale.wasLoan || paymentStatus === "unpaid"
         sale.paymentMethod =
           paymentStatus === "paid" ? payload.paymentMethod : undefined
         const existingPayments = sale.payments as ExistingLoanPayment[] | undefined
         const amountPaid = getAmountPaidFromPayments(existingPayments)
-        if (paymentStatus === "unpaid" && amountPaid > totalAmount) {
+        const returnCredit = await getReturnCreditForSale(sale._id, store, dbSession)
+        const returnAdjustedTotal = Math.max(0, totalAmount - returnCredit)
+        if (paymentStatus === "unpaid" && amountPaid > returnAdjustedTotal) {
           throw new Error("Existing payments exceed the updated sale total.")
         }
-        sale.amountPaid = paymentStatus === "unpaid" ? amountPaid : totalAmount
+        sale.amountPaid =
+          paymentStatus === "unpaid" ? amountPaid : returnAdjustedTotal
         sale.remainingBalance =
-          paymentStatus === "unpaid" ? totalAmount - amountPaid : 0
+          paymentStatus === "unpaid" ? returnAdjustedTotal - amountPaid : 0
         sale.customer =
           customer.name || customer.phone
             ? {
@@ -503,6 +521,9 @@ export async function PUT(
 
         if (invoice) {
           await invoice.save({ session: dbSession })
+        }
+        if (sale.wasLoan) {
+          await reconcileLoanAfterReturn(sale._id, store, dbSession)
         }
       })
     } finally {
