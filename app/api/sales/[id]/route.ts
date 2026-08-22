@@ -4,6 +4,7 @@ import type { ClientSession } from "mongoose"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Invoice } from "@/lib/db/models/Invoice"
 import { Product } from "@/lib/db/models/Product"
+import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
@@ -19,6 +20,11 @@ import {
 type SaleItemForRestock = {
   productId: { toString(): string }
   quantity: number
+}
+
+type ReturnForSaleDelete = {
+  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
+  replacementItems: Array<{ productId: { toString(): string }; quantity: number }>
 }
 
 type SaleItemForEdit = {
@@ -62,6 +68,20 @@ function getRestockQuantities(items: SaleItemForRestock[]) {
   items.forEach((item) =>
     addQuantity(quantities, item.productId.toString(), item.quantity)
   )
+  return quantities
+}
+
+function getReturnDeletionStockChanges(returns: ReturnForSaleDelete[]) {
+  const quantities = new Map<string, number>()
+  returns.forEach((entry) => {
+    entry.returnItems.forEach((item) =>
+      addQuantity(quantities, item.productId.toString(), -item.quantity)
+    )
+    const replacementItems = entry.replacementItems ?? []
+    replacementItems.forEach((item) =>
+      addQuantity(quantities, item.productId.toString(), item.quantity)
+    )
+  })
   return quantities
 }
 
@@ -623,7 +643,17 @@ export async function DELETE(
 
     const saleItems = sale.items as SaleItemForRestock[]
     const restockQuantities = getRestockQuantities(saleItems)
-    const productIds = Array.from(restockQuantities.keys())
+    const linkedReturns = await ReturnModel.find({ saleId: sale._id, store })
+      .select("returnItems replacementItems")
+      .lean<ReturnForSaleDelete[]>()
+    const returnDeletionChanges = getReturnDeletionStockChanges(linkedReturns)
+    const stockChanges = new Map(restockQuantities)
+    returnDeletionChanges.forEach((change, productId) => {
+      addQuantity(stockChanges, productId, change)
+    })
+    const productIds = Array.from(stockChanges.keys()).filter(
+      (productId) => (stockChanges.get(productId) ?? 0) !== 0
+    )
     const products = await Product.find({ _id: { $in: productIds }, store })
     const productMap = new Map(
       products.map((product) => [product._id.toString(), product])
@@ -640,21 +670,34 @@ export async function DELETE(
       )
     }
 
+    for (const productId of productIds) {
+      const product = productMap.get(productId)
+      const change = stockChanges.get(productId) ?? 0
+      if (!product || product.quantity + change < 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Cannot delete this sale because stock from one or more linked returns is no longer available.",
+          },
+          { status: 409 }
+        )
+      }
+    }
+
     const dbSession = await db.startSession()
     try {
       await dbSession.withTransaction(async () => {
         // Soft-deleting a recorded sale reverses its physical stock movement
-        // while retaining the record itself for audit and possible restore.
-        if (restockQuantities.size > 0) {
+        // while linked returns are hard-deleted and their stock effect reversed.
+        if (productIds.length > 0) {
           await Product.bulkWrite(
-            Array.from(restockQuantities.entries()).map(
-              ([productId, quantity]) => ({
-                updateOne: {
-                  filter: { _id: productId, store },
-                  update: { $inc: { quantity } },
-                },
-              })
-            ),
+            productIds.map((productId) => ({
+              updateOne: {
+                filter: { _id: productId, store },
+                update: { $inc: { quantity: stockChanges.get(productId) ?? 0 } },
+              },
+            })),
             { session: dbSession }
           )
         }
@@ -674,6 +717,12 @@ export async function DELETE(
           { $set: deletionMeta },
           { session: dbSession }
         )
+        if (linkedReturns.length > 0) {
+          await ReturnModel.deleteMany(
+            { saleId: sale._id, store },
+            { session: dbSession }
+          )
+        }
       })
     } finally {
       await dbSession.endSession()
@@ -681,11 +730,11 @@ export async function DELETE(
 
     try {
       await Promise.all(
-        Array.from(restockQuantities.entries()).map(
-          async ([productId, quantity]) => {
+        productIds.map(
+          async (productId) => {
             const product = productMap.get(productId)
             if (!product) return
-            const newQuantity = product.quantity + quantity
+            const newQuantity = product.quantity + (stockChanges.get(productId) ?? 0)
             await syncLowStockAlert({
               store,
               productId: product._id.toString(),

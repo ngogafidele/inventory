@@ -54,13 +54,20 @@ type SaleItemClient = {
   lineTotal: number
 }
 
+type StockQuantityClient = {
+  productId: string
+  quantity: number
+}
+
 type SaleClient = {
   _id: string
   items: SaleItemClient[]
+  returnedItems?: StockQuantityClient[]
   totalAmount: number
   notes: string
   paymentStatus?: "paid" | "unpaid"
   paymentMethod?: "cash" | "bank" | "mobile"
+  returnStatus?: "none" | "partial" | "returned"
   customer?: {
     name?: string
     phone?: string
@@ -118,6 +125,12 @@ function normalizeSearchText(value: string) {
 
 function getStatusLabel(status?: SaleClient["paymentStatus"]) {
   return status === "unpaid" ? "Unpaid" : "Paid"
+}
+
+function getReturnStatusLabel(status?: SaleClient["returnStatus"]) {
+  if (status === "returned") return "Returned"
+  if (status === "partial") return "Partially returned"
+  return null
 }
 
 function refreshLoanNotifications() {
@@ -422,7 +435,7 @@ export function SalesManager({
         return
       }
 
-      updateProductQuantities(sale.items, [])
+      updateProductQuantities(sale.items, sale.returnedItems ?? [])
       setSales((current) => current.filter((item) => item._id !== sale._id))
       setInvoicedSaleIds((current) => {
         const next = new Set(current)
@@ -443,8 +456,8 @@ export function SalesManager({
   }
 
   const updateProductQuantities = (
-    previousItems: SaleItemClient[],
-    nextItems: SaleItemClient[]
+    previousItems: StockQuantityClient[],
+    nextItems: StockQuantityClient[]
   ) => {
     const changes = new Map<string, number>()
 
@@ -1247,15 +1260,22 @@ export function SalesManager({
                             {formatCurrency(sale.totalAmount)}
                           </TableCell>
                           <TableCell rowSpan={rowSpan}>
-                            <span
-                              className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                                sale.paymentStatus === "unpaid"
-                                  ? "border-warning/30 bg-warning/10 text-warning"
-                                  : "border-success/30 bg-success/10 text-success"
-                              }`}
-                            >
-                              {getStatusLabel(sale.paymentStatus)}
-                            </span>
+                            <div className="flex flex-col items-start gap-1.5">
+                              <span
+                                className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                                  sale.paymentStatus === "unpaid"
+                                    ? "border-warning/30 bg-warning/10 text-warning"
+                                    : "border-success/30 bg-success/10 text-success"
+                                }`}
+                              >
+                                {getStatusLabel(sale.paymentStatus)}
+                              </span>
+                              {getReturnStatusLabel(sale.returnStatus) ? (
+                                <span className="inline-flex rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                                  {getReturnStatusLabel(sale.returnStatus)}
+                                </span>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell rowSpan={rowSpan}>
                             {sale.createdByName ?? "Unknown User"}
@@ -1434,7 +1454,7 @@ export function SalesManager({
           }
         }}
         title="Delete sale?"
-        description="The sold quantities return to inventory and any linked invoice is hidden too. You can restore it later from Deleted Sales."
+        description="The sold quantities return to inventory, any linked invoice is hidden, and any return recorded against this sale is deleted too. You can restore the sale later from Deleted Sales."
         confirmLabel="Delete Sale"
         pendingLabel="Deleting..."
         pending={deletingSaleId !== null}

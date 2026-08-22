@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/db/connection"
 import { Sale } from "@/lib/db/models/Sale"
 import { Product } from "@/lib/db/models/Product"
 import { Invoice } from "@/lib/db/models/Invoice"
+import { ReturnModel } from "@/lib/db/models/Return"
 import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
@@ -62,6 +63,16 @@ type SalesPageInvoice = {
   saleId?: { toString(): string }
 }
 
+type ReturnedQuantityRow = {
+  _id: {
+    saleId: { toString(): string } | null
+    productId: { toString(): string } | null
+  }
+  quantity: number
+}
+
+type SalesReturnStatus = "none" | "partial" | "returned"
+
 function isPopulatedSaleUser(
   value: SalesPageSale["createdBy"]
 ): value is PopulatedSaleUser {
@@ -85,7 +96,7 @@ export default async function SalesPage({
   const resolvedSearchParams = searchParams ? await searchParams : {}
 
   await connectToDatabase()
-  const [sales, deletedSales, products, invoices] = await Promise.all([
+  const [sales, deletedSales, products, invoices, returnedRows] = await Promise.all([
     Sale.find({ store, deletedAt: null })
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 })
@@ -101,7 +112,47 @@ export default async function SalesPage({
     Invoice.find({ store, sourceType: "sale", deletedAt: null })
       .select("saleId")
       .lean<SalesPageInvoice[]>(),
+    ReturnModel.aggregate<ReturnedQuantityRow>([
+      { $match: { store, saleId: { $ne: null } } },
+      { $unwind: "$returnItems" },
+      {
+        $group: {
+          _id: {
+            saleId: "$saleId",
+            productId: "$returnItems.productId",
+          },
+          quantity: { $sum: "$returnItems.quantity" },
+        },
+      },
+    ]),
   ])
+
+  const returnedQuantityBySaleId = new Map<string, number>()
+  const returnedItemsBySaleId = new Map<
+    string,
+    Array<{ productId: string; quantity: number }>
+  >()
+  returnedRows.forEach((row) => {
+    const saleId = row._id.saleId?.toString()
+    const productId = row._id.productId?.toString()
+    if (!saleId || !productId) return
+
+    returnedQuantityBySaleId.set(
+      saleId,
+      (returnedQuantityBySaleId.get(saleId) ?? 0) + row.quantity
+    )
+    const items = returnedItemsBySaleId.get(saleId) ?? []
+    items.push({ productId, quantity: row.quantity })
+    returnedItemsBySaleId.set(saleId, items)
+  })
+
+  const getReturnStatus = (sale: SalesPageSale): SalesReturnStatus => {
+    const soldQuantity = sale.items.reduce((sum, item) => sum + item.quantity, 0)
+    const returnedQuantity =
+      returnedQuantityBySaleId.get(sale._id.toString()) ?? 0
+    if (returnedQuantity <= 0) return "none"
+    return returnedQuantity >= soldQuantity ? "returned" : "partial"
+  }
 
   const serializeSale = (sale: SalesPageSale) => ({
     ...sale,
@@ -142,6 +193,8 @@ export default async function SalesPage({
       ...item,
       productId: item.productId.toString(),
     })),
+    returnedItems: returnedItemsBySaleId.get(sale._id.toString()) ?? [],
+    returnStatus: getReturnStatus(sale),
   })
 
   const serializedSales = sales.map(serializeSale)
