@@ -1,11 +1,12 @@
 // Defines the skeleton arrangement displayed while dashboard data loads.
 //
-// Mirrors DashboardStats: eleven metric cards on a six-column grid, then the
-// Recent Sales and Top Products panels. Keep the card count and spacing in step
-// with that component or the page jumps when the data lands.
+// Mirrors DashboardStats: metric cards, then admin-only Recent Sales and Top
+// Products panels. Keep counts and spacing in step with that component or the
+// page jumps when the data lands.
 import { Skeleton } from "@/components/ui/skeleton"
 
-const CARD_COUNT = 11
+const ADMIN_CARD_COUNT = 11
+const RESTRICTED_CARD_COUNT = 7
 
 function PanelSkeleton() {
   return (
@@ -37,11 +38,13 @@ function PanelSkeleton() {
   )
 }
 
-export function DashboardSkeleton() {
+export function DashboardSkeleton({ restricted = false }: { restricted?: boolean }) {
+  const cardCount = restricted ? RESTRICTED_CARD_COUNT : ADMIN_CARD_COUNT
+
   return (
     <div className="space-y-14" role="status" aria-label="Loading dashboard">
       <div className="grid gap-x-5 gap-y-12 md:grid-cols-2 xl:grid-cols-6">
-        {Array.from({ length: CARD_COUNT }).map((_, index) => (
+        {Array.from({ length: cardCount }).map((_, index) => (
           <div
             key={index}
             className="rounded-2xl border border-border/80 bg-background/80 p-4 shadow-sm"
@@ -55,10 +58,12 @@ export function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="grid gap-12">
-        <PanelSkeleton />
-        <PanelSkeleton />
-      </div>
+      {restricted ? null : (
+        <div className="grid gap-12">
+          <PanelSkeleton />
+          <PanelSkeleton />
+        </div>
+      )}
     </div>
   )
 }

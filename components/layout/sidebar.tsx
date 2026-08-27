@@ -21,8 +21,13 @@ import {
 import { cn } from "@/lib/utils"
 import { requiresReauth } from "@/lib/auth/reauth"
 
+const dashboardNavItem = {
+  href: "/dashboard",
+  label: "Dashboard",
+  icon: LayoutDashboard,
+}
+
 const adminOnlyNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/users", label: "Users", icon: Users },
 ]
 
@@ -52,13 +57,14 @@ export function Sidebar({ session }: { session: AuthSession }) {
   const pathname = usePathname()
   const navItems = session.isAdmin
     ? [
+        dashboardNavItem,
         ...adminOnlyNavItems,
         ...commonNavItems.flatMap((item) =>
           item.href === "/outstanding" ? [item, stockAdjustmentsNavItem] : item
         ),
         ...bottomNavItems,
       ]
-    : commonNavItems
+    : [dashboardNavItem, ...commonNavItems]
 
   return (
     <aside className="w-full shrink-0 rounded-2xl border border-sidebar-border bg-sidebar/90 p-2 backdrop-blur-sm md:sticky md:top-4 md:h-fit md:w-60">

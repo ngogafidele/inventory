@@ -1,14 +1,10 @@
-// Renders the administrator-only overview for the currently selected branch.
+// Renders the branch overview with role-aware metric visibility.
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { IdleGuard } from "@/components/auth/idle-guard"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
-import { redirect } from "next/navigation"
 
 export default async function DashboardPage() {
   const session = await requireServerSession()
-  if (!session.isAdmin) {
-    redirect("/sales")
-  }
   const store = getCurrentStore(session)
 
   return (
@@ -20,7 +16,7 @@ export default async function DashboardPage() {
         </p>
         <h2 className="text-2xl font-semibold">Dashboard</h2>
       </div>
-      <DashboardStats store={store} />
+      <DashboardStats store={store} isAdmin={session.isAdmin} />
     </div>
   )
 }

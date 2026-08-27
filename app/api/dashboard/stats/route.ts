@@ -1,6 +1,6 @@
-// Aggregates administrator dashboard metrics for a selected branch.
+// Aggregates role-aware dashboard metrics for a selected branch.
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth/middleware"
+import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
@@ -89,11 +89,11 @@ function getKigaliTodayRange() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { authorized, session } = await requireAdmin(request)
+    const { authorized, session } = await requireAuth(request)
     if (!authorized || !session) {
       return NextResponse.json(
-        { success: false, error: "Admin only" },
-        { status: 403 }
+        { success: false, error: "Authentication required" },
+        { status: 401 }
       )
     }
 
@@ -111,24 +111,8 @@ export async function GET(request: NextRequest) {
       createdAt: { $gte: today.start, $lt: today.end },
     }
 
-    const [
-      productCount,
-      lowStockCount,
-      salesCount,
-      salesToday,
-      invoiceCount,
-      unpaidCount,
-      loansToday,
-    ] = await Promise.all([
-      Product.countDocuments({ store }),
-      Product.countDocuments({
-        store,
-        $expr: { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
-      }),
-      Sale.countDocuments({ store, deletedAt: null }),
+    const [salesToday, loansToday] = await Promise.all([
       Sale.countDocuments(todayFilter),
-      Invoice.countDocuments({ store, deletedAt: null }),
-      Invoice.countDocuments({ store, status: "unpaid", deletedAt: null }),
       Sale.aggregate<DashboardMoneyTotal>([
         { $match: { ...todayFilter, paymentStatus: "unpaid" } },
         {
@@ -142,134 +126,179 @@ export async function GET(request: NextRequest) {
       ]),
     ])
 
-    const sales = await Sale.aggregate<DashboardMoneyTotal>([
-      { $match: { store, deletedAt: null } },
-      { $group: { _id: null, total: { $sum: "$totalAmount" } } },
-    ])
-
-    const returns = await ReturnModel.aggregate<DashboardReturnTotal>([
-      { $match: { store } },
-      { $unwind: "$returnItems" },
-      {
-        $lookup: {
-          from: "products",
-          localField: "returnItems.productId",
-          foreignField: "_id",
-          as: "product",
+    const [
+      todaySalesTotals,
+      todayReturnTotals,
+      todayExpenses,
+      paymentsByMethod,
+    ] = await Promise.all([
+      Sale.aggregate<DashboardRevenueTotal>([
+        { $match: todayFilter },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$totalAmount" },
+          },
         },
-      },
-      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
-      {
-        $group: {
-          _id: null,
-          revenue: { $sum: "$returnItems.lineTotal" },
-          grossProfit: {
-            $sum: {
-              $subtract: [
-                "$returnItems.lineTotal",
-                {
-                  $multiply: [
-                    {
-                      $ifNull: [
-                        "$returnItems.basePrice",
-                        { $ifNull: ["$product.costPrice", 0] },
-                      ],
-                    },
-                    "$returnItems.quantity",
-                  ],
-                },
-              ],
+      ]),
+      ReturnModel.aggregate<DashboardReturnTotal>([
+        { $match: todayFilter },
+        { $unwind: "$returnItems" },
+        {
+          $lookup: {
+            from: "products",
+            localField: "returnItems.productId",
+            foreignField: "_id",
+            as: "product",
+          },
+        },
+        { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$returnItems.lineTotal" },
+            grossProfit: {
+              $sum: {
+                $subtract: [
+                  "$returnItems.lineTotal",
+                  {
+                    $multiply: [
+                      {
+                        $ifNull: [
+                          "$returnItems.basePrice",
+                          { $ifNull: ["$product.costPrice", 0] },
+                        ],
+                      },
+                      "$returnItems.quantity",
+                    ],
+                  },
+                ],
+              },
             },
           },
         },
-      },
+      ]),
+      Expense.aggregate<DashboardExpenseTotal>([
+        {
+          $match: {
+            store,
+            date: { $gte: today.start, $lt: today.end },
+          },
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      getPaymentMethodTotals(store, {
+        $gte: today.start,
+        $lt: today.end,
+      }),
     ])
 
-    const stockValue = await Product.aggregate<DashboardMoneyTotal>([
-      { $match: { store } },
-      {
-        $group: {
-          _id: null,
-          total: {
-            $sum: {
-              $multiply: [
-                { $ifNull: ["$quantity", 0] },
-                { $ifNull: ["$costPrice", 0] },
-              ],
+    const returnedRevenueToday = todayReturnTotals[0]?.revenue || 0
+    const returnedGrossProfitToday = todayReturnTotals[0]?.grossProfit || 0
+    const expensesTodayTotal = todayExpenses[0]?.total || 0
+    const revenueToday =
+      (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday
+
+    if (!session.isAdmin) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          salesToday,
+          revenueToday,
+          loansToday: loansToday[0]?.total || 0,
+          expensesToday: expensesTodayTotal,
+          paymentsByMethod,
+        },
+      })
+    }
+
+    const [
+      productCount,
+      lowStockCount,
+      salesCount,
+      invoiceCount,
+      unpaidCount,
+      sales,
+      returns,
+      stockValue,
+      unpaidTotals,
+    ] = await Promise.all([
+      Product.countDocuments({ store }),
+      Product.countDocuments({
+        store,
+        $expr: { $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 0] }] },
+      }),
+      Sale.countDocuments({ store, deletedAt: null }),
+      Invoice.countDocuments({ store, deletedAt: null }),
+      Invoice.countDocuments({ store, status: "unpaid", deletedAt: null }),
+      Sale.aggregate<DashboardMoneyTotal>([
+        { $match: { store, deletedAt: null } },
+        { $group: { _id: null, total: { $sum: "$totalAmount" } } },
+      ]),
+      ReturnModel.aggregate<DashboardReturnTotal>([
+        { $match: { store } },
+        { $unwind: "$returnItems" },
+        {
+          $lookup: {
+            from: "products",
+            localField: "returnItems.productId",
+            foreignField: "_id",
+            as: "product",
+          },
+        },
+        { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$returnItems.lineTotal" },
+            grossProfit: {
+              $sum: {
+                $subtract: [
+                  "$returnItems.lineTotal",
+                  {
+                    $multiply: [
+                      {
+                        $ifNull: [
+                          "$returnItems.basePrice",
+                          { $ifNull: ["$product.costPrice", 0] },
+                        ],
+                      },
+                      "$returnItems.quantity",
+                    ],
+                  },
+                ],
+              },
             },
           },
         },
-      },
-    ])
-
-    const unpaidTotals = await Sale.aggregate<DashboardMoneyTotal>([
-      { $match: { store, paymentStatus: "unpaid", deletedAt: null } },
-      {
-        $group: {
-          _id: null,
-          total: {
-            $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
-          },
-        },
-      },
-    ])
-
-    const todaySalesTotals = await Sale.aggregate<DashboardRevenueTotal>([
-      { $match: todayFilter },
-      {
-        $group: {
-          _id: null,
-          revenue: { $sum: "$totalAmount" },
-        },
-      },
-    ])
-
-    const todayReturnTotals = await ReturnModel.aggregate<DashboardReturnTotal>([
-      { $match: todayFilter },
-      { $unwind: "$returnItems" },
-      {
-        $lookup: {
-          from: "products",
-          localField: "returnItems.productId",
-          foreignField: "_id",
-          as: "product",
-        },
-      },
-      { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
-      {
-        $group: {
-          _id: null,
-          revenue: { $sum: "$returnItems.lineTotal" },
-          grossProfit: {
-            $sum: {
-              $subtract: [
-                "$returnItems.lineTotal",
-                {
-                  $multiply: [
-                    {
-                      $ifNull: [
-                        "$returnItems.basePrice",
-                        { $ifNull: ["$product.costPrice", 0] },
-                      ],
-                    },
-                    "$returnItems.quantity",
-                  ],
-                },
-              ],
+      ]),
+      Product.aggregate<DashboardMoneyTotal>([
+        { $match: { store } },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: {
+                $multiply: [
+                  { $ifNull: ["$quantity", 0] },
+                  { $ifNull: ["$costPrice", 0] },
+                ],
+              },
             },
           },
         },
-      },
-    ])
-
-    const todayExpenses = await Expense.aggregate<DashboardExpenseTotal>([
-      {
-        $match: {
-          store,
-          date: { $gte: today.start, $lt: today.end },
+      ]),
+      Sale.aggregate<DashboardMoneyTotal>([
+        { $match: { store, paymentStatus: "unpaid", deletedAt: null } },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: { $ifNull: ["$remainingBalance", "$totalAmount"] },
+            },
+          },
         },
-      },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
     ])
 
     const todayGrossProfit = await Sale.aggregate<DashboardMoneyTotal>([
@@ -372,61 +401,51 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.soldQuantity - a.soldQuantity)
       .slice(0, 6)
 
-    const paymentsByMethod = await getPaymentMethodTotals(store, {
-      $gte: today.start,
-      $lt: today.end,
-    })
-
     const returnedRevenue = returns[0]?.revenue || 0
-    const returnedRevenueToday = todayReturnTotals[0]?.revenue || 0
-    const returnedGrossProfitToday = todayReturnTotals[0]?.grossProfit || 0
     const grossProfitToday =
       (todayGrossProfit[0]?.total || 0) - returnedGrossProfitToday
-    const expensesTodayTotal = todayExpenses[0]?.total || 0
-    const revenueToday =
-      (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday
     const costOfSalesToday = revenueToday - grossProfitToday
+
+    const data = {
+      productCount,
+      lowStockCount,
+      salesCount,
+      salesToday,
+      invoiceCount,
+      unpaidCount,
+      stockValue: stockValue[0]?.total || 0,
+      revenue: (sales[0]?.total || 0) - returnedRevenue,
+      revenueToday,
+      costOfSalesToday,
+      loansToday: loansToday[0]?.total || 0,
+      grossProfitToday,
+      expensesToday: expensesTodayTotal,
+      profitToday: grossProfitToday - expensesTodayTotal,
+      outstandingAmount: unpaidTotals[0]?.total || 0,
+      lowStockProducts: lowStockProducts.map((product) => ({
+        _id: product._id.toString(),
+        name: product.name,
+        sku: product.sku,
+        quantity: product.quantity,
+        unit: product.unit ?? "pcs",
+        lowStockThreshold: product.lowStockThreshold ?? 0,
+      })),
+      recentSales: recentSales.map((sale) => ({
+        _id: sale._id.toString(),
+        createdAt: sale.createdAt,
+        totalAmount: sale.totalAmount,
+        quantitySold: sale.items.reduce((acc, item) => acc + item.quantity, 0),
+        units: Array.from(new Set(sale.items.map((item) => item.unit ?? "pcs"))),
+      })),
+      topMoving: netTopMovingProducts,
+      paymentsByMethod,
+    }
 
     return NextResponse.json({
       success: true,
-      data: {
-        productCount,
-        lowStockCount,
-        salesCount,
-        salesToday,
-        invoiceCount,
-        unpaidCount,
-        stockValue: stockValue[0]?.total || 0,
-        revenue: (sales[0]?.total || 0) - returnedRevenue,
-        revenueToday,
-        costOfSalesToday,
-        loansToday: loansToday[0]?.total || 0,
-        grossProfitToday,
-        expensesToday: expensesTodayTotal,
-        profitToday: grossProfitToday - expensesTodayTotal,
-        outstandingAmount: unpaidTotals[0]?.total || 0,
-        lowStockProducts: lowStockProducts.map((product) => ({
-          _id: product._id.toString(),
-          name: product.name,
-          sku: product.sku,
-          quantity: product.quantity,
-          unit: product.unit ?? "pcs",
-          lowStockThreshold: product.lowStockThreshold ?? 0,
-        })),
-        recentSales: recentSales.map((sale) => ({
-          _id: sale._id.toString(),
-          createdAt: sale.createdAt,
-          totalAmount: sale.totalAmount,
-          quantitySold: sale.items.reduce((acc, item) => acc + item.quantity, 0),
-          units: Array.from(
-            new Set(sale.items.map((item) => item.unit ?? "pcs"))
-          ),
-        })),
-        topMoving: netTopMovingProducts,
-        paymentsByMethod,
-      },
+      data,
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, error: "Failed to fetch stats" },
       { status: 500 }
