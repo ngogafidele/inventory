@@ -1,5 +1,5 @@
 ---
-name: architect
+name: architect  
 description: Think through what you are about to build like a senior engineer before writing any code. Surfaces decisions, aligns on language, and produces a clear implementation plan you confirm before anything starts.
 ---
 
