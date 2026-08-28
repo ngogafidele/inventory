@@ -196,8 +196,8 @@ export async function GET(request: NextRequest) {
     const returnedRevenueToday = todayReturnTotals[0]?.revenue || 0
     const returnedGrossProfitToday = todayReturnTotals[0]?.grossProfit || 0
     const expensesTodayTotal = todayExpenses[0]?.total || 0
-    const revenueToday =
-      (todaySalesTotals[0]?.revenue || 0) - returnedRevenueToday
+    const revenueToday = todaySalesTotals[0]?.revenue || 0
+    const netRevenueToday = revenueToday - returnedRevenueToday
 
     if (!session.isAdmin) {
       return NextResponse.json({
@@ -405,7 +405,7 @@ export async function GET(request: NextRequest) {
     const returnedRevenue = returns[0]?.revenue || 0
     const grossProfitToday =
       (todayGrossProfit[0]?.total || 0) - returnedGrossProfitToday
-    const costOfSalesToday = revenueToday - grossProfitToday
+    const costOfSalesToday = netRevenueToday - grossProfitToday
 
     const data = {
       productCount,
