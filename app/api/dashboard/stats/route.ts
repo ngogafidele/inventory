@@ -205,6 +205,7 @@ export async function GET(request: NextRequest) {
         data: {
           salesToday,
           revenueToday,
+          returnsToday: returnedRevenueToday,
           loansToday: loansToday[0]?.total || 0,
           expensesToday: expensesTodayTotal,
           paymentsByMethod,
@@ -416,6 +417,7 @@ export async function GET(request: NextRequest) {
       stockValue: stockValue[0]?.total || 0,
       revenue: (sales[0]?.total || 0) - returnedRevenue,
       revenueToday,
+      returnsToday: returnedRevenueToday,
       costOfSalesToday,
       loansToday: loansToday[0]?.total || 0,
       grossProfitToday,

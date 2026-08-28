@@ -11,6 +11,7 @@ import {
   Package,
   PackageSearch,
   ReceiptText,
+  RotateCcw,
   Smartphone,
   TrendingUp,
   Warehouse,
@@ -42,6 +43,7 @@ type StatsResponse = {
   salesToday: number
   stockValue?: number
   revenueToday: number
+  returnsToday: number
   costOfSalesToday?: number
   loansToday: number
   grossProfitToday?: number
@@ -79,6 +81,7 @@ type StatsResponse = {
 const nonAdminCardLabels = new Set([
   "Sales Today",
   "Revenue Today",
+  "Today's Returns",
   "Today's Loans",
   "Expenses Today",
   "Cash Payments",
@@ -143,6 +146,13 @@ export function DashboardStats({ store, isAdmin }: DashboardStatsProps) {
       icon: Coins,
       className: "border-emerald-200 bg-emerald-50 text-emerald-950",
       iconClassName: "text-emerald-700",
+    },
+    {
+      label: "Today's Returns",
+      value: `-${formatCurrency(stats.returnsToday)}`,
+      icon: RotateCcw,
+      className: "border-red-200 bg-red-50 text-red-950",
+      iconClassName: "text-red-700",
     },
     {
       label: "Today's Loans",

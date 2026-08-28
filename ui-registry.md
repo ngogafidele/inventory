@@ -40,7 +40,7 @@ Last updated: 2026-08-28
 
 **Pattern notes:**
 Dashboard cards remain the same visual component for admin and restricted users.
-Restricted users see only the approved seven cards, while admin users keep the
+Restricted users see only the approved eight cards, while admin users keep the
 full metric set and the supporting activity tables. Keep the restricted UI in
 step with `app/api/dashboard/stats/route.ts`, which returns only the approved
 dashboard metrics for non-admin sessions.

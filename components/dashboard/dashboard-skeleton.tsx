@@ -5,8 +5,8 @@
 // page jumps when the data lands.
 import { Skeleton } from "@/components/ui/skeleton"
 
-const ADMIN_CARD_COUNT = 11
-const RESTRICTED_CARD_COUNT = 7
+const ADMIN_CARD_COUNT = 12
+const RESTRICTED_CARD_COUNT = 8
 
 function PanelSkeleton() {
   return (
