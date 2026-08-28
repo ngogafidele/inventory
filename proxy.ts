@@ -115,7 +115,7 @@ export async function proxy(request: NextRequest) {
   // prefetch, an RSC navigation, and a direct call to the data endpoints are
   // all covered by the same check — gating only the pages would leave the
   // same figures readable from /api/dashboard and /api/reports.
-  if (requiresReauth(pathname) && !isReauthCurrent(session)) {
+  if (session.isAdmin && requiresReauth(pathname) && !isReauthCurrent(session)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { success: false, error: "Verification required" },
