@@ -29,7 +29,7 @@ export interface IdleWindow {
 }
 
 export function getIdleTimeoutSeconds(session: IdleWindow) {
-  if (session.strict) return STRICT_IDLE_TIMEOUT_SECONDS
+  if (session.isAdmin && session.strict) return STRICT_IDLE_TIMEOUT_SECONDS
   return session.isAdmin
     ? ADMIN_IDLE_TIMEOUT_SECONDS
     : STAFF_IDLE_TIMEOUT_SECONDS

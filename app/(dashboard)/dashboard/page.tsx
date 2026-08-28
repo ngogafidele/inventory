@@ -9,7 +9,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <IdleGuard />
+      {session.isAdmin ? <IdleGuard /> : null}
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Store Overview

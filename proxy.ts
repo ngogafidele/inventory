@@ -141,7 +141,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/") || isPrefetchRequest(request)
   const strict = carryStrictThrough
     ? Boolean(session.strict)
-    : isStrictPath(pathname)
+    : session.isAdmin && isStrictPath(pathname)
 
   const refreshedSession = refreshSessionActivity({ ...session, strict })
   const response = NextResponse.next()
