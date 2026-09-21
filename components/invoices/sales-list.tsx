@@ -50,6 +50,7 @@ type SalesInvoice = {
 export type SaleInvoiceSaleOption = {
   _id: string
   label: string
+  customerName?: string
   totalAmount: number
 }
 
@@ -108,6 +109,7 @@ export function SalesInvoicesList({
 }) {
   const [invoices, setInvoices] = useState<SalesInvoice[]>([])
   const [search, setSearch] = useState("")
+  const [saleSearch, setSaleSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailInvoice, setDetailInvoice] = useState<SalesInvoice | null>(null)
   const [activeInvoiceId, setActiveInvoiceId] = useState<string | null>(null)
@@ -141,6 +143,7 @@ export function SalesInvoicesList({
     ) {
       setActiveInvoiceId(null)
       setFormState(emptyForm)
+      setSaleSearch("")
       setError(null)
       setDialogOpen(true)
     }
@@ -151,6 +154,7 @@ export function SalesInvoicesList({
   const resetForm = () => {
     setActiveInvoiceId(null)
     setFormState(emptyForm)
+    setSaleSearch("")
     setError(null)
   }
 
@@ -163,6 +167,7 @@ export function SalesInvoicesList({
       customerPhone: invoice.customerPhone ?? "",
       status: invoice.status,
     })
+    setSaleSearch("")
     setError(null)
     setDialogOpen(true)
   }
@@ -185,6 +190,27 @@ export function SalesInvoicesList({
         .some((value) => value?.toLowerCase().includes(needle))
     )
   }, [invoices, search])
+
+  const filteredAvailableSales = useMemo(() => {
+    const needle = saleSearch.trim().toLowerCase()
+    if (!needle) return availableSales
+
+    return availableSales.filter((sale) =>
+      [sale.label, sale.customerName, formatCurrency(sale.totalAmount)]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(needle))
+    )
+  }, [availableSales, saleSearch])
+
+  const handleSaleChange = (saleId: string) => {
+    const selectedSale = sales.find((sale) => sale._id === saleId)
+    setFormState((prev) => ({
+      ...prev,
+      saleId,
+      customerName: prev.customerName || selectedSale?.customerName || "",
+    }))
+    setSaleSearch("")
+  }
 
   const submitForm = async () => {
     if (!activeInvoiceId && !formState.saleId) {
@@ -429,21 +455,46 @@ export function SalesInvoicesList({
           </DialogHeader>
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
+              Search sale/customer
+              <Input
+                value={saleSearch}
+                onChange={(event) => setSaleSearch(event.target.value)}
+                placeholder="Type customer name or sale date"
+                disabled={Boolean(activeInvoiceId)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
               Sale
               <Select
                 value={formState.saleId}
-                onValueChange={(value) =>
-                  setFormState((prev) => ({ ...prev, saleId: value }))
-                }
-                disabled={Boolean(activeInvoiceId)}
+                onValueChange={handleSaleChange}
+                disabled={Boolean(activeInvoiceId) || availableSales.length === 0}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select sale" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableSales.map((sale) => (
-                    <SelectItem key={sale._id} value={sale._id}>
-                      {sale.label} - {formatCurrency(sale.totalAmount)}
+                  {filteredAvailableSales.length === 0 ? (
+                    <div className="px-2 py-2 text-sm text-muted-foreground">
+                      No matching sales.
+                    </div>
+                  ) : null}
+                  {filteredAvailableSales.map((sale) => (
+                    <SelectItem
+                      key={sale._id}
+                      value={sale._id}
+                      textValue={`${sale.label} ${sale.customerName ?? ""} ${formatCurrency(sale.totalAmount)}`}
+                    >
+                      <span className="flex flex-col items-start gap-0.5">
+                        <span>
+                          {sale.label} - {formatCurrency(sale.totalAmount)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {sale.customerName
+                            ? `Customer: ${sale.customerName}`
+                            : "Walk-in customer"}
+                        </span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

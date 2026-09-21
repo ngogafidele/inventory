@@ -151,7 +151,7 @@ export async function PUT(
     }
 
     return NextResponse.json({ success: true, data: deliveryNote })
-  } catch {
+  } catch (error) {
     const message = formatValidationError(
       error,
       "Failed to update delivery note"

@@ -14,6 +14,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Table,
   TableBody,
   TableCell,
@@ -57,7 +64,6 @@ type FormState = {
   deliveryDate: string
   deliveredByName: string
   deliveredByPhone: string
-  deliveredByDate: string
 }
 
 const emptyForm: FormState = {
@@ -68,7 +74,6 @@ const emptyForm: FormState = {
   deliveryDate: "",
   deliveredByName: "",
   deliveredByPhone: "",
-  deliveredByDate: "",
 }
 
 function createDefaultForm(): FormState {
@@ -76,7 +81,6 @@ function createDefaultForm(): FormState {
   return {
     ...emptyForm,
     deliveryDate: today,
-    deliveredByDate: today,
   }
 }
 
@@ -123,6 +127,7 @@ export function DeliveryNotesList({
 }) {
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [search, setSearch] = useState("")
+  const [saleSearch, setSaleSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailNote, setDetailNote] = useState<DeliveryNote | null>(null)
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
@@ -150,6 +155,7 @@ export function DeliveryNotesList({
     ) {
       setActiveNoteId(null)
       setFormState(createDefaultForm())
+      setSaleSearch("")
       setError(null)
       setDialogOpen(true)
     }
@@ -181,9 +187,31 @@ export function DeliveryNotesList({
     [formState.saleIds, sales]
   )
 
+  const selectedSales = useMemo(
+    () => sales.filter((sale) => formState.saleIds.includes(sale._id)),
+    [formState.saleIds, sales]
+  )
+
+  const availableSales = useMemo(
+    () => sales.filter((sale) => !formState.saleIds.includes(sale._id)),
+    [formState.saleIds, sales]
+  )
+
+  const filteredAvailableSales = useMemo(() => {
+    const needle = saleSearch.trim().toLowerCase()
+    if (!needle) return availableSales
+
+    return availableSales.filter((sale) =>
+      [sale.label, sale.customerName, formatCurrency(sale.totalAmount)]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(needle))
+    )
+  }, [availableSales, saleSearch])
+
   const resetForm = () => {
     setActiveNoteId(null)
     setFormState(createDefaultForm())
+    setSaleSearch("")
     setError(null)
   }
 
@@ -197,19 +225,29 @@ export function DeliveryNotesList({
       deliveryDate: toDateInputValue(note.deliveryDate),
       deliveredByName: note.deliveredByName,
       deliveredByPhone: note.deliveredByPhone ?? "",
-      deliveredByDate: toDateInputValue(note.deliveredByDate),
     })
+    setSaleSearch("")
     setError(null)
     setDialogOpen(true)
   }
 
   const toggleSale = (saleId: string) => {
-    setFormState((prev) => ({
-      ...prev,
-      saleIds: prev.saleIds.includes(saleId)
-        ? prev.saleIds.filter((id) => id !== saleId)
-        : [...prev.saleIds, saleId],
-    }))
+    const selectedSale = sales.find((sale) => sale._id === saleId)
+    setFormState((prev) => {
+      if (prev.saleIds.includes(saleId)) {
+        return {
+          ...prev,
+          saleIds: prev.saleIds.filter((id) => id !== saleId),
+        }
+      }
+
+      return {
+        ...prev,
+        saleIds: [...prev.saleIds, saleId],
+        customerName: prev.customerName || selectedSale?.customerName || "",
+      }
+    })
+    setSaleSearch("")
   }
 
   const submitForm = async () => {
@@ -227,8 +265,8 @@ export function DeliveryNotesList({
       return
     }
 
-    if (!formState.deliveryDate || !formState.deliveredByDate) {
-      setError("Enter the delivery date and delivered-by date.")
+    if (!formState.deliveryDate) {
+      setError("Enter the date of delivery.")
       return
     }
 
@@ -249,7 +287,7 @@ export function DeliveryNotesList({
         deliveryDate: toDateTimePayload(formState.deliveryDate),
         deliveredByName: formState.deliveredByName.trim(),
         deliveredByPhone: formState.deliveredByPhone.trim() || undefined,
-        deliveredByDate: toDateTimePayload(formState.deliveredByDate),
+        deliveredByDate: toDateTimePayload(formState.deliveryDate),
       }
 
       const response = await fetch(
@@ -458,26 +496,81 @@ export function DeliveryNotesList({
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <p className="text-sm font-semibold">Sales</p>
-              <div className="max-h-52 overflow-y-auto rounded-lg border border-border">
-                {sales.length === 0 ? (
+              <label className="grid gap-1 text-sm">
+                Search sale/customer
+                <Input
+                  value={saleSearch}
+                  onChange={(event) => setSaleSearch(event.target.value)}
+                  placeholder="Type customer name or sale date"
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                Sale
+                <Select
+                  value=""
+                  onValueChange={toggleSale}
+                  disabled={availableSales.length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select sale" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredAvailableSales.length === 0 ? (
+                      <div className="px-2 py-2 text-sm text-muted-foreground">
+                        No matching sales.
+                      </div>
+                    ) : null}
+                    {filteredAvailableSales.map((sale) => (
+                      <SelectItem
+                        key={sale._id}
+                        value={sale._id}
+                        textValue={`${sale.label} ${sale.customerName ?? ""} ${formatCurrency(sale.totalAmount)}`}
+                      >
+                        <span className="flex flex-col items-start gap-0.5">
+                          <span>
+                            {sale.label} - {formatCurrency(sale.totalAmount)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {sale.customerName
+                              ? `Customer: ${sale.customerName}`
+                              : "Walk-in customer"}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <div className="rounded-lg border border-border">
+                {selectedSales.length === 0 ? (
                   <p className="p-3 text-sm text-muted-foreground">
-                    No sales available.
+                    No sales selected.
                   </p>
                 ) : (
-                  sales.map((sale) => (
-                    <label
+                  selectedSales.map((sale) => (
+                    <div
                       key={sale._id}
-                      className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 text-sm last:border-b-0"
+                      className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 text-sm last:border-b-0"
                     >
-                      <input
-                        type="checkbox"
-                        className="size-4"
-                        checked={formState.saleIds.includes(sale._id)}
-                        onChange={() => toggleSale(sale._id)}
-                      />
-                      <span className="flex-1">{sale.label}</span>
-                    </label>
+                      <span className="flex-1">
+                        <span className="block">
+                          {sale.label} - {formatCurrency(sale.totalAmount)}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {sale.customerName
+                            ? `Customer: ${sale.customerName}`
+                            : "Walk-in customer"}
+                        </span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleSale(sale._id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   ))
                 )}
               </div>
@@ -542,7 +635,7 @@ export function DeliveryNotesList({
                 />
               </label>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
                 Delivered by
                 <Input
@@ -563,19 +656,6 @@ export function DeliveryNotesList({
                     setFormState((prev) => ({
                       ...prev,
                       deliveredByPhone: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                Delivered date
-                <Input
-                  type="date"
-                  value={formState.deliveredByDate}
-                  onChange={(event) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      deliveredByDate: event.target.value,
                     }))
                   }
                 />

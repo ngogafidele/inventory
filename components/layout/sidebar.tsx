@@ -36,7 +36,7 @@ const commonNavItems = [
   { href: "/sales", label: "Sales", icon: ReceiptText },
   { href: "/customers-suppliers", label: "Customers/Suppliers", icon: Users },
   { href: "/returns", label: "Returns", icon: RotateCcw },
-  { href: "/invoices", label: "Invoices", icon: ClipboardList },
+  { href: "/invoices", label: "Invoices/DN", icon: ClipboardList },
   { href: "/expenses", label: "Expenses", icon: Wallet },
   { href: "/outstanding", label: "Loans", icon: Clock },
   { href: "/alerts", label: "Low Stock Alerts", icon: Bell },

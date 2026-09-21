@@ -9,6 +9,12 @@ type InvoicePageSale = {
   _id: { toString(): string }
   createdAt?: Date
   totalAmount: number
+  customer?: {
+    name?: string
+  }
+  outstanding?: {
+    customerName?: string
+  }
 }
 
 export default async function InvoicesPage() {
@@ -17,13 +23,14 @@ export default async function InvoicesPage() {
 
   await connectToDatabase()
   const sales = await Sale.find({ store, deletedAt: null })
-    .select("totalAmount createdAt")
+    .select("totalAmount createdAt customer outstanding")
     .sort({ createdAt: -1 })
     .lean<InvoicePageSale[]>()
 
-  const serializedSales = sales.map((sale) => ({
-    _id: sale._id.toString(),
-    label: sale.createdAt
+  const serializedSales = sales.map((sale) => {
+    const customerName =
+      sale.customer?.name?.trim() || sale.outstanding?.customerName?.trim()
+    const dateLabel = sale.createdAt
       ? formatInKigali(sale.createdAt, {
           month: "short",
           day: "2-digit",
@@ -31,9 +38,15 @@ export default async function InvoicesPage() {
           hour: "2-digit",
           minute: "2-digit",
         })
-      : sale._id.toString(),
-    totalAmount: sale.totalAmount,
-  }))
+      : sale._id.toString()
+
+    return {
+      _id: sale._id.toString(),
+      label: dateLabel,
+      customerName,
+      totalAmount: sale.totalAmount,
+    }
+  })
 
   return (
     <InvoicesPageClient

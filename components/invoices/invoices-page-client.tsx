@@ -50,7 +50,9 @@ export function InvoicesPageClient({
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             Billing
           </p>
-          <h2 className="text-2xl font-semibold">Invoices</h2>
+          <h2 className="text-2xl font-semibold">
+            Invoices and Delivery Notes
+          </h2>
         </div>
         {canCreateInvoices ? (
           <Button
