@@ -463,43 +463,49 @@ export function SalesInvoicesList({
                 disabled={Boolean(activeInvoiceId)}
               />
             </label>
-            <label className="grid gap-1 text-sm">
-              Sale
-              <Select
-                value={formState.saleId}
-                onValueChange={handleSaleChange}
-                disabled={Boolean(activeInvoiceId) || availableSales.length === 0}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select sale" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredAvailableSales.length === 0 ? (
-                    <div className="px-2 py-2 text-sm text-muted-foreground">
+            {!activeInvoiceId ? (
+              <div className="grid gap-1 text-sm">
+                <p>Sale</p>
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
+                  {availableSales.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground">
+                      No sales available.
+                    </p>
+                  ) : filteredAvailableSales.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground">
                       No matching sales.
-                    </div>
-                  ) : null}
-                  {filteredAvailableSales.map((sale) => (
-                    <SelectItem
-                      key={sale._id}
-                      value={sale._id}
-                      textValue={`${sale.label} ${sale.customerName ?? ""} ${formatCurrency(sale.totalAmount)}`}
-                    >
-                      <span className="flex flex-col items-start gap-0.5">
+                    </p>
+                  ) : (
+                    filteredAvailableSales.map((sale) => (
+                      <button
+                        key={sale._id}
+                        type="button"
+                        onClick={() => handleSaleChange(sale._id)}
+                        className={`flex w-full items-start justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/60 ${
+                          formState.saleId === sale._id ? "bg-muted" : ""
+                        }`}
+                      >
                         <span>
-                          {sale.label} - {formatCurrency(sale.totalAmount)}
+                          <span className="block">
+                            {sale.label} - {formatCurrency(sale.totalAmount)}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {sale.customerName
+                              ? `Customer: ${sale.customerName}`
+                              : "Walk-in customer"}
+                          </span>
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {sale.customerName
-                            ? `Customer: ${sale.customerName}`
-                            : "Walk-in customer"}
-                        </span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
+                        {formState.saleId === sale._id ? (
+                          <span className="text-xs font-medium text-primary">
+                            Selected
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
             <label className="grid gap-1 text-sm">
               Customer
               <Input

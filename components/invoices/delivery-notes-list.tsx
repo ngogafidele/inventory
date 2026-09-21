@@ -14,13 +14,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Table,
   TableBody,
   TableCell,
@@ -504,43 +497,43 @@ export function DeliveryNotesList({
                   placeholder="Type customer name or sale date"
                 />
               </label>
-              <label className="grid gap-1 text-sm">
-                Sale
-                <Select
-                  value=""
-                  onValueChange={toggleSale}
-                  disabled={availableSales.length === 0}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select sale" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredAvailableSales.length === 0 ? (
-                      <div className="px-2 py-2 text-sm text-muted-foreground">
-                        No matching sales.
-                      </div>
-                    ) : null}
-                    {filteredAvailableSales.map((sale) => (
-                      <SelectItem
+              <div className="grid gap-1 text-sm">
+                <p>Sale</p>
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
+                  {availableSales.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground">
+                      No sales available.
+                    </p>
+                  ) : filteredAvailableSales.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground">
+                      No matching sales.
+                    </p>
+                  ) : (
+                    filteredAvailableSales.map((sale) => (
+                      <button
                         key={sale._id}
-                        value={sale._id}
-                        textValue={`${sale.label} ${sale.customerName ?? ""} ${formatCurrency(sale.totalAmount)}`}
+                        type="button"
+                        onClick={() => toggleSale(sale._id)}
+                        className="flex w-full items-start justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/60"
                       >
-                        <span className="flex flex-col items-start gap-0.5">
-                          <span>
+                        <span>
+                          <span className="block">
                             {sale.label} - {formatCurrency(sale.totalAmount)}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="block text-xs text-muted-foreground">
                             {sale.customerName
                               ? `Customer: ${sale.customerName}`
                               : "Walk-in customer"}
                           </span>
                         </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+                        <span className="text-xs font-medium text-primary">
+                          Add
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
               <div className="rounded-lg border border-border">
                 {selectedSales.length === 0 ? (
                   <p className="p-3 text-sm text-muted-foreground">
