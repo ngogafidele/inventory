@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils"
 import type { StoreKey } from "@/lib/auth/session"
 import { ProformaInvoicesList } from "@/components/invoices/proforma-list"
 import { SalesInvoicesList, type SaleInvoiceSaleOption } from "@/components/invoices/sales-list"
+import { DeliveryNotesList } from "@/components/invoices/delivery-notes-list"
 
-type ActiveTab = "sales" | "proforma"
+type ActiveTab = "sales" | "proforma" | "delivery-notes"
 
 export function InvoicesPageClient({
   storeId,
@@ -27,11 +28,20 @@ export function InvoicesPageClient({
   const [activeTab, setActiveTab] = useState<ActiveTab>("sales")
   const [newSalesInvoiceSignal, setNewSalesInvoiceSignal] = useState(0)
   const [newProformaSignal, setNewProformaSignal] = useState(0)
+  const [newDeliveryNoteSignal, setNewDeliveryNoteSignal] = useState(0)
 
   const tabs: Array<{ value: ActiveTab; label: string }> = [
     { value: "sales", label: "Sales invoices" },
     { value: "proforma", label: "Proforma invoices" },
+    { value: "delivery-notes", label: "Delivery notes" },
   ]
+
+  const createButtonLabel =
+    activeTab === "sales"
+      ? "New invoice"
+      : activeTab === "proforma"
+        ? "New proforma"
+        : "New delivery note"
 
   return (
     <div className="space-y-5">
@@ -50,17 +60,22 @@ export function InvoicesPageClient({
                 return
               }
 
-              setNewProformaSignal((value) => value + 1)
+              if (activeTab === "proforma") {
+                setNewProformaSignal((value) => value + 1)
+                return
+              }
+
+              setNewDeliveryNoteSignal((value) => value + 1)
             }}
           >
             <Plus className="size-4" />
-            {activeTab === "sales" ? "New invoice" : "New proforma"}
+            {createButtonLabel}
           </Button>
         ) : null}
       </div>
 
       <div className="rounded-lg border border-border bg-muted/40 p-1">
-        <div className="grid grid-cols-2 gap-1">
+        <div className="grid gap-1 md:grid-cols-3">
           {tabs.map((tab) => (
             <button
               key={tab.value}
@@ -87,13 +102,22 @@ export function InvoicesPageClient({
           canDeleteInvoices={canDeleteInvoices}
           newInvoiceSignal={newSalesInvoiceSignal}
         />
-      ) : (
+      ) : activeTab === "proforma" ? (
         <ProformaInvoicesList
           storeId={storeId}
           canCreateInvoices={canCreateInvoices}
           canManageInvoices={canManageInvoices}
           canDeleteInvoices={canDeleteInvoices}
           newInvoiceSignal={newProformaSignal}
+        />
+      ) : (
+        <DeliveryNotesList
+          storeId={storeId}
+          sales={sales}
+          canCreateInvoices={canCreateInvoices}
+          canManageInvoices={canManageInvoices}
+          canDeleteInvoices={canDeleteInvoices}
+          newDeliveryNoteSignal={newDeliveryNoteSignal}
         />
       )}
     </div>

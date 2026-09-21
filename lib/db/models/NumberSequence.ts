@@ -6,7 +6,7 @@ const NumberSequenceSchema = new Schema(
     storeId: { type: String, required: true },
     type: {
       type: String,
-      enum: ["invoice", "proforma"],
+      enum: ["invoice", "proforma", "deliveryNote"],
       required: true,
     },
     year: { type: Number, required: true },

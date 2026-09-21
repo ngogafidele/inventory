@@ -2,7 +2,7 @@
 import { NumberSequence } from "@/lib/db/models/NumberSequence"
 import { getKigaliDateParts } from "@/lib/utils/time"
 
-type SequenceType = "invoice" | "proforma"
+type SequenceType = "invoice" | "proforma" | "deliveryNote"
 
 function formatSequence(sequence: number) {
   return String(sequence).padStart(4, "0")
@@ -29,7 +29,8 @@ async function generateNumber(storeId: string, type: SequenceType) {
     throw new Error("Failed to generate number sequence")
   }
 
-  const prefix = type === "invoice" ? "INV" : "PF"
+  const prefix =
+    type === "invoice" ? "INV" : type === "proforma" ? "PF" : "DN"
   const period = `${year}${String(month).padStart(2, "0")}`
 
   return `${prefix}-${period}-${formatSequence(sequence.sequence)}`
@@ -41,4 +42,10 @@ export async function generateInvoiceNumber(storeId: string): Promise<string> {
 
 export async function generateProformaNumber(storeId: string): Promise<string> {
   return generateNumber(storeId, "proforma")
+}
+
+export async function generateDeliveryNoteNumber(
+  storeId: string
+): Promise<string> {
+  return generateNumber(storeId, "deliveryNote")
 }

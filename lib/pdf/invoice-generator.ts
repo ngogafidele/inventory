@@ -43,6 +43,25 @@ type PdfDocumentData = {
   items: PdfItem[]
 }
 
+type DeliveryNoteItem = {
+  description: string
+  sku?: string
+  unit?: string
+  quantity: number
+}
+
+type DeliveryNotePdfData = {
+  number: string
+  customerName: string
+  customerLocation: string
+  deliveryLocation: string
+  deliveryDate: Date | string
+  deliveredByName: string
+  deliveredByPhone?: string
+  deliveredByDate: Date | string
+  items: DeliveryNoteItem[]
+}
+
 type StoreInfo = {
   name?: string
   address?: string
@@ -102,6 +121,9 @@ const PRINT_TEXT = "#111827"
 const PRINT_MUTED_TEXT = "#1f2937"
 const PRINT_HEADER_TEXT = "#00183d"
 const TABLE_ROW_HEIGHT = 24
+const BUSINESS_NAME = "B Ikaze Hardware"
+const BUSINESS_TIN = "111049695"
+const BUSINESS_PHONE = "0788399098"
 
 function mutedText(doc: InvoicePdfDocument) {
   return doc.font("Helvetica").fillColor(PRINT_MUTED_TEXT)
@@ -414,4 +436,148 @@ export function generateProformaPDF(
     businessFooterLines,
     "Thank You For Doing Business With B Ikaze Hardware"
   )
+}
+
+export function generateDeliveryNotePDF(
+  deliveryNote: DeliveryNotePdfData,
+  storeInfo: StoreInfo
+) {
+  if (!PDFDocument) {
+    const keys =
+      typeof PDFKitModule === "object" && PDFKitModule !== null
+        ? Object.keys(PDFKitModule).join(", ")
+        : typeof PDFKitModule
+    throw new Error(`Unable to load pdfkit constructor. Exports: ${keys}`)
+  }
+
+  const doc = new PDFDocument({ margin: 48, size: "A4" })
+  const chunks: Buffer[] = []
+
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+
+  const done = new Promise<Buffer>((resolve, reject) => {
+    doc.on("end", () => resolve(Buffer.concat(chunks)))
+    doc.on("error", reject)
+  })
+
+  drawLogo(doc, storeInfo)
+
+  boldText(doc)
+    .fontSize(12)
+    .text(BUSINESS_NAME, 330, 48, { align: "right" })
+  mutedText(doc)
+    .fontSize(10)
+    .text(`TIN: ${BUSINESS_TIN}`, 330, 66, { align: "right" })
+    .text("KIGALI-RWANDA", 330, 82, { align: "right" })
+    .text(`Tel No: ${BUSINESS_PHONE}`, 330, 98, { align: "right" })
+
+  boldText(doc)
+    .fontSize(18)
+    .text("DELIVERY NOTE", 48, 156, { align: "center", width: 499 })
+    .fontSize(11)
+    .text(deliveryNote.number, 48, 182, { align: "center", width: 499 })
+
+  doc
+    .moveTo(48, 212)
+    .lineTo(547, 212)
+    .lineWidth(1.5)
+    .strokeColor("#f08010")
+    .stroke()
+
+  const leftX = 48
+  let detailY = 235
+
+  boldText(doc).fontSize(10).text("NAME:", leftX, detailY)
+  mutedText(doc).fontSize(10).text(deliveryNote.customerName, 180, detailY)
+  detailY += 18
+
+  boldText(doc).fontSize(10).text("LOCATION:", leftX, detailY)
+  mutedText(doc).fontSize(10).text(deliveryNote.customerLocation, 180, detailY)
+  detailY += 18
+
+  boldText(doc).fontSize(10).text("DELIVERY LOCATION:", leftX, detailY)
+  mutedText(doc).fontSize(10).text(deliveryNote.deliveryLocation, 180, detailY)
+  detailY += 30
+
+  boldText(doc).fontSize(10).text("DATE OF DELIVERY:", leftX, detailY)
+  mutedText(doc).fontSize(10).text(formatDate(deliveryNote.deliveryDate), 180, detailY)
+
+  const tableTop = 340
+  const columns = {
+    no: 58,
+    description: 102,
+    unit: 395,
+    quantity: 470,
+  }
+
+  doc
+    .rect(48, tableTop, 499, 24)
+    .fillColor("#eef3f8")
+    .fill()
+    .font("Helvetica-Bold")
+    .fillColor(PRINT_HEADER_TEXT)
+    .fontSize(9)
+    .text("No", columns.no, tableTop + 8)
+    .text("ITEM DESCRIPTION", columns.description, tableTop + 8)
+    .text("UNIT", columns.unit, tableTop + 8)
+    .text("QTY", columns.quantity, tableTop + 8)
+
+  let y = tableTop + 32
+  deliveryNote.items.forEach((item, index) => {
+    if (y + TABLE_ROW_HEIGHT > 700) {
+      doc.addPage()
+      y = 56
+    }
+
+    doc.font("Helvetica").fontSize(9)
+    const description = truncateToWidth(doc, item.description, 250)
+
+    doc
+      .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")
+      .rect(48, y - 7, 499, TABLE_ROW_HEIGHT)
+      .fill()
+      .font("Helvetica")
+      .fillColor(PRINT_TEXT)
+      .fontSize(9)
+      .text(String(index + 1), columns.no, y)
+      .text(description, columns.description, y, { width: 250 })
+      .text(item.unit ?? "pcs", columns.unit, y, { width: 60 })
+      .text(String(item.quantity), columns.quantity, y, { width: 60 })
+
+    y += TABLE_ROW_HEIGHT + 2
+  })
+
+  doc.moveTo(48, y).lineTo(547, y).strokeColor("#d8dee8").stroke()
+
+  if (y > 610) {
+    doc.addPage()
+    y = 56
+  }
+
+  const signY = y + 34
+  const rightX = 330
+
+  boldText(doc).fontSize(11).text("DELIVERED BY:", 48, signY)
+  boldText(doc).fontSize(9).text("NAME:", 48, signY + 24)
+  mutedText(doc).fontSize(9).text(deliveryNote.deliveredByName, 118, signY + 24)
+  boldText(doc).fontSize(9).text("SIGNATURE:", 48, signY + 44)
+  mutedText(doc).fontSize(9).text("____________________", 118, signY + 44)
+  boldText(doc).fontSize(9).text("DATE:", 48, signY + 64)
+  mutedText(doc).fontSize(9).text(formatDate(deliveryNote.deliveredByDate), 118, signY + 64)
+  boldText(doc).fontSize(9).text("TEL:", 48, signY + 84)
+  mutedText(doc).fontSize(9).text(deliveryNote.deliveredByPhone ?? "", 118, signY + 84)
+
+  boldText(doc).fontSize(11).text("RECEIVED BY:", rightX, signY)
+  boldText(doc).fontSize(9).text("NAME:", rightX, signY + 24)
+  mutedText(doc).fontSize(9).text("____________________", rightX + 70, signY + 24)
+  boldText(doc).fontSize(9).text("SIGNATURE:", rightX, signY + 44)
+  mutedText(doc).fontSize(9).text("____________________", rightX + 70, signY + 44)
+  boldText(doc).fontSize(9).text("DATE:", rightX, signY + 64)
+  mutedText(doc).fontSize(9).text("____________________", rightX + 70, signY + 64)
+  boldText(doc).fontSize(9).text("TEL:", rightX, signY + 84)
+  mutedText(doc).fontSize(9).text("____________________", rightX + 70, signY + 84)
+
+  doc.end()
+
+  return done
 }
