@@ -741,6 +741,84 @@ export function ProductsManager({
                       <option key={unit} value={unit} />
                     ))}
                   </datalist>
+                  {/* Package units are offered only where the store sells in them. */}
+                  {packUnitsEnabled ? (
+                    <div className="grid gap-2 rounded-lg border border-border/80 bg-muted/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">Package units</p>
+                          <p className="text-xs text-muted-foreground">
+                            Bought or sold by the crate, box, or sack? Add it here with how
+                            many {formState.unit.trim() || "base units"} it holds. Its selling
+                            price is set with the other prices below.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={formState.packUnits.length >= 10}
+                          onClick={() =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              packUnits: [
+                                ...prev.packUnits,
+                                { name: "", factor: "", price: "" },
+                              ],
+                            }))
+                          }
+                        >
+                          Add unit
+                        </Button>
+                      </div>
+                      {formState.packUnits.map((row, rowIndex) => (
+                        <div
+                          key={rowIndex}
+                          className="grid grid-cols-[1fr_1fr_auto] items-end gap-2"
+                        >
+                          <label className="grid gap-1 text-xs">
+                            Unit
+                            <Input
+                              placeholder="crate"
+                              list="product-unit-suggestions"
+                              value={row.name}
+                              onChange={(event) =>
+                                setPackUnitRow(rowIndex, "name", event.target.value)
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-1 text-xs">
+                            {formState.unit.trim() || "Base units"} in it
+                            <Input
+                              type="number"
+                              min={2}
+                              step={1}
+                              placeholder="24"
+                              value={row.factor}
+                              onChange={(event) =>
+                                setPackUnitRow(rowIndex, "factor", event.target.value)
+                              }
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                packUnits: prev.packUnits.filter(
+                                  (_, index) => index !== rowIndex
+                                ),
+                              }))
+                            }
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="grid gap-1 text-sm">
                       {activeProductId ? "Quantity" : "Opening stock"} (
@@ -1031,98 +1109,41 @@ export function ProductsManager({
                         </span>
                       ) : null}
                     </label>
-                  </div>
-                  {/* Package units are offered only where the store sells in them. */}
-                  {packUnitsEnabled ? (
-                    <div className="grid gap-2 rounded-lg border border-border/80 bg-muted/40 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium">Package units</p>
-                          <p className="text-xs text-muted-foreground">
-                            Bought or sold by the crate, box, or sack? Add it here
-                            with how many {formState.unit.trim() || "base units"}{" "}
-                            it holds and its own selling price.
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={formState.packUnits.length >= 10}
-                          onClick={() =>
-                            setFormState((prev) => ({
-                              ...prev,
-                              packUnits: [
-                                ...prev.packUnits,
-                                { name: "", factor: "", price: "" },
-                              ],
-                            }))
-                          }
-                        >
-                          Add unit
-                        </Button>
-                      </div>
-                      {formState.packUnits.map((row, rowIndex) => (
-                        <div
-                          key={rowIndex}
-                          className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2"
-                        >
-                          <label className="grid gap-1 text-xs">
-                            Unit
-                            <Input
-                              placeholder="crate"
-                              list="product-unit-suggestions"
-                              value={row.name}
-                              onChange={(event) =>
-                                setPackUnitRow(rowIndex, "name", event.target.value)
-                              }
-                            />
-                          </label>
-                          <label className="grid gap-1 text-xs">
-                            {formState.unit.trim() || "Base units"} in it
-                            <Input
-                              type="number"
-                              min={2}
-                              step={1}
-                              placeholder="24"
-                              value={row.factor}
-                              onChange={(event) =>
-                                setPackUnitRow(rowIndex, "factor", event.target.value)
-                              }
-                            />
-                          </label>
-                          <label className="grid gap-1 text-xs">
-                            Selling price
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="13500"
-                              value={row.price}
-                              onChange={(event) =>
-                                setPackUnitRow(rowIndex, "price", event.target.value)
-                              }
-                            />
-                          </label>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setFormState((prev) => ({
-                                ...prev,
-                                packUnits: prev.packUnits.filter(
-                                  (_, index) => index !== rowIndex
-                                ),
-                              }))
+                    {/* Package unit prices sit with the base price; the units themselves are
+                        defined under the base unit above. */}
+                    {formState.packUnits.map((row, rowIndex) => {
+                      const factor = Number(row.factor)
+                      const packPrice = Number(row.price)
+                      const belowCost =
+                        hasFormCost &&
+                        row.price.trim() !== "" &&
+                        Number.isFinite(packPrice) &&
+                        Number.isInteger(factor) &&
+                        factor >= 2 &&
+                        packPrice < costValue * factor
+                      return (
+                        <label key={rowIndex} className="grid gap-1 text-sm">
+                          Selling Price (per{" "}
+                          {row.name.trim() || `package unit ${rowIndex + 1}`})
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="e.g. 13500"
+                            value={row.price}
+                            onChange={(event) =>
+                              setPackUnitRow(rowIndex, "price", event.target.value)
                             }
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                          />
+                          {belowCost ? (
+                            <span className="text-xs text-warning">
+                              Warning: selling price is below cost price.
+                            </span>
+                          ) : null}
+                        </label>
+                      )
+                    })}
+                  </div>
                   {error ? (
                     <p className="text-sm text-destructive">{error}</p>
                   ) : null}
