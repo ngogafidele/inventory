@@ -1,5 +1,6 @@
 // Generates a product catalog PDF using the selected branch identity.
 import { NextRequest, NextResponse } from "next/server"
+import { getCostUnit } from "@/lib/utils/units"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { requireAuth } from "@/lib/auth/middleware"
@@ -14,6 +15,8 @@ type CatalogProduct = {
   name: string
   sku: string
   unit?: string
+  packUnits?: Array<{ name: string; factor: number; price: number }>
+  costUnit?: string
   quantity: number
   lowStockThreshold?: number
   costPrice: number
@@ -61,9 +64,17 @@ export async function GET(request: NextRequest) {
           name: product.name,
           sku: product.sku,
           unit: product.unit ?? "pcs",
+          packUnits: (product.packUnits ?? []).map((pack) => ({
+            name: pack.name,
+            factor: pack.factor,
+            price: pack.price,
+          })),
           quantity: product.quantity,
           lowStockThreshold: product.lowStockThreshold ?? 0,
-          costPrice: product.costPrice ?? 0,
+          // Printed per cost unit (e.g. per crate), as staff enter it.
+          costPrice: (product.costPrice ?? 0) * getCostUnit(product).factor,
+          costUnitLabel:
+            (product.packUnits?.length ?? 0) > 0 ? getCostUnit(product).name : undefined,
           price: product.price,
         })),
       },

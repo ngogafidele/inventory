@@ -9,6 +9,12 @@ import { syncLowStockAlert } from "@/lib/db/alerts"
 import { CreateProductReceiptSchema } from "@/lib/db/validators/product-receipt"
 import { parseKigaliDateInput } from "@/lib/utils/time"
 import { ZodError } from "zod"
+import {
+  findUnitOption,
+  roundCost,
+  roundMoney,
+  toBaseQuantity,
+} from "@/lib/utils/units"
 
 export async function POST(
   request: NextRequest,
@@ -41,9 +47,43 @@ export async function POST(
       )
     }
 
-    const totalCost = payload.quantity * payload.unitCost
+    const totalCost = roundMoney(payload.quantity * payload.unitCost)
 
     const db = await connectToDatabase()
+
+    // Deliveries can be entered in a package unit (e.g. 2 crates at 24,000);
+    // stock and cost are kept per base unit.
+    const target = await Product.findOne({ _id: id, store })
+      .select("name unit packUnits price")
+      .lean<{
+        name: string
+        unit?: string
+        packUnits?: Array<{ name: string; factor: number; price: number }>
+        price: number
+      } | null>()
+    if (!target) {
+      return NextResponse.json(
+        { success: false, error: "Product not found" },
+        { status: 404 }
+      )
+    }
+    const unit = findUnitOption(target, payload.unit)
+    if (!unit) {
+      return NextResponse.json(
+        { success: false, error: `${target.name} has no unit "${payload.unit}".` },
+        { status: 400 }
+      )
+    }
+    const baseQuantity = toBaseQuantity(payload.quantity, unit.factor)
+    if (baseQuantity === null) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `${payload.quantity} ${unit.name} is not a whole number of ${target.unit ?? "pcs"}.`,
+        },
+        { status: 400 }
+      )
+    }
     const dbSession = await db.startSession()
     let product
     let receipt
@@ -53,8 +93,10 @@ export async function POST(
         product = await Product.findOneAndUpdate(
           { _id: id, store },
           {
-            $inc: { quantity: payload.quantity },
-            $set: { costPrice: payload.unitCost },
+            $inc: { quantity: baseQuantity },
+            // The latest supplier price becomes the cost, per base unit:
+            // 24,000 per crate of 24 is stored as 1,000.
+            $set: { costPrice: roundCost(payload.unitCost / unit.factor) },
           },
           { returnDocument: "after", runValidators: true, session: dbSession }
         )
@@ -69,6 +111,9 @@ export async function POST(
               sku: product.sku,
               supplierName: payload.supplierName,
               supplierPhone: payload.supplierPhone,
+              unit: unit.name,
+              unitFactor: unit.factor,
+              baseQuantity,
               quantity: payload.quantity,
               unitCost: payload.unitCost,
               totalCost,

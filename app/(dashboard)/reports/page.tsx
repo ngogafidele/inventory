@@ -1,5 +1,6 @@
 // Produces administrator reporting views from branch-scoped operational data.
 import { redirect } from "next/navigation"
+import { baseQuantityExpr, baseUnitExpr } from "@/lib/db/quantity-expr"
 import { connection } from "next/server"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { connectToDatabase } from "@/lib/db/connection"
@@ -318,7 +319,7 @@ export default async function ReportsPage({
           _id: "$store",
           saleIds: { $addToSet: "$_id" },
           revenue: { $sum: "$items.lineTotal" },
-          unitsSold: { $sum: "$items.quantity" },
+          unitsSold: { $sum: baseQuantityExpr("$items") },
           grossProfit: {
             $sum: {
               $subtract: [
@@ -438,9 +439,9 @@ export default async function ReportsPage({
           _id: {
             sku: "$items.sku",
             name: "$items.name",
-            unit: "$items.unit",
+            unit: baseUnitExpr("$items"),
           },
-          soldQuantity: { $sum: "$items.quantity" },
+          soldQuantity: { $sum: baseQuantityExpr("$items") },
           revenue: { $sum: "$items.lineTotal" },
           grossProfit: {
             $sum: {
@@ -484,9 +485,9 @@ export default async function ReportsPage({
           _id: {
             sku: "$returnItems.sku",
             name: "$returnItems.name",
-            unit: "$returnItems.unit",
+            unit: baseUnitExpr("$returnItems"),
           },
-          returnedQuantity: { $sum: "$returnItems.quantity" },
+          returnedQuantity: { $sum: baseQuantityExpr("$returnItems") },
           revenue: { $sum: "$returnItems.lineTotal" },
           grossProfit: {
             $sum: {

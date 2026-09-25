@@ -10,9 +10,25 @@ import { verifyActionPassword } from "@/lib/auth/step-up"
 import { UpdateReturnSchema } from "@/lib/db/validators/return"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { reconcileLoanAfterReturn } from "@/lib/db/loan-reconciliation"
+import {
+  buildSaleReturnItems,
+  getReturnedByLine,
+  getReturnStockEffect,
+  getSoldLines,
+  ReturnLineError,
+} from "@/lib/db/return-lines"
+import {
+  findUnitOption,
+  getBaseUnit,
+  roundCost,
+  roundMoney,
+  toBaseQuantity,
+  type PackUnit,
+} from "@/lib/utils/units"
 
 type ReturnItemInput = {
   productId: string
+  unit?: string
   quantity: number
   unitPrice: number
 }
@@ -22,18 +38,11 @@ type ProductDocumentLike = {
   name: string
   sku: string
   unit?: string
+  packUnits?: PackUnit[]
   quantity: number
   price: number
   costPrice?: number
   lowStockThreshold?: number
-}
-
-type SoldInfo = {
-  name: string
-  sku: string
-  unit: string
-  basePrice: number
-  soldQuantity: number
 }
 
 type SaleForReturn = {
@@ -44,12 +53,18 @@ type SaleForReturn = {
     sku: string
     unit?: string
     quantity: number
+    unitFactor?: number
+    baseUnit?: string
     basePrice: number
   }>
 }
 
 type PriorReturn = {
-  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
+  returnItems: Array<{
+    productId: { toString(): string }
+    unit?: string
+    quantity: number
+  }>
 }
 
 export async function PUT(
@@ -85,93 +100,19 @@ export async function PUT(
       )
     }
 
-    const returnItemsInput = payload.returnItems
-      ? payload.returnItems.map((item: ReturnItemInput) => ({
+    const returnItemsInput: ReturnItemInput[] = payload.returnItems
+      ? payload.returnItems.map((item) => ({
           productId: item.productId,
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         }))
       : existingReturn.returnItems.map((item) => ({
           productId: item.productId.toString(),
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         }))
-
-    // Sale-linked returns stay capped by what the sale sold (minus other
-    // returns against it); legacy returns without a sale keep free-form edits.
-    const linkedSaleId = existingReturn.saleId
-      ? existingReturn.saleId.toString()
-      : null
-    let soldMap: Map<string, SoldInfo> | null = null
-    if (linkedSaleId) {
-      const sale = await Sale.findOne({ _id: linkedSaleId, store }).lean<SaleForReturn | null>()
-      if (!sale) {
-        return NextResponse.json(
-          { success: false, error: "Linked sale not found" },
-          { status: 404 }
-        )
-      }
-
-      const resolvedSoldMap = new Map<string, SoldInfo>()
-      sale.items.forEach((item) => {
-        const key = item.productId.toString()
-        const existing = resolvedSoldMap.get(key)
-        if (existing) {
-          existing.soldQuantity += item.quantity
-        } else {
-          resolvedSoldMap.set(key, {
-            name: item.name,
-            sku: item.sku,
-            unit: item.unit ?? "pcs",
-            basePrice: item.basePrice,
-            soldQuantity: item.quantity,
-          })
-        }
-      })
-      soldMap = resolvedSoldMap
-
-      const otherReturns = await ReturnModel.find({
-        store,
-        saleId: linkedSaleId,
-        _id: { $ne: existingReturn._id },
-      })
-        .select("returnItems")
-        .lean<PriorReturn[]>()
-      const otherReturned = new Map<string, number>()
-      otherReturns.forEach((entry) => {
-        entry.returnItems.forEach((item) => {
-          const key = item.productId.toString()
-          otherReturned.set(key, (otherReturned.get(key) ?? 0) + item.quantity)
-        })
-      })
-
-      const requested = new Map<string, number>()
-      returnItemsInput.forEach((item) => {
-        requested.set(
-          item.productId,
-          (requested.get(item.productId) ?? 0) + item.quantity
-        )
-      })
-      for (const [productId, quantity] of requested.entries()) {
-        const sold = resolvedSoldMap.get(productId)
-        if (!sold) {
-          return NextResponse.json(
-            { success: false, error: "A returned item was not part of the linked sale." },
-            { status: 400 }
-          )
-        }
-        const remaining = sold.soldQuantity - (otherReturned.get(productId) ?? 0)
-        if (quantity > remaining) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: `Cannot return more than was sold for ${sold.name}. ${Math.max(0, remaining)} remaining.`,
-            },
-            { status: 400 }
-          )
-        }
-      }
-    }
 
     const allProductIds = Array.from(
       new Set(
@@ -199,44 +140,83 @@ export async function PUT(
       products.map((product) => [product._id.toString(), product])
     )
 
+    // Sale-linked returns stay capped per sale line (product and unit sold),
+    // minus other returns against it; legacy returns without a sale keep
+    // free-form edits priced from the product.
+    const linkedSaleId = existingReturn.saleId
+      ? existingReturn.saleId.toString()
+      : null
+    let returnItems
     let totalReturnAmount = 0
-    const returnItems = returnItemsInput.map((item) => {
-      const product = productMap.get(item.productId) as ProductDocumentLike | undefined
-      if (!product) {
-        throw new Error("Product not found")
+    try {
+      if (linkedSaleId) {
+        const sale = await Sale.findOne({ _id: linkedSaleId, store }).lean<SaleForReturn | null>()
+        if (!sale) {
+          return NextResponse.json(
+            { success: false, error: "Linked sale not found" },
+            { status: 404 }
+          )
+        }
+
+        const otherReturns = await ReturnModel.find({
+          store,
+          saleId: linkedSaleId,
+          _id: { $ne: existingReturn._id },
+        })
+          .select("returnItems")
+          .lean<PriorReturn[]>()
+
+        const built = buildSaleReturnItems(
+          returnItemsInput,
+          getSoldLines(sale.items),
+          getReturnedByLine(otherReturns)
+        )
+        returnItems = built.items
+        totalReturnAmount = built.totalReturnAmount
+      } else {
+        returnItems = returnItemsInput.map((item) => {
+          const product = productMap.get(item.productId) as ProductDocumentLike | undefined
+          if (!product) {
+            throw new ReturnLineError("Product not found")
+          }
+          const unit = findUnitOption(product, item.unit)
+          const baseQuantity = unit ? toBaseQuantity(item.quantity, unit.factor) : null
+          if (!unit || baseQuantity === null) {
+            throw new ReturnLineError(
+              `${item.quantity} ${item.unit ?? ""} is not a valid quantity for ${product.name}.`
+            )
+          }
+          const lineTotal = roundMoney(item.unitPrice * item.quantity)
+          totalReturnAmount += lineTotal
+          return {
+            productId: product._id,
+            name: product.name,
+            sku: product.sku,
+            unit: unit.name,
+            quantity: item.quantity,
+            unitFactor: unit.factor,
+            baseQuantity,
+            baseUnit: getBaseUnit(product),
+            basePrice: roundCost((product.costPrice ?? product.price) * unit.factor),
+            unitPrice: item.unitPrice,
+            lineTotal,
+          }
+        })
+        totalReturnAmount = roundMoney(totalReturnAmount)
       }
-
-      const sold = soldMap?.get(item.productId)
-      const lineTotal = item.unitPrice * item.quantity
-      totalReturnAmount += lineTotal
-
-      return {
-        productId: product._id,
-        name: sold?.name ?? product.name,
-        sku: sold?.sku ?? product.sku,
-        unit: sold?.unit ?? product.unit ?? "pcs",
-        quantity: item.quantity,
-        basePrice: sold?.basePrice ?? product.costPrice ?? product.price,
-        unitPrice: item.unitPrice,
-        lineTotal,
+    } catch (error) {
+      if (error instanceof ReturnLineError) {
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 400 }
+        )
       }
-    })
+      throw error
+    }
 
-    const oldNetMap = new Map<string, number>()
-    existingReturn.returnItems.forEach((item) => {
-      const current = oldNetMap.get(item.productId.toString()) ?? 0
-      oldNetMap.set(item.productId.toString(), current + item.quantity)
-    })
-    existingReturn.replacementItems.forEach((item) => {
-      const current = oldNetMap.get(item.productId.toString()) ?? 0
-      oldNetMap.set(item.productId.toString(), current - item.quantity)
-    })
-
-    const newNetMap = new Map<string, number>()
-    returnItems.forEach((item) => {
-      const current = newNetMap.get(item.productId.toString()) ?? 0
-      newNetMap.set(item.productId.toString(), current + item.quantity)
-    })
+    // Stock deltas in base units between the saved return and the edited one.
+    const oldNetMap = getReturnStockEffect(existingReturn)
+    const newNetMap = getReturnStockEffect({ returnItems })
 
     const updates: Array<{ productId: string; delta: number }> = []
     for (const productId of allProductIds) {
@@ -397,15 +377,8 @@ export async function DELETE(
       products.map((product) => [product._id.toString(), product.quantity])
     )
 
-    const netChanges = new Map<string, number>()
-    existingReturn.returnItems.forEach((item) => {
-      const current = netChanges.get(item.productId.toString()) ?? 0
-      netChanges.set(item.productId.toString(), current + item.quantity)
-    })
-    existingReturn.replacementItems.forEach((item) => {
-      const current = netChanges.get(item.productId.toString()) ?? 0
-      netChanges.set(item.productId.toString(), current - item.quantity)
-    })
+    // Undoing the return takes its restored stock back out, in base units.
+    const netChanges = getReturnStockEffect(existingReturn)
 
     for (const [productId, change] of netChanges.entries()) {
       const available = productMap.get(productId) ?? 0

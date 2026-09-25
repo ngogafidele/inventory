@@ -44,6 +44,7 @@ type SupplierReceipt = {
   supplierName: string
   supplierPhone: string
   quantity: number
+  unit?: string
   unitCost: number
   totalCost: number
   receivedAt?: Date
@@ -195,7 +196,8 @@ export default async function CustomersSuppliersPage() {
       productName: product?.name ?? receipt.sku,
       sku: product?.sku ?? receipt.sku,
       quantity: receipt.quantity,
-      unit: product?.unit ?? "pcs",
+      // The unit bought in (e.g. sack); older receipts were in the base unit.
+      unit: receipt.unit ?? product?.unit ?? "pcs",
       unitCost: receipt.unitCost,
       totalCost: receipt.totalCost,
     })

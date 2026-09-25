@@ -70,6 +70,41 @@ A product records branch ownership, SKU, unit, quantity, low-stock threshold,
 cost price, and selling price. Product names and SKUs are unique within each
 branch.
 
+#### Package units (Kinyinya only)
+
+In the Kinyinya branch (`store2`) a product has a base unit, the smallest
+amount it is ever sold in (a bottle, a piece, a gram), and can also have
+package units. Each package unit is a fixed number of base units with its own
+selling price, for example:
+
+| Product | Base unit | Package units |
+| --- | --- | --- |
+| Soda | bottle | crate = 24 bottles |
+| Rice | g | kg = 1,000 g, sack = 50,000 g |
+| Soap | pcs | box = 24 pcs |
+
+Stock, the low-stock threshold, the cost price, and the product's own selling
+price are all per base unit. Stock can be received, sold, and returned in any
+of a product's units; the quantity is converted to base units before stock
+changes, so selling one crate takes 24 bottles. Quantities may have up to
+three decimals as long as they convert to a whole number of base units
+(1.5 kg is 1,500 g). Stock is displayed broken down by unit, for example
+"7 crate + 19 bottle". Stock adjustments are entered in the base unit.
+
+Each sale, return, and receipt line keeps the unit it was entered in and that
+unit's size at the time, so changing a product's package units later does not
+change past records. A sale can include the same product in two units (a crate
+and some loose bottles); each is returned in its own unit.
+
+The cost price is entered and shown per the product's cost unit: by default
+its largest package unit, or another unit chosen on the product form. It is
+stored per base unit, so 12,000 per crate of 24 is kept as 500 per bottle.
+Receiving stock sets the cost to the supplier price, converted the same way.
+
+Gisozi (`store1`) does not use package units: its products have a single unit
+and whole-number quantities, as before. The list of branches that use package
+units is `PACK_UNIT_STORES` in `lib/utils/constants.ts`.
+
 Inventory changes occur through:
 
 - Sales, which deduct quantity.

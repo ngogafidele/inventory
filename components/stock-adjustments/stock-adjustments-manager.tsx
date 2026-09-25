@@ -2,6 +2,7 @@
 
 // Manages administrator-entered stock corrections with audit reasons.
 import { useMemo, useState } from "react"
+import { formatStock, type PackUnit } from "@/lib/utils/units"
 import { ArrowDown, ArrowUp, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +22,7 @@ type ProductOption = {
   name: string
   sku: string
   unit: string
+  packUnits?: PackUnit[]
   quantity: number
 }
 
@@ -130,7 +132,8 @@ export function StockAdjustmentsManager({
           </label>
 
           <label className="grid gap-1 text-sm">
-            Change
+            {/* Adjustments are counted in the base unit (e.g. bottles, not crates). */}
+            Change ({selectedProduct?.unit ?? "base unit"})
             <Input
               type="number"
               step="1"
@@ -161,7 +164,10 @@ export function StockAdjustmentsManager({
 
         {selectedProduct ? (
           <p className="text-xs text-muted-foreground">
-            Current stock: {selectedProduct.quantity} {selectedProduct.unit}
+            Current stock: {formatStock(selectedProduct.quantity, selectedProduct)}
+            {(selectedProduct.packUnits?.length ?? 0) > 0
+              ? ` (${selectedProduct.quantity} ${selectedProduct.unit})`
+              : ""}
           </p>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}

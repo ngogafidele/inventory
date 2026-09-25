@@ -6,7 +6,7 @@ const InvoiceItemSchema = new Schema(
     description: { type: String, required: true, trim: true },
     sku: { type: String, default: "", trim: true },
     unit: { type: String, required: true, default: "pcs", trim: true },
-    quantity: { type: Number, required: true, min: 1 },
+    quantity: { type: Number, required: true, min: 0.001 },
     unitPrice: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, required: true, min: 0 },
   },

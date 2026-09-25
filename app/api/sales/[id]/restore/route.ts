@@ -8,10 +8,13 @@ import { requireAdmin } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { verifyActionPassword } from "@/lib/auth/step-up"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import { lineBaseQuantity } from "@/lib/utils/units"
 
 type SaleItemForRestore = {
   productId: { toString(): string }
   quantity: number
+  unitFactor?: number | null
+  baseQuantity?: number | null
 }
 
 type ProductForRestore = {
@@ -26,7 +29,11 @@ function getRequiredQuantities(items: SaleItemForRestore[]) {
   const quantities = new Map<string, number>()
   items.forEach((item) => {
     const productId = item.productId.toString()
-    quantities.set(productId, (quantities.get(productId) ?? 0) + item.quantity)
+    // In base units: a restored crate needs its 24 bottles back.
+    quantities.set(
+      productId,
+      (quantities.get(productId) ?? 0) + lineBaseQuantity(item)
+    )
   })
   return quantities
 }

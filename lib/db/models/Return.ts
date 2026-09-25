@@ -7,7 +7,11 @@ const ReturnItemSchema = new Schema(
     name: { type: String, required: true },
     sku: { type: String, required: true },
     unit: { type: String, required: true, default: "pcs" },
-    quantity: { type: Number, required: true, min: 1 },
+    quantity: { type: Number, required: true, min: 0.001 },
+    // Copied from the sale line being returned; see the Sale item schema.
+    unitFactor: { type: Number, min: 1 },
+    baseQuantity: { type: Number, min: 1 },
+    baseUnit: { type: String },
     basePrice: { type: Number, required: true, min: 0, default: 0 },
     unitPrice: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, required: true, min: 0 },

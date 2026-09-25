@@ -1,5 +1,6 @@
 // Loads product returns and sellable sales for the active branch.
 import "@/lib/db/models/User"
+import { lineKey } from "@/lib/db/return-lines"
 import { connectToDatabase } from "@/lib/db/connection"
 import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
@@ -49,7 +50,11 @@ type ReturnPageSale = {
 }
 
 type ReturnedQuantityRow = {
-  _id: { saleId: { toString(): string }; productId: { toString(): string } }
+  _id: {
+    saleId: { toString(): string }
+    productId: { toString(): string }
+    unit?: string
+  }
   qty: number
 }
 
@@ -76,7 +81,13 @@ export default async function ReturnsPage() {
       { $unwind: "$returnItems" },
       {
         $group: {
-          _id: { saleId: "$saleId", productId: "$returnItems.productId" },
+          // Per sale line: the same product may be sold by the crate and by
+          // the bottle, and each is returned in its own unit.
+          _id: {
+            saleId: "$saleId",
+            productId: "$returnItems.productId",
+            unit: "$returnItems.unit",
+          },
           qty: { $sum: "$returnItems.quantity" },
         },
       },
@@ -86,7 +97,7 @@ export default async function ReturnsPage() {
   const returnedByKey = new Map<string, number>()
   returnedRows.forEach((row) => {
     returnedByKey.set(
-      `${row._id.saleId.toString()}:${row._id.productId.toString()}`,
+      `${row._id.saleId.toString()}:${lineKey(row._id.productId.toString(), row._id.unit)}`,
       row.qty
     )
   })
@@ -126,37 +137,51 @@ export default async function ReturnsPage() {
   const serializedSales = sales
     .map((sale) => {
       const saleId = sale._id.toString()
-      // Aggregate sold quantity per product (a product can appear on multiple lines).
-      const soldByProduct = new Map<
+      // Aggregate sold quantity per product and unit sold (a product can
+      // appear on several lines, and in more than one unit).
+      const soldByLine = new Map<
         string,
-        { name: string; sku: string; unit: string; sellingPrice: number; sold: number }
+        {
+          productId: string
+          name: string
+          sku: string
+          unit: string
+          sellingPrice: number
+          sold: number
+        }
       >()
       sale.items.forEach((item) => {
         const productId = item.productId.toString()
-        const existing = soldByProduct.get(productId)
+        const unit = item.unit ?? "pcs"
+        const key = lineKey(productId, unit)
+        const existing = soldByLine.get(key)
         if (existing) {
           existing.sold += item.quantity
         } else {
-          soldByProduct.set(productId, {
+          soldByLine.set(key, {
+            productId,
             name: item.name,
             sku: item.sku,
-            unit: item.unit ?? "pcs",
+            unit,
             sellingPrice: item.sellingPrice,
             sold: item.quantity,
           })
         }
       })
 
-      const items = Array.from(soldByProduct.entries())
-        .map(([productId, info]) => {
-          const alreadyReturned = returnedByKey.get(`${saleId}:${productId}`) ?? 0
+      const items = Array.from(soldByLine.entries())
+        .map(([key, info]) => {
+          const alreadyReturned = returnedByKey.get(`${saleId}:${key}`) ?? 0
           return {
-            productId,
+            productId: info.productId,
             name: info.name,
             sku: info.sku,
             unit: info.unit,
             sellingPrice: info.sellingPrice,
-            returnableQuantity: Math.max(0, info.sold - alreadyReturned),
+            returnableQuantity: Math.max(
+              0,
+              Math.round((info.sold - alreadyReturned) * 1000) / 1000
+            ),
           }
         })
         .filter((item) => item.returnableQuantity > 0)

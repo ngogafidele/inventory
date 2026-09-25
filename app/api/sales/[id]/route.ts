@@ -12,24 +12,30 @@ import { verifyActionPassword } from "@/lib/auth/step-up"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { UpdateSaleSchema } from "@/lib/db/validators/sale"
 import { parseKigaliDateInput } from "@/lib/utils/time"
+import { lineBaseQuantity, type PackUnit } from "@/lib/utils/units"
+import { buildSaleItems, SaleLineError } from "@/lib/db/sale-items"
 import {
   getReturnCreditForSale,
   reconcileLoanAfterReturn,
 } from "@/lib/db/loan-reconciliation"
 
-type SaleItemForRestock = {
+// Quantities below are in the unit each line was sold in; stock math converts
+// them with lineBaseQuantity.
+type StockLine = {
   productId: { toString(): string }
   quantity: number
+  unitFactor?: number | null
+  baseQuantity?: number | null
 }
+
+type SaleItemForRestock = StockLine
 
 type ReturnForSaleDelete = {
-  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
-  replacementItems: Array<{ productId: { toString(): string }; quantity: number }>
+  returnItems: StockLine[]
+  replacementItems: StockLine[]
 }
 
-type SaleItemForEdit = {
-  productId: { toString(): string }
-  quantity: number
+type SaleItemForEdit = StockLine & {
   name: string
   sku: string
   unit?: string
@@ -43,6 +49,7 @@ type ProductForEdit = {
   name: string
   sku: string
   unit?: string
+  packUnits?: PackUnit[]
   quantity: number
   price: number
   costPrice?: number
@@ -59,14 +66,16 @@ function addQuantity(map: Map<string, number>, productId: string, quantity: numb
 
 function getSaleQuantities(items: SaleItemForEdit[]) {
   const quantities = new Map<string, number>()
-  items.forEach((item) => addQuantity(quantities, item.productId.toString(), item.quantity))
+  items.forEach((item) =>
+    addQuantity(quantities, item.productId.toString(), lineBaseQuantity(item))
+  )
   return quantities
 }
 
 function getRestockQuantities(items: SaleItemForRestock[]) {
   const quantities = new Map<string, number>()
   items.forEach((item) =>
-    addQuantity(quantities, item.productId.toString(), item.quantity)
+    addQuantity(quantities, item.productId.toString(), lineBaseQuantity(item))
   )
   return quantities
 }
@@ -75,11 +84,11 @@ function getReturnDeletionStockChanges(returns: ReturnForSaleDelete[]) {
   const quantities = new Map<string, number>()
   returns.forEach((entry) => {
     entry.returnItems.forEach((item) =>
-      addQuantity(quantities, item.productId.toString(), -item.quantity)
+      addQuantity(quantities, item.productId.toString(), -lineBaseQuantity(item))
     )
     const replacementItems = entry.replacementItems ?? []
     replacementItems.forEach((item) =>
-      addQuantity(quantities, item.productId.toString(), item.quantity)
+      addQuantity(quantities, item.productId.toString(), lineBaseQuantity(item))
     )
   })
   return quantities
@@ -362,20 +371,17 @@ export async function PUT(
 
     const oldItems = sale.items as SaleItemForEdit[]
     const oldQuantities = getSaleQuantities(oldItems)
-    const newQuantities = new Map<string, number>()
-    payload.items.forEach((item) =>
-      addQuantity(newQuantities, item.productId, item.quantity)
-    )
+    const requestedProductIds = payload.items.map((item) => item.productId)
 
     const productIds = Array.from(
-      new Set([...oldQuantities.keys(), ...newQuantities.keys()])
+      new Set([...oldQuantities.keys(), ...requestedProductIds])
     )
     const products = await Product.find({ _id: { $in: productIds }, store })
     const productMap = new Map(
       products.map((product) => [product._id.toString(), product as ProductForEdit])
     )
 
-    for (const productId of newQuantities.keys()) {
+    for (const productId of requestedProductIds) {
       if (!productMap.has(productId)) {
         return NextResponse.json(
           { success: false, error: "One or more products not found" },
@@ -383,6 +389,22 @@ export async function PUT(
         )
       }
     }
+
+    // Lines are rebuilt from the products' current units and costs, the same
+    // way a new sale is; stock is reconciled in base units.
+    let built
+    try {
+      built = buildSaleItems(payload.items, productMap, { allowCostOverride: true })
+    } catch (error) {
+      if (error instanceof SaleLineError) {
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 400 }
+        )
+      }
+      throw error
+    }
+    const { items: saleItems, baseQuantities: newQuantities, totalAmount } = built
 
     for (const [productId, newQuantity] of newQuantities.entries()) {
       const product = productMap.get(productId)
@@ -402,32 +424,6 @@ export async function PUT(
         )
       }
     }
-
-    let totalAmount = 0
-    const saleItems = payload.items.map((item) => {
-      const product = productMap.get(item.productId)
-      if (!product) {
-        throw new Error("Product not found")
-      }
-
-      const lineTotal = item.sellingPrice * item.quantity
-      totalAmount += lineTotal
-
-      const requestedCostPrice = Number.isFinite(item.costPrice)
-        ? item.costPrice
-        : undefined
-
-      return {
-        productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
-        quantity: item.quantity,
-        basePrice: requestedCostPrice ?? product.costPrice ?? product.price,
-        sellingPrice: item.sellingPrice,
-        lineTotal,
-      }
-    })
 
     const paymentStatus = payload.paymentStatus ?? "paid"
     const customer = {
@@ -509,7 +505,7 @@ export async function PUT(
           invoice.items = saleItems.map((item) => ({
             description: item.name,
             sku: item.sku,
-            unit: item.unit ?? "pcs",
+            unit: item.unit,
             quantity: item.quantity,
             unitPrice: item.sellingPrice,
             lineTotal: item.lineTotal,

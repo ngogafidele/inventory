@@ -1,5 +1,7 @@
 // Retrieves, updates, or deletes a branch-owned product record.
 import { NextRequest, NextResponse } from "next/server"
+import { normalizeUnitName } from "@/lib/utils/units"
+import { storeUsesPackUnits } from "@/lib/utils/constants"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
@@ -93,7 +95,31 @@ export async function PUT(
     const payload = UpdateProductSchema.parse(await request.json())
     const { categoryId: _categoryId, ...updateInput } = payload
 
+    // Package units are a per-store feature; other stores sell in the base
+    // unit only.
+    if (!storeUsesPackUnits(store) && (payload.packUnits?.length ?? 0) > 0) {
+      return NextResponse.json(
+        { success: false, error: "This store does not use package units." },
+        { status: 400 }
+      )
+    }
+
     await connectToDatabase()
+
+    // Package unit names are checked against the base unit in the schema when
+    // both are sent; when only the packages change, check the stored one.
+    if (payload.packUnits && !payload.unit) {
+      const current = await Product.findOne({ _id: id, store })
+        .select("unit")
+        .lean<{ unit?: string } | null>()
+      const baseUnit = normalizeUnitName(current?.unit ?? "pcs")
+      if (payload.packUnits.some((pack) => normalizeUnitName(pack.name) === baseUnit)) {
+        return NextResponse.json(
+          { success: false, error: "A package unit cannot have the same name as the base unit." },
+          { status: 400 }
+        )
+      }
+    }
 
     if (payload.name) {
       const duplicateProduct = await Product.exists({

@@ -1,5 +1,6 @@
 // Generates an administrator financial and inventory report PDF by branch.
 import { NextRequest, NextResponse } from "next/server"
+import { baseQuantityExpr, baseUnitExpr } from "@/lib/db/quantity-expr"
 import { connectToDatabase } from "@/lib/db/connection"
 import { requireAdmin } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest, type StoreKey } from "@/lib/auth/session"
@@ -329,9 +330,9 @@ export async function GET(request: NextRequest) {
             _id: {
               sku: "$items.sku",
               name: "$items.name",
-              unit: "$items.unit",
+              unit: baseUnitExpr("$items"),
             },
-            soldQuantity: { $sum: "$items.quantity" },
+            soldQuantity: { $sum: baseQuantityExpr("$items") },
             revenue: { $sum: "$items.lineTotal" },
             grossProfit: {
               $sum: {
@@ -375,9 +376,9 @@ export async function GET(request: NextRequest) {
             _id: {
               sku: "$returnItems.sku",
               name: "$returnItems.name",
-              unit: "$returnItems.unit",
+              unit: baseUnitExpr("$returnItems"),
             },
-            returnedQuantity: { $sum: "$returnItems.quantity" },
+            returnedQuantity: { $sum: baseQuantityExpr("$returnItems") },
             revenue: { $sum: "$returnItems.lineTotal" },
             grossProfit: {
               $sum: {

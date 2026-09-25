@@ -5,6 +5,17 @@ import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
+import {
+  describeUnit,
+  findUnitOption,
+  formatStock,
+  getCostUnit,
+  getUnitOptions,
+  lineBaseQuantity,
+  roundCost,
+  toBaseQuantity,
+  type PackUnit,
+} from "@/lib/utils/units"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -37,7 +48,10 @@ type ProductOption = {
   _id: string
   name: string
   sku: string
+  // Base unit; quantity is stock in it and price is per one of it.
   unit: string
+  packUnits?: PackUnit[]
+  costUnit?: string
   price: number
   costPrice?: number
   quantity: number
@@ -48,7 +62,11 @@ type SaleItemClient = {
   name?: string
   sku?: string
   unit?: string
+  // In the unit sold; stock moved by baseQuantity (see lineBaseQuantity).
   quantity: number
+  unitFactor?: number
+  baseQuantity?: number
+  baseUnit?: string
   basePrice?: number
   sellingPrice: number
   lineTotal: number
@@ -57,6 +75,8 @@ type SaleItemClient = {
 type StockQuantityClient = {
   productId: string
   quantity: number
+  unitFactor?: number
+  baseQuantity?: number
 }
 
 type SaleClient = {
@@ -89,6 +109,8 @@ type DeletedSaleClient = SaleClient & {
 
 type DraftItem = {
   productId: string
+  // Unit sold in; empty means the product's base unit.
+  unit: string
   quantity: string
   sellingPrice: string
   costPrice?: string
@@ -112,6 +134,7 @@ type InvoiceDraft = {
 
 const emptyDraft: DraftItem = {
   productId: "",
+  unit: "",
   quantity: "",
   sellingPrice: "",
   costPrice: "",
@@ -228,10 +251,11 @@ export function SalesManager({
 
   const activeSaleQuantities = useMemo(() => {
     const quantities = new Map<string, number>()
+    // Base units, so a crate on the sale being edited frees its 24 bottles.
     activeSale?.items.forEach((item) => {
       quantities.set(
         item.productId,
-        (quantities.get(item.productId) ?? 0) + item.quantity
+        (quantities.get(item.productId) ?? 0) + lineBaseQuantity(item)
       )
     })
     return quantities
@@ -302,6 +326,14 @@ export function SalesManager({
     setDraftItems((current) =>
       current.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [key]: value } : item
+      )
+    )
+  }
+
+  const setDraftFields = (index: number, fields: Partial<DraftItem>) => {
+    setDraftItems((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...fields } : item
       )
     )
   }
@@ -462,10 +494,16 @@ export function SalesManager({
     const changes = new Map<string, number>()
 
     previousItems.forEach((item) => {
-      changes.set(item.productId, (changes.get(item.productId) ?? 0) + item.quantity)
+      changes.set(
+        item.productId,
+        (changes.get(item.productId) ?? 0) + lineBaseQuantity(item)
+      )
     })
     nextItems.forEach((item) => {
-      changes.set(item.productId, (changes.get(item.productId) ?? 0) - item.quantity)
+      changes.set(
+        item.productId,
+        (changes.get(item.productId) ?? 0) - lineBaseQuantity(item)
+      )
     })
 
     setProductOptions((current) =>
@@ -542,6 +580,9 @@ export function SalesManager({
       sale.items.length
         ? sale.items.map((item) => ({
             productId: item.productId,
+            // Base-unit lines (all older ones) stay "" so they keep matching
+            // even if the product's base unit is renamed later.
+            unit: (item.unitFactor ?? 1) > 1 ? (item.unit ?? "") : "",
             quantity: String(item.quantity),
             sellingPrice: String(item.sellingPrice),
             costPrice: isAdmin ? String(item.basePrice ?? "") : "",
@@ -567,6 +608,7 @@ export function SalesManager({
 
     const payloadItems = draftItems.map((item) => ({
       productId: item.productId,
+      unit: item.unit || undefined,
       quantity: Number(item.quantity),
       sellingPrice: Number(item.sellingPrice),
       costPrice:
@@ -589,21 +631,33 @@ export function SalesManager({
 
         return (
           Number.isNaN(item.quantity) ||
-          item.quantity < 1 ||
+          item.quantity <= 0 ||
           Number.isNaN(item.sellingPrice) ||
           item.sellingPrice < 0 ||
           hasInvalidCostPrice
         )
       })
     ) {
-      setError("Quantity must be at least 1 and price must be 0 or more.")
+      setError("Quantity must be more than 0 and price must be 0 or more.")
       return
     }
 
+    // Stock is compared in base units: 1 crate + 5 bottles needs 29 bottles.
     const requestedByProduct = new Map<string, number>()
     for (const item of payloadItems) {
+      const product = productMap.get(item.productId)
+      const unit = product ? findUnitOption(product, item.unit) : null
+      const baseQuantity = unit ? toBaseQuantity(item.quantity, unit.factor) : null
+      if (!product || !unit || baseQuantity === null) {
+        setError(
+          product && unit
+            ? `${item.quantity} ${unit.name} of ${product.name} is not a whole number of ${product.unit}.`
+            : "One selected product is no longer available."
+        )
+        return
+      }
       const current = requestedByProduct.get(item.productId) ?? 0
-      requestedByProduct.set(item.productId, current + item.quantity)
+      requestedByProduct.set(item.productId, current + baseQuantity)
     }
 
     for (const [productId, totalRequested] of requestedByProduct.entries()) {
@@ -754,8 +808,9 @@ export function SalesManager({
                 key={`${index}-${item.productId}`}
                 className={`grid gap-3 rounded-lg border border-border/80 p-3 ${
                   isAdmin
-                    ? "md:grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_auto]"
-                    : "md:grid-cols-[1.6fr_0.8fr_1fr_auto]"
+                    ? // Quantity is wider: it holds the unit picker too.
+                      "md:grid-cols-[1.4fr_1.4fr_0.8fr_0.8fr_auto]"
+                    : "md:grid-cols-[1.5fr_1.4fr_1fr_auto]"
                 }`}
               >
                 <label className="grid gap-1 text-sm">
@@ -765,32 +820,81 @@ export function SalesManager({
                     value={item.productId}
                     onValueChange={(value) => {
                       const product = productMap.get(value)
-                      setDraftItem(index, "productId", value)
-                      if (product) {
-                        setDraftItem(index, "sellingPrice", String(product.price))
-                        if (isAdmin) {
-                          setDraftItem(
-                            index,
-                            "costPrice",
-                            String(product.costPrice ?? product.price)
-                          )
-                        }
-                      }
+                      setDraftFields(index, {
+                        productId: value,
+                        // A new product starts in its base unit.
+                        unit: "",
+                        ...(product
+                          ? {
+                              sellingPrice: String(product.price),
+                              ...(isAdmin
+                                ? {
+                                    costPrice: String(
+                                      product.costPrice ?? product.price
+                                    ),
+                                  }
+                                : {}),
+                            }
+                          : {}),
+                      })
                     }}
                   />
                 </label>
 
                 <label className="grid gap-1 text-sm">
                   Quantity
-                  <Input
-                    type="number"
-                    min={1}
-                    placeholder="e.g. 3"
-                    value={item.quantity}
-                    onChange={(event) =>
-                      setDraftItem(index, "quantity", event.target.value)
-                    }
-                  />
+                  <div className="flex gap-2 [&>input]:min-w-24 [&>input]:flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="any"
+                      placeholder="e.g. 3"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        setDraftItem(index, "quantity", event.target.value)
+                      }
+                    />
+                    {selectedProduct &&
+                    (selectedProduct.packUnits?.length ?? 0) > 0 ? (
+                      <Select
+                        value={
+                          findUnitOption(selectedProduct, item.unit)?.name ??
+                          selectedProduct.unit
+                        }
+                        onValueChange={(value) => {
+                          const option = findUnitOption(selectedProduct, value)
+                          if (!option) return
+                          // Each unit has its own price; the cost follows the
+                          // unit so profit stays per unit sold.
+                          setDraftFields(index, {
+                            unit: option.isBase ? "" : option.name,
+                            sellingPrice: String(option.price),
+                            ...(isAdmin
+                              ? {
+                                  costPrice: String(
+                                    roundCost(
+                                      (selectedProduct.costPrice ??
+                                        selectedProduct.price) * option.factor
+                                    )
+                                  ),
+                                }
+                              : {}),
+                          })
+                        }}
+                      >
+                        <SelectTrigger className="w-36 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getUnitOptions(selectedProduct).map((option) => (
+                            <SelectItem key={option.name} value={option.name}>
+                              {describeUnit(option, selectedProduct.unit)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                  </div>
                 </label>
 
                 <label className="grid gap-1 text-sm">
@@ -835,7 +939,17 @@ export function SalesManager({
 
                 {selectedProduct ? (
                   <p className="md:col-span-4 text-xs text-muted-foreground">
-                    Base price: {formatCurrency(selectedProduct.costPrice ?? selectedProduct.price)} | Available: {selectedProduct.quantity + (activeSaleQuantities.get(item.productId) ?? 0)} {selectedProduct.unit}
+                    Base price:{" "}
+                    {formatCurrency(
+                      (selectedProduct.costPrice ?? selectedProduct.price) *
+                        getCostUnit(selectedProduct).factor
+                    )}{" "}
+                    per {getCostUnit(selectedProduct).name} | Available:{" "}
+                    {formatStock(
+                      selectedProduct.quantity +
+                        (activeSaleQuantities.get(item.productId) ?? 0),
+                      selectedProduct
+                    )}
                   </p>
                 ) : null}
               </div>

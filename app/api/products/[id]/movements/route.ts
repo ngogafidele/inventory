@@ -1,5 +1,6 @@
 // Reconstructs a product's stock-movement history for the monitor view.
 import { NextRequest, NextResponse } from "next/server"
+import { lineBaseQuantity } from "@/lib/utils/units"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
@@ -19,6 +20,14 @@ type MovementType =
   | "adjustment"
 
 type MovementDirection = "in" | "out"
+
+// Every movement is counted in the product's base unit.
+type MovementLine = {
+  productId: unknown
+  quantity: number
+  unitFactor?: number
+  baseQuantity?: number
+}
 
 type MovementEvent = {
   date: string
@@ -87,8 +96,16 @@ export async function GET(
 
     const [receipts, adjustments, sales, returns] = await Promise.all([
       ProductReceipt.find({ store, productId: id })
-        .select("quantity receivedAt supplierName")
-        .lean<{ quantity: number; receivedAt: Date; supplierName: string }[]>(),
+        .select("quantity unitFactor baseQuantity receivedAt supplierName")
+        .lean<
+          {
+            quantity: number
+            unitFactor?: number
+            baseQuantity?: number
+            receivedAt: Date
+            supplierName: string
+          }[]
+        >(),
       StockAdjustment.find({ store, productId: id })
         .select("quantityChange reason createdAt")
         .lean<{ quantityChange: number; reason: string; createdAt: Date }[]>(),
@@ -96,7 +113,7 @@ export async function GET(
         .select("items paymentStatus createdAt")
         .lean<
           {
-            items: { productId: unknown; quantity: number }[]
+            items: MovementLine[]
             paymentStatus: "paid" | "unpaid"
             createdAt: Date
           }[]
@@ -108,8 +125,8 @@ export async function GET(
         .select("returnItems replacementItems createdAt")
         .lean<
           {
-            returnItems: { productId: unknown; quantity: number }[]
-            replacementItems: { productId: unknown; quantity: number }[]
+            returnItems: MovementLine[]
+            replacementItems: MovementLine[]
             createdAt: Date
           }[]
         >(),
@@ -124,7 +141,7 @@ export async function GET(
         date: new Date(receipt.receivedAt).toISOString(),
         type: "receipt",
         direction: "in",
-        quantity: receipt.quantity,
+        quantity: lineBaseQuantity(receipt),
         reason: receipt.supplierName
           ? `Received from ${receipt.supplierName}`
           : MOVEMENT_LABELS.receipt,
@@ -146,7 +163,7 @@ export async function GET(
     for (const sale of sales) {
       const quantity = sale.items
         .filter((item) => String(item.productId) === id)
-        .reduce((sum, item) => sum + item.quantity, 0)
+        .reduce((sum, item) => sum + lineBaseQuantity(item), 0)
       if (quantity === 0) continue
       const isLoan = sale.paymentStatus === "unpaid"
       raw.push({
@@ -161,7 +178,7 @@ export async function GET(
     for (const entry of returns) {
       const returned = entry.returnItems
         .filter((item) => String(item.productId) === id)
-        .reduce((sum, item) => sum + item.quantity, 0)
+        .reduce((sum, item) => sum + lineBaseQuantity(item), 0)
       if (returned > 0) {
         raw.push({
           date: new Date(entry.createdAt).toISOString(),
@@ -174,7 +191,7 @@ export async function GET(
 
       const replaced = entry.replacementItems
         .filter((item) => String(item.productId) === id)
-        .reduce((sum, item) => sum + item.quantity, 0)
+        .reduce((sum, item) => sum + lineBaseQuantity(item), 0)
       if (replaced > 0) {
         raw.push({
           date: new Date(entry.createdAt).toISOString(),

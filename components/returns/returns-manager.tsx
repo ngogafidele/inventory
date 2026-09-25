@@ -151,8 +151,12 @@ export function ReturnsManager({
     setError(null)
     setReturnLines(
       entry.returnItems.map((item) => {
+        // Matched per product and unit sold: a crate and loose bottles of
+        // the same product are separate lines.
         const saleItem = sale?.items.find(
-          (candidate) => candidate.productId === item.productId
+          (candidate) =>
+            candidate.productId === item.productId &&
+            candidate.unit.toLowerCase() === (item.unit ?? "pcs").toLowerCase()
         )
         // The sale's returnableQuantity already excludes this return, so the
         // editable cap is that remainder plus what this return currently holds.
@@ -205,6 +209,7 @@ export function ReturnsManager({
 
     const parsedLines = returnLines.map((line) => ({
       productId: line.productId,
+      unit: line.unit,
       name: line.name,
       maxQuantity: line.maxQuantity,
       quantity: line.quantity.trim() === "" ? 0 : Number(line.quantity),
@@ -218,8 +223,8 @@ export function ReturnsManager({
     }
 
     for (const line of activeLines) {
-      if (!Number.isInteger(line.quantity) || line.quantity < 1) {
-        setError("Quantities must be whole numbers of at least 1.")
+      if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+        setError("Quantities must be more than 0.")
         return
       }
       if (Number.isNaN(line.unitPrice) || line.unitPrice < 0) {
@@ -228,7 +233,7 @@ export function ReturnsManager({
       }
       if (line.quantity > line.maxQuantity) {
         setError(
-          `Cannot return more than ${line.maxQuantity} of ${line.name}.`
+          `Cannot return more than ${line.maxQuantity} ${line.unit} of ${line.name}.`
         )
         return
       }
@@ -236,6 +241,7 @@ export function ReturnsManager({
 
     const returnItems = activeLines.map((line) => ({
       productId: line.productId,
+      unit: line.unit,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
     }))
@@ -412,7 +418,7 @@ export function ReturnsManager({
                 <h4 className="text-lg font-semibold">Items to return</h4>
                 {returnLines.map((line, index) => (
                   <div
-                    key={line.productId}
+                    key={`${line.productId}|${line.unit}`}
                     className="grid gap-3 rounded-lg border border-border/80 p-3 md:grid-cols-[1.6fr_0.8fr_1fr]"
                   >
                     <div className="grid gap-1 text-sm">
@@ -424,10 +430,11 @@ export function ReturnsManager({
                     </div>
 
                     <label className="grid gap-1 text-sm">
-                      Quantity
+                      Quantity ({line.unit})
                       <Input
                         type="number"
                         min={0}
+                        step="any"
                         max={line.maxQuantity}
                         placeholder="0"
                         value={line.quantity}

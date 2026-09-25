@@ -5,12 +5,15 @@ import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { ProductsManager } from "@/components/products/products-manager"
 import { formatInKigali } from "@/lib/utils/time"
+import type { PackUnit } from "@/lib/utils/units"
+import { storeUsesPackUnits } from "@/lib/utils/constants"
 
 type ProductsPageProduct = {
   _id: { toString(): string }
   name: string
   sku: string
   unit?: string
+  packUnits?: PackUnit[]
   quantity: number
   lowStockThreshold?: number
   costPrice: number
@@ -48,6 +51,11 @@ export default async function ProductsPage() {
       ...product,
       _id: product._id.toString(),
       unit: product.unit ?? "pcs",
+      packUnits: (product.packUnits ?? []).map((pack) => ({
+        name: pack.name,
+        factor: pack.factor,
+        price: pack.price,
+      })),
       lowStockThreshold: product.lowStockThreshold ?? 0,
       lastRestock: latestReceipt?.receivedAt.toISOString(),
       lastRestockLabel: latestReceipt
@@ -67,6 +75,7 @@ export default async function ProductsPage() {
     <ProductsManager
       initialProducts={serializedProducts}
       isAdmin={session.isAdmin}
+      packUnitsEnabled={storeUsesPackUnits(store)}
     />
   )
 }

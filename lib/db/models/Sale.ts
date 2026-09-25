@@ -7,7 +7,15 @@ const SaleItemSchema = new Schema(
     name: { type: String, required: true },
     sku: { type: String, required: true },
     unit: { type: String, required: true, default: "pcs" },
-    quantity: { type: Number, required: true, min: 1 },
+    quantity: { type: Number, required: true, min: 0.001 },
+    // Package-unit snapshot, fixed when the line is saved so a later change to
+    // the product's units never rewrites history. Absent on older lines, which
+    // were always in the base unit (see lineBaseQuantity).
+    unitFactor: { type: Number, min: 1 },
+    baseQuantity: { type: Number, min: 1 },
+    baseUnit: { type: String },
+    // Per unit sold (cost per base unit x unitFactor), so basePrice x quantity
+    // stays the line's cost of goods.
     basePrice: { type: Number, required: true, min: 0 },
     sellingPrice: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, required: true, min: 0 },

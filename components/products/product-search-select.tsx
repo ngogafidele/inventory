@@ -3,12 +3,14 @@
 // Provides a searchable branch-product selection control.
 import { useEffect, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
+import { formatStock, type PackUnit } from "@/lib/utils/units"
 
 export type ProductSearchOption = {
   _id: string
   name: string
   sku: string
   unit: string
+  packUnits?: PackUnit[]
   quantity: number
 }
 
@@ -99,7 +101,7 @@ export function ProductSearchSelect({
               >
                 <span className="font-medium">{product.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {product.sku} - Stock {product.quantity} {product.unit}
+                  {product.sku} - Stock {formatStock(product.quantity, product)}
                 </span>
               </button>
             ))

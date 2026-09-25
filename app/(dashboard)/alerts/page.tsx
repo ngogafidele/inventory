@@ -1,5 +1,6 @@
 // Displays low-stock alerts for the authenticated user's active branch.
 import { connectToDatabase } from "@/lib/db/connection"
+import { formatStock, type PackUnit } from "@/lib/utils/units"
 import { Product } from "@/lib/db/models/Product"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import {
@@ -16,6 +17,7 @@ type AlertsPageProduct = {
   name: string
   sku: string
   unit?: string
+  packUnits?: PackUnit[]
   quantity: number
   lowStockThreshold?: number
 }
@@ -69,11 +71,9 @@ export default async function AlertsPage() {
               >
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
+                <TableCell>{formatStock(product.quantity, product)}</TableCell>
                 <TableCell>
-                  {product.quantity} {product.unit ?? "pcs"}
-                </TableCell>
-                <TableCell>
-                  {product.lowStockThreshold ?? 0} {product.unit ?? "pcs"}
+                  {formatStock(product.lowStockThreshold ?? 0, product)}
                 </TableCell>
                 <TableCell>
                   {product.quantity === 0 ? "Out of Stock" : "Low Stock"}

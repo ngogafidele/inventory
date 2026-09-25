@@ -1,5 +1,7 @@
 // Aggregates role-aware dashboard metrics for a selected branch.
 import { NextRequest, NextResponse } from "next/server"
+import { baseQuantityExpr, baseUnitExpr } from "@/lib/db/quantity-expr"
+import { lineBaseQuantity } from "@/lib/utils/units"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { connectToDatabase } from "@/lib/db/connection"
@@ -14,6 +16,9 @@ import { getPaymentMethodTotals } from "@/lib/db/payments"
 type DashboardSaleItem = {
   quantity: number
   unit?: string
+  unitFactor?: number
+  baseQuantity?: number
+  baseUnit?: string
 }
 
 type DashboardRecentSale = {
@@ -343,9 +348,9 @@ export async function GET(request: NextRequest) {
           _id: {
             sku: "$items.sku",
             name: "$items.name",
-            unit: "$items.unit",
+            unit: baseUnitExpr("$items"),
           },
-          soldQuantity: { $sum: "$items.quantity" },
+          soldQuantity: { $sum: baseQuantityExpr("$items") },
           salesValue: { $sum: "$items.lineTotal" },
         },
       },
@@ -360,9 +365,9 @@ export async function GET(request: NextRequest) {
           _id: {
             sku: "$returnItems.sku",
             name: "$returnItems.name",
-            unit: "$returnItems.unit",
+            unit: baseUnitExpr("$returnItems"),
           },
-          returnedQuantity: { $sum: "$returnItems.quantity" },
+          returnedQuantity: { $sum: baseQuantityExpr("$returnItems") },
           returnedValue: { $sum: "$returnItems.lineTotal" },
         },
       },
@@ -436,8 +441,14 @@ export async function GET(request: NextRequest) {
         _id: sale._id.toString(),
         createdAt: sale.createdAt,
         totalAmount: sale.totalAmount,
-        quantitySold: sale.items.reduce((acc, item) => acc + item.quantity, 0),
-        units: Array.from(new Set(sale.items.map((item) => item.unit ?? "pcs"))),
+        // In base units, so a crate and loose bottles add up to bottles.
+        quantitySold: sale.items.reduce(
+          (acc, item) => acc + lineBaseQuantity(item),
+          0
+        ),
+        units: Array.from(
+          new Set(sale.items.map((item) => item.baseUnit ?? item.unit ?? "pcs"))
+        ),
       })),
       topMoving: netTopMovingProducts,
       paymentsByMethod,

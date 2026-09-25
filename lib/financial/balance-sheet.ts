@@ -18,6 +18,7 @@
 // figures for a past as-of date. See lib/financial/income-statement for the note on
 // swapping in an immutable ledger if that ever needs to stop.
 import { Product } from "@/lib/db/models/Product"
+import { baseQuantityExpr } from "@/lib/db/quantity-expr"
 import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
 import { ReturnModel } from "@/lib/db/models/Return"
 import { Sale } from "@/lib/db/models/Sale"
@@ -179,13 +180,13 @@ async function computeInventoryValue(
     // Receipts after the date came IN after the snapshot -> subtract.
     ProductReceipt.aggregate<IdQtyAgg>([
       { $match: { store, receivedAt: { $gte: endExclusive } } },
-      { $group: { _id: "$productId", qty: { $sum: "$quantity" } } },
+      { $group: { _id: "$productId", qty: { $sum: baseQuantityExpr("$") } } },
     ]),
     // Sales after the date went OUT after the snapshot -> add back.
     Sale.aggregate<IdQtyAgg>([
       { $match: { store, deletedAt: null, createdAt: { $gte: endExclusive } } },
       { $unwind: "$items" },
-      { $group: { _id: "$items.productId", qty: { $sum: "$items.quantity" } } },
+      { $group: { _id: "$items.productId", qty: { $sum: baseQuantityExpr("$items") } } },
     ]),
     // Returns after the date: returned goods came IN -> subtract; replacements
     // issued went OUT -> add back.
@@ -202,7 +203,7 @@ async function computeInventoryValue(
                     as: "item",
                     in: {
                       productId: "$$item.productId",
-                      returnedIn: "$$item.quantity",
+                      returnedIn: baseQuantityExpr("$$item"),
                       replacedOut: 0,
                     },
                   },
@@ -214,7 +215,7 @@ async function computeInventoryValue(
                     in: {
                       productId: "$$item.productId",
                       returnedIn: 0,
-                      replacedOut: "$$item.quantity",
+                      replacedOut: baseQuantityExpr("$$item"),
                     },
                   },
                 },
@@ -243,7 +244,8 @@ async function computeInventoryValue(
       {
         $group: {
           _id: "$productId",
-          totalQty: { $sum: "$quantity" },
+          // Quantity in base units; cost is money, so the ratio is per base unit.
+          totalQty: { $sum: baseQuantityExpr("$") },
           totalCost: { $sum: { $multiply: ["$unitCost", "$quantity"] } },
         },
       },
@@ -253,7 +255,20 @@ async function computeInventoryValue(
       { $match: { store, deletedAt: null, createdAt: { $lt: endExclusive } } },
       { $sort: { createdAt: 1 } },
       { $unwind: "$items" },
-      { $group: { _id: "$items.productId", basePrice: { $last: "$items.basePrice" } } },
+      // basePrice is per unit sold (a crate); divide back to per base unit.
+      {
+        $group: {
+          _id: "$items.productId",
+          basePrice: {
+            $last: {
+              $divide: [
+                "$items.basePrice",
+                { $ifNull: ["$items.unitFactor", 1] },
+              ],
+            },
+          },
+        },
+      },
     ]),
   ])
 

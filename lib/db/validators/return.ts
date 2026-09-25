@@ -1,11 +1,17 @@
 // Validates returned-item and optional replacement-item submissions.
 import { z } from "zod"
-import { objectIdSchema } from "@/lib/db/validators/shared"
+import {
+  objectIdSchema,
+  quantitySchema,
+  unitNameSchema,
+} from "@/lib/db/validators/shared"
 
 export const ReturnItemSchema = z
   .object({
     productId: objectIdSchema,
-    quantity: z.number().int().min(1),
+    // The unit the item was sold in on the sale; omitted means the base unit.
+    unit: unitNameSchema,
+    quantity: quantitySchema,
     unitPrice: z.number().min(0),
   })
   .strict()

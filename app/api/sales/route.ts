@@ -6,6 +6,7 @@ import { Sale } from "@/lib/db/models/Sale"
 import { requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateSaleSchema } from "@/lib/db/validators/sale"
+import { buildSaleItems } from "@/lib/db/sale-items"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { parseKigaliDateInput } from "@/lib/utils/time"
 
@@ -79,10 +80,14 @@ export async function POST(request: NextRequest) {
       products.map((product) => [product._id.toString(), product])
     )
 
-    const requestedQuantities = new Map<string, number>()
-    payload.items.forEach((item) => {
-      const current = requestedQuantities.get(item.productId) ?? 0
-      requestedQuantities.set(item.productId, current + item.quantity)
+    // Stock is checked and deducted in base units, whatever unit each line
+    // was sold in (e.g. a crate takes 24 bottles).
+    const {
+      items: saleItems,
+      baseQuantities: requestedQuantities,
+      totalAmount,
+    } = buildSaleItems(payload.items, productMap, {
+      allowCostOverride: session.isAdmin,
     })
 
     for (const [productId, quantity] of requestedQuantities.entries()) {
@@ -94,33 +99,6 @@ export async function POST(request: NextRequest) {
         throw new Error(`Insufficient stock for ${product.name}`)
       }
     }
-
-    let totalAmount = 0
-    const saleItems = payload.items.map((item) => {
-      const product = productMap.get(item.productId)
-      if (!product) {
-        throw new Error("Product not found")
-      }
-
-      const lineTotal = item.sellingPrice * item.quantity
-      totalAmount += lineTotal
-
-      const requestedCostPrice =
-        session.isAdmin && Number.isFinite(item.costPrice)
-          ? item.costPrice
-          : undefined
-
-      return {
-        productId: product._id,
-        name: product.name,
-        sku: product.sku,
-        unit: product.unit ?? "pcs",
-        quantity: item.quantity,
-        basePrice: requestedCostPrice ?? product.costPrice ?? product.price,
-        sellingPrice: item.sellingPrice,
-        lineTotal,
-      }
-    })
 
     const paymentStatus = payload.paymentStatus ?? "paid"
     const customer = {

@@ -26,10 +26,14 @@ const PDFDocument =
 type CatalogProduct = {
   name: string
   sku: string
+  // Base unit; quantity, cost, and price are per one of it.
   unit?: string
+  packUnits?: Array<{ name: string; factor: number; price: number }>
   quantity: number
   lowStockThreshold?: number
+  // Per costUnitLabel when set (e.g. per crate), else per base unit.
   costPrice: number
+  costUnitLabel?: string
   price: number
 }
 
@@ -296,12 +300,28 @@ export function generateProductCatalogPDF(
     doc.font("Helvetica-Bold").fontSize(8)
     const name = truncateToWidth(doc, product.name, 178)
     doc.font("Helvetica").fontSize(7)
-    const sku = truncateToWidth(doc, product.sku, 178)
+    // Package units ride on the SKU line: "SKU · crate of 24: 13,500".
+    const packText = (product.packUnits ?? [])
+      .map((pack) => `${pack.name} of ${pack.factor}: ${formatCurrency(pack.price)}`)
+      .join(" · ")
+    const sku = truncateToWidth(
+      doc,
+      packText ? `${product.sku} · ${packText}` : product.sku,
+      178
+    )
     doc.font("Helvetica").fontSize(8)
     const quantityText = truncateToWidth(doc, quantity, 62)
     const lowStockText = truncateToWidth(doc, String(lowStockThreshold), 62)
-    const costPrice = truncateToWidth(doc, formatCurrency(product.costPrice ?? 0), 82)
-    const price = truncateToWidth(doc, formatCurrency(product.price), 82)
+    const costPrice = truncateToWidth(
+      doc,
+      `${formatCurrency(product.costPrice ?? 0)}${product.costUnitLabel ? ` /${product.costUnitLabel}` : ""}`,
+      82
+    )
+    const price = truncateToWidth(
+      doc,
+      `${formatCurrency(product.price)}${(product.packUnits?.length ?? 0) > 0 ? ` /${product.unit ?? "pcs"}` : ""}`,
+      82
+    )
 
     doc
       .fillColor(index % 2 === 0 ? "#ffffff" : "#fbfcfe")

@@ -1,5 +1,7 @@
 // Lists and creates products within an authorized store context.
 import { NextRequest, NextResponse } from "next/server"
+import { findUnitOption, roundCost, roundMoney } from "@/lib/utils/units"
+import { storeUsesPackUnits } from "@/lib/utils/constants"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
 import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
@@ -93,8 +95,18 @@ export async function POST(request: NextRequest) {
       categoryId: _categoryId,
       supplierName,
       supplierPhone,
+      openingUnit,
       ...productInput
     } = payload
+
+    // Package units are a per-store feature; other stores sell in the base
+    // unit only.
+    if (!storeUsesPackUnits(store) && productInput.packUnits.length > 0) {
+      return NextResponse.json(
+        { success: false, error: "This store does not use package units." },
+        { status: 400 }
+      )
+    }
 
     await connectToDatabase()
 
@@ -117,15 +129,26 @@ export async function POST(request: NextRequest) {
     })
 
     if (supplierName && supplierPhone && product.quantity > 0) {
+      // Recorded in the unit the stock was counted in (10 crates at 12,000)
+      // when that is a whole number of it; otherwise in the base unit.
+      const counted = findUnitOption(product, openingUnit) ?? findUnitOption(product)
+      const unit =
+        counted && product.quantity % counted.factor === 0
+          ? counted
+          : findUnitOption(product)
+      const factor = unit?.factor ?? 1
       await ProductReceipt.create({
         store,
         productId: product._id,
         sku: product.sku,
         supplierName,
         supplierPhone,
-        quantity: product.quantity,
-        unitCost: product.costPrice,
-        totalCost: product.quantity * product.costPrice,
+        unit: unit?.name ?? product.unit,
+        unitFactor: factor,
+        baseQuantity: product.quantity,
+        quantity: product.quantity / factor,
+        unitCost: roundCost(product.costPrice * factor),
+        totalCost: roundMoney(product.quantity * product.costPrice),
         receivedAt: new Date(),
         receivedBy: session.userId,
       })

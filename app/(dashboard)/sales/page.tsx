@@ -8,6 +8,8 @@ import "@/lib/db/models/User"
 import { getCurrentStore, requireServerSession } from "@/lib/auth/server"
 import { SalesManager } from "@/components/sales/sales-manager"
 import { formatInKigali, formatKigaliDateInput } from "@/lib/utils/time"
+import { lineBaseQuantity, type PackUnit } from "@/lib/utils/units"
+import { baseQuantityExpr } from "@/lib/db/quantity-expr"
 
 type PopulatedSaleUser = {
   _id: { toString(): string }
@@ -21,6 +23,9 @@ type SalesPageSaleItem = {
   sku: string
   unit?: string
   quantity: number
+  unitFactor?: number
+  baseQuantity?: number
+  baseUnit?: string
   basePrice: number
   sellingPrice: number
   lineTotal: number
@@ -54,6 +59,8 @@ type SalesPageProduct = {
   name: string
   sku: string
   unit?: string
+  packUnits?: PackUnit[]
+  costUnit?: string
   quantity: number
   price: number
   costPrice?: number
@@ -121,7 +128,8 @@ export default async function SalesPage({
             saleId: "$saleId",
             productId: "$returnItems.productId",
           },
-          quantity: { $sum: "$returnItems.quantity" },
+          // Base units, so returns compare with sales whatever unit was used.
+          quantity: { $sum: baseQuantityExpr("$returnItems") },
         },
       },
     ]),
@@ -147,7 +155,10 @@ export default async function SalesPage({
   })
 
   const getReturnStatus = (sale: SalesPageSale): SalesReturnStatus => {
-    const soldQuantity = sale.items.reduce((sum, item) => sum + item.quantity, 0)
+    const soldQuantity = sale.items.reduce(
+      (sum, item) => sum + lineBaseQuantity(item),
+      0
+    )
     const returnedQuantity =
       returnedQuantityBySaleId.get(sale._id.toString()) ?? 0
     if (returnedQuantity <= 0) return "none"
@@ -217,6 +228,12 @@ export default async function SalesPage({
     name: product.name,
     sku: product.sku,
     unit: product.unit ?? "pcs",
+    packUnits: (product.packUnits ?? []).map((pack) => ({
+      name: pack.name,
+      factor: pack.factor,
+      price: pack.price,
+    })),
+    costUnit: product.costUnit,
     quantity: product.quantity,
     price: product.price,
     costPrice: product.costPrice,

@@ -1,11 +1,17 @@
 // Validates sales, payments, and customer receivable details.
 import { z } from "zod"
-import { objectIdSchema } from "@/lib/db/validators/shared"
+import {
+  objectIdSchema,
+  quantitySchema,
+  unitNameSchema,
+} from "@/lib/db/validators/shared"
 
 export const SaleItemSchema = z
   .object({
     productId: objectIdSchema,
-    quantity: z.number().int().min(1),
+    unit: unitNameSchema,
+    quantity: quantitySchema,
+    // Per unit sold, like costPrice.
     sellingPrice: z.number().min(0),
     costPrice: z.number().min(0).optional(),
   })

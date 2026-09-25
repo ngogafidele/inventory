@@ -10,6 +10,13 @@ import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateReturnSchema } from "@/lib/db/validators/return"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import { reconcileLoanAfterReturn } from "@/lib/db/loan-reconciliation"
+import {
+  buildSaleReturnItems,
+  getReturnedByLine,
+  getReturnStockEffect,
+  getSoldLines,
+  ReturnLineError,
+} from "@/lib/db/return-lines"
 
 type ProductDocumentLike = {
   _id: { toString(): string }
@@ -31,13 +38,19 @@ type SaleForReturn = {
     sku: string
     unit?: string
     quantity: number
+    unitFactor?: number
+    baseUnit?: string
     basePrice: number
     sellingPrice: number
   }>
 }
 
 type PriorReturn = {
-  returnItems: Array<{ productId: { toString(): string }; quantity: number }>
+  returnItems: Array<{
+    productId: { toString(): string }
+    unit?: string
+    quantity: number
+  }>
 }
 
 export async function GET(request: NextRequest) {
@@ -106,70 +119,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // What the sale sold, aggregated per product.
-    const soldMap = new Map<
-      string,
-      { name: string; sku: string; unit: string; basePrice: number; soldQuantity: number }
-    >()
-    sale.items.forEach((item) => {
-      const key = item.productId.toString()
-      const existing = soldMap.get(key)
-      if (existing) {
-        existing.soldQuantity += item.quantity
-      } else {
-        soldMap.set(key, {
-          name: item.name,
-          sku: item.sku,
-          unit: item.unit ?? "pcs",
-          basePrice: item.basePrice,
-          soldQuantity: item.quantity,
-        })
-      }
-    })
-
-    // Quantities already returned against this sale cap what remains returnable.
+    // Returns are capped per sale line (product and unit sold), net of what
+    // earlier returns against this sale already took back.
     const priorReturns = await ReturnModel.find({ store, saleId: sale._id })
       .select("returnItems")
       .lean<PriorReturn[]>()
-    const alreadyReturned = new Map<string, number>()
-    priorReturns.forEach((entry) => {
-      entry.returnItems.forEach((item) => {
-        const key = item.productId.toString()
-        alreadyReturned.set(key, (alreadyReturned.get(key) ?? 0) + item.quantity)
-      })
-    })
-
-    // Requested quantities per product across all lines.
-    const requested = new Map<string, number>()
-    payload.returnItems.forEach((item) => {
-      requested.set(
-        item.productId,
-        (requested.get(item.productId) ?? 0) + item.quantity
+    let built
+    try {
+      built = buildSaleReturnItems(
+        payload.returnItems,
+        getSoldLines(sale.items),
+        getReturnedByLine(priorReturns)
       )
-    })
-
-    for (const [productId, quantity] of requested.entries()) {
-      const sold = soldMap.get(productId)
-      if (!sold) {
+    } catch (error) {
+      if (error instanceof ReturnLineError) {
         return NextResponse.json(
-          { success: false, error: "A returned item was not part of the selected sale." },
+          { success: false, error: error.message },
           { status: 400 }
         )
       }
-      const remaining = sold.soldQuantity - (alreadyReturned.get(productId) ?? 0)
-      if (quantity > remaining) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Cannot return more than was sold for ${sold.name}. ${Math.max(0, remaining)} remaining.`,
-          },
-          { status: 400 }
-        )
-      }
+      throw error
     }
+    const { items: returnItems, totalReturnAmount } = built
+
+    // Stock comes back in base units: a returned crate restores 24 bottles.
+    const netChanges = getReturnStockEffect({ returnItems })
 
     // Load the products so stock can be restored and low-stock alerts resynced.
-    const productIds = Array.from(requested.keys())
+    const productIds = Array.from(netChanges.keys())
     const products = await Product.find({ _id: { $in: productIds }, store })
     if (products.length !== productIds.length) {
       return NextResponse.json(
@@ -181,36 +158,6 @@ export async function POST(request: NextRequest) {
     const productMap = new Map(
       products.map((product) => [product._id.toString(), product])
     )
-
-    let totalReturnAmount = 0
-    const returnItems = payload.returnItems.map((item) => {
-      const sold = soldMap.get(item.productId)
-      if (!sold) {
-        throw new Error("A returned item was not part of the selected sale.")
-      }
-
-      const lineTotal = item.unitPrice * item.quantity
-      totalReturnAmount += lineTotal
-
-      return {
-        productId: item.productId,
-        name: sold.name,
-        sku: sold.sku,
-        unit: sold.unit,
-        quantity: item.quantity,
-        // Cost basis comes from the sale so report gross profit stays consistent.
-        basePrice: sold.basePrice,
-        unitPrice: item.unitPrice,
-        lineTotal,
-      }
-    })
-
-    const netChanges = new Map<string, number>()
-
-    payload.returnItems.forEach((item) => {
-      const current = netChanges.get(item.productId) ?? 0
-      netChanges.set(item.productId, current + item.quantity)
-    })
 
     const stockUpdates = Array.from(netChanges.entries()).map(
       ([productId, change]) => ({
