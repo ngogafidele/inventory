@@ -105,6 +105,25 @@ Gisozi (`store1`) does not use package units: its products have a single unit
 and whole-number quantities, as before. The list of branches that use package
 units is `PACK_UNIT_STORES` in `lib/utils/constants.ts`.
 
+#### Adding products and approval
+
+Administrators add products directly. Managers and staff use the same form
+through **Request Product**, which creates a product request rather than a
+product. A request is kept in its own collection (`ProductRequest`), so it
+cannot be sold, returned, adjusted, or counted in stock value or reports until
+it is approved.
+
+Administrators see pending requests above the product list. **Review** opens
+the request in the product form, where any field can be corrected, and
+**Approve product** creates the product (and its opening supplier receipt, if
+one was entered) in a single transaction. **Reject** records an optional
+reason. The submitter sees their pending requests, can withdraw one before it
+is reviewed, and sees rejections with the reason for 30 days.
+
+A request is refused at submission if a product, or another pending request,
+already has the same name in the branch. The name is checked again on
+approval.
+
 Inventory changes occur through:
 
 - Sales, which deduct quantity.

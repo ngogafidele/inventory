@@ -7,6 +7,7 @@ import { ProductsManager } from "@/components/products/products-manager"
 import { formatInKigali } from "@/lib/utils/time"
 import type { PackUnit } from "@/lib/utils/units"
 import { storeUsesPackUnits } from "@/lib/utils/constants"
+import { loadProductRequests } from "@/lib/db/product-requests"
 
 type ProductsPageProduct = {
   _id: { toString(): string }
@@ -37,6 +38,11 @@ export default async function ProductsPage() {
   const receipts = await ProductReceipt.find({ store })
     .sort({ receivedAt: -1, createdAt: -1 })
     .lean<ProductsPageReceipt[]>()
+  const requests = await loadProductRequests({
+    store,
+    isAdmin: session.isAdmin,
+    userId: session.userId,
+  })
   const latestReceiptByProduct = new Map<string, ProductsPageReceipt>()
   for (const receipt of receipts) {
     const productId = receipt.productId.toString()
@@ -74,6 +80,7 @@ export default async function ProductsPage() {
   return (
     <ProductsManager
       initialProducts={serializedProducts}
+      initialRequests={requests}
       isAdmin={session.isAdmin}
       packUnitsEnabled={storeUsesPackUnits(store)}
     />

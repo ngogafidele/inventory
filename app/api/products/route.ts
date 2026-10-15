@@ -1,46 +1,17 @@
 // Lists and creates products within an authorized store context.
 import { NextRequest, NextResponse } from "next/server"
-import { findUnitOption, roundCost, roundMoney } from "@/lib/utils/units"
-import { storeUsesPackUnits } from "@/lib/utils/constants"
 import { connectToDatabase } from "@/lib/db/connection"
 import { Product } from "@/lib/db/models/Product"
-import { ProductReceipt } from "@/lib/db/models/ProductReceipt"
 import { requireAdmin, requireAuth } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
+import {
+  createProduct,
+  isDuplicateProductNameError,
+  ProductInputError,
+} from "@/lib/db/products"
 import { ZodError } from "zod"
-
-const CASE_INSENSITIVE_COLLATION = { locale: "en", strength: 2 } as const
-
-function isDuplicateProductNameError(error: unknown) {
-  if (typeof error !== "object" || error === null) return false
-
-  const mongoError = error as {
-    code?: unknown
-    keyPattern?: Record<string, unknown>
-  }
-
-  return mongoError.code === 11000 && Boolean(mongoError.keyPattern?.name)
-}
-
-function getSkuBase(name: string) {
-  const normalized = name.toUpperCase().replace(/[^A-Z0-9]+/g, "")
-  return (normalized.slice(0, 6) || "PRD").padEnd(3, "X")
-}
-
-async function generateProductSku(store: string, name: string) {
-  const base = getSkuBase(name)
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
-    const sku = `${base}-${suffix}`
-    const existing = await Product.exists({ store, sku })
-    if (!existing) return sku
-  }
-
-  return `${base}-${Date.now().toString(36).toUpperCase()}`
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -91,68 +62,14 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = CreateProductSchema.parse(await request.json())
-    const {
-      categoryId: _categoryId,
-      supplierName,
-      supplierPhone,
-      openingUnit,
-      ...productInput
-    } = payload
-
-    // Package units are a per-store feature; other stores sell in the base
-    // unit only.
-    if (!storeUsesPackUnits(store) && productInput.packUnits.length > 0) {
-      return NextResponse.json(
-        { success: false, error: "This store does not use package units." },
-        { status: 400 }
-      )
-    }
 
     await connectToDatabase()
 
-    const duplicateProduct = await Product.exists({
+    const product = await createProduct({
       store,
-      name: payload.name,
-    }).collation(CASE_INSENSITIVE_COLLATION)
-
-    if (duplicateProduct) {
-      return NextResponse.json(
-        { success: false, error: "A product with this name already exists." },
-        { status: 409 }
-      )
-    }
-
-    const product = await Product.create({
-      ...productInput,
-      sku: await generateProductSku(store, payload.name),
-      store,
+      input: payload,
+      userId: session.userId,
     })
-
-    if (supplierName && supplierPhone && product.quantity > 0) {
-      // Recorded in the unit the stock was counted in (10 crates at 12,000)
-      // when that is a whole number of it; otherwise in the base unit.
-      const counted = findUnitOption(product, openingUnit) ?? findUnitOption(product)
-      const unit =
-        counted && product.quantity % counted.factor === 0
-          ? counted
-          : findUnitOption(product)
-      const factor = unit?.factor ?? 1
-      await ProductReceipt.create({
-        store,
-        productId: product._id,
-        sku: product.sku,
-        supplierName,
-        supplierPhone,
-        unit: unit?.name ?? product.unit,
-        unitFactor: factor,
-        baseQuantity: product.quantity,
-        quantity: product.quantity / factor,
-        unitCost: roundCost(product.costPrice * factor),
-        totalCost: roundMoney(product.quantity * product.costPrice),
-        receivedAt: new Date(),
-        receivedBy: session.userId,
-      })
-    }
 
     await syncLowStockAlert({
       store,
@@ -168,6 +85,12 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
+    if (error instanceof ProductInputError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.status }
+      )
+    }
     if (error instanceof ZodError) {
       return NextResponse.json(
         { success: false, error: error.issues[0]?.message ?? "Invalid input" },

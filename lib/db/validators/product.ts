@@ -80,3 +80,9 @@ export const UpdateProductSchema = z
   })
   .strict()
   .superRefine(checkPackUnits)
+
+export const RejectProductRequestSchema = z
+  .object({
+    reason: z.string().trim().max(300).optional().default(""),
+  })
+  .strict()

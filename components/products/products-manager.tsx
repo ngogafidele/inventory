@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
 import { Activity, FileText, PackagePlus } from "lucide-react"
+import type { ProductRequestClient } from "@/lib/db/product-requests"
 import { Button } from "@/components/ui/button"
 import {
   ProductMonitorDialog,
@@ -70,6 +71,9 @@ type ProductClient = {
 
 export type ProductsManagerProps = {
   initialProducts: ProductClient[]
+  // Admins get every pending request to review; other users their own
+  // pending and recently rejected ones.
+  initialRequests: ProductRequestClient[]
   isAdmin: boolean
   // Whether the active store sells in package units (see PACK_UNIT_STORES).
   packUnitsEnabled: boolean
@@ -141,12 +145,21 @@ const PRODUCTS_PER_PAGE = 20
 
 export function ProductsManager({
   initialProducts,
+  initialRequests,
   isAdmin,
   packUnitsEnabled,
 }: ProductsManagerProps) {
   const [products, setProducts] = useState(initialProducts)
+  const [requests, setRequests] = useState(initialRequests)
   const [formState, setFormState] = useState<FormState>(emptyForm)
   const [activeProductId, setActiveProductId] = useState<string | null>(null)
+  // Set while an admin is reviewing a request in the product form.
+  const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<ProductRequestClient | null>(
+    null
+  )
+  const [rejectReason, setRejectReason] = useState("")
+  const [requestError, setRequestError] = useState<string | null>(null)
   const [receiveProduct, setReceiveProduct] = useState<ProductClient | null>(
     null
   )
@@ -282,6 +295,7 @@ export function ProductsManager({
       ...emptyForm,
     })
     setActiveProductId(null)
+    setReviewRequestId(null)
     setError(null)
   }
 
@@ -343,6 +357,105 @@ export function ProductsManager({
     setActiveProductId(product._id)
     setError(null)
     setDialogOpen(true)
+  }
+
+  // Opens the request in the product form so the admin can correct it before
+  // approving; what the form holds on approval is what gets created.
+  const openReview = (request: ProductRequestClient) => {
+    const costUnit = getCostUnit(request)
+    // Stock and threshold reopen in the unit they were counted in when that
+    // divides evenly (240 bottles -> 10 crates), else in the base unit.
+    const inUnit = (baseCount: number, unitName?: string) => {
+      const unit = unitName ? findUnitOption(request, unitName) : costUnit
+      return unit && baseCount > 0 && baseCount % unit.factor === 0
+        ? { unit: unit.name, count: String(baseCount / unit.factor) }
+        : { unit: request.unit, count: String(baseCount) }
+    }
+    const stock = inUnit(request.quantity, request.openingUnit)
+    const threshold = inUnit(request.lowStockThreshold)
+    setFormState({
+      name: request.name,
+      sku: "",
+      unit: request.unit,
+      packUnits: request.packUnits.map((pack) => ({
+        name: pack.name,
+        factor: String(pack.factor),
+        price: String(pack.price),
+      })),
+      costUnit: costUnit.name,
+      stockUnit: stock.unit,
+      quantity: stock.count,
+      thresholdUnit: threshold.unit,
+      lowStockThreshold: threshold.count,
+      costPrice: String(roundMoney(request.costPrice * costUnit.factor)),
+      price: String(request.price),
+      supplierName: request.supplierName ?? "",
+      supplierPhone: request.supplierPhone ?? "",
+    })
+    setActiveProductId(null)
+    setReviewRequestId(request._id)
+    setError(null)
+    setDialogOpen(true)
+  }
+
+  const submitReject = async () => {
+    if (!rejectTarget) return
+    setSubmitting(true)
+    setRequestError(null)
+
+    try {
+      const response = await fetch(
+        `/api/product-requests/${rejectTarget._id}/reject`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: rejectReason.trim() }),
+        }
+      )
+      const body = await response.json()
+      if (!response.ok || !body?.success) {
+        setRequestError(body?.error ?? "Failed to reject product.")
+        return
+      }
+
+      setRequests((current) =>
+        current.filter((request) => request._id !== rejectTarget._id)
+      )
+      // Rejecting from the review form closes it too.
+      if (reviewRequestId === rejectTarget._id) {
+        setDialogOpen(false)
+        resetForm()
+      }
+      setRejectTarget(null)
+      setRejectReason("")
+    } catch {
+      setRequestError("Failed to reject product.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const withdrawRequest = async (request: ProductRequestClient) => {
+    if (!window.confirm(`Withdraw the request for "${request.name}"?`)) return
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/product-requests/${request._id}`, {
+        method: "DELETE",
+      })
+      const body = await response.json()
+      if (!response.ok || !body?.success) {
+        setError(body?.error ?? "Failed to withdraw request.")
+        return
+      }
+
+      setRequests((current) => current.filter((item) => item._id !== request._id))
+    } catch {
+      setError("Failed to withdraw request.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openMonitor = (product: ProductClient) => {
@@ -559,20 +672,40 @@ export function ProductsManager({
         : {}),
     }
 
+    // Admins create directly or approve a request; everyone else submits a
+    // request that waits for an admin.
+    const endpoint = activeProductId
+      ? `/api/products/${activeProductId}`
+      : reviewRequestId
+        ? `/api/product-requests/${reviewRequestId}/approve`
+        : isAdmin
+          ? "/api/products"
+          : "/api/product-requests"
+
     try {
-      const response = await fetch(
-        activeProductId ? `/api/products/${activeProductId}` : "/api/products",
-        {
-          method: activeProductId ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      )
+      const response = await fetch(endpoint, {
+        method: activeProductId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
       const body = await response.json()
       if (!response.ok || !body?.success) {
         setError(body?.error ?? "Failed to save product.")
         return
+      }
+
+      if (!activeProductId && !reviewRequestId && !isAdmin) {
+        setRequests((current) => [body.data as ProductRequestClient, ...current])
+        setDialogOpen(false)
+        resetForm()
+        return
+      }
+
+      if (reviewRequestId) {
+        setRequests((current) =>
+          current.filter((request) => request._id !== reviewRequestId)
+        )
       }
 
       const updated = body.data as ProductClient
@@ -697,19 +830,37 @@ export function ProductsManager({
             <FileText className="size-4" />
             {catalogDownloading ? "Preparing..." : "Catalog PDF"}
           </Button>
-          {isAdmin ? (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          {/* Open to every user: non-admins submit a request for approval. */}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openCreate}>Add Product</Button>
+                <Button onClick={openCreate}>
+                  {isAdmin ? "Add Product" : "Request Product"}
+                </Button>
               </DialogTrigger>
               {/* Wide enough for quantity + unit pickers and the package-units table. */}
               <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
-                    {activeProductId ? "Edit product" : "Add product"}
+                    {activeProductId
+                      ? "Edit product"
+                      : reviewRequestId
+                        ? "Review product request"
+                        : isAdmin
+                          ? "Add product"
+                          : "Request new product"}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-3">
+                  {!isAdmin ? (
+                    <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                      An admin will confirm this product before it can be sold.
+                    </p>
+                  ) : reviewRequestId ? (
+                    <p className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                      Correct anything that needs it, then approve to add the
+                      product to the catalog.
+                    </p>
+                  ) : null}
                   <label className="grid gap-1 text-sm">
                     Name
                     <Input
@@ -1155,20 +1306,197 @@ export function ProductsManager({
                   >
                     Cancel
                   </Button>
+                  {reviewRequestId ? (
+                    <Button
+                      variant="destructive"
+                      disabled={submitting}
+                      onClick={() => {
+                        const request = requests.find(
+                          (item) => item._id === reviewRequestId
+                        )
+                        if (!request) return
+                        setRequestError(null)
+                        setRejectReason("")
+                        setRejectTarget(request)
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  ) : null}
                   <Button onClick={submitForm} disabled={submitting}>
                     {submitting
                       ? "Saving..."
                       : activeProductId
-                      ? "Save changes"
-                      : "Create product"}
+                        ? "Save changes"
+                        : reviewRequestId
+                          ? "Approve product"
+                          : isAdmin
+                            ? "Create product"
+                            : "Submit for approval"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          ) : null}
         </div>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {requests.length > 0 ? (
+        <section className="space-y-2 rounded-2xl border border-warning/30 bg-warning/5 p-4">
+          <div>
+            <h3 className="text-sm font-semibold">
+              {isAdmin
+                ? `Awaiting approval (${requests.length})`
+                : "Your product requests"}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {isAdmin
+                ? "Submitted by staff. Nothing here can be sold until you approve it."
+                : "These products can be sold once an admin approves them."}
+            </p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Opening Stock</TableHead>
+                <TableHead>Cost Price</TableHead>
+                <TableHead>Selling Price</TableHead>
+                <TableHead>{isAdmin ? "Submitted By" : "Status"}</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {requests.map((request) => {
+                const costUnit = getCostUnit(request)
+                return (
+                  <TableRow key={request._id}>
+                    <TableCell>{request.name}</TableCell>
+                    <TableCell>{formatStock(request.quantity, request)}</TableCell>
+                    <TableCell>
+                      {formatCurrency(request.costPrice * costUnit.factor)}
+                      {request.packUnits.length > 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          / {costUnit.name}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      {formatCurrency(request.price)}
+                      <span className="text-xs text-muted-foreground">
+                        {" "}
+                        / {request.unit}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin ? (
+                        request.submittedByName
+                      ) : request.status === "rejected" ? (
+                        <div className="grid gap-0.5">
+                          <span className="w-fit rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                            Rejected
+                          </span>
+                          {request.rejectionReason ? (
+                            <span className="text-xs text-muted-foreground">
+                              {request.rejectionReason}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                          Pending
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{request.createdAtLabel}</TableCell>
+                    <TableCell className="text-right">
+                      {isAdmin ? (
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openReview(request)}
+                            disabled={submitting}
+                          >
+                            Review
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setRequestError(null)
+                              setRejectReason("")
+                              setRejectTarget(request)
+                            }}
+                            disabled={submitting}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : request.status === "pending" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => withdrawRequest(request)}
+                          disabled={submitting}
+                        >
+                          Withdraw
+                        </Button>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </section>
+      ) : null}
+      <Dialog
+        open={rejectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setRejectTarget(null)
+            setRequestError(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject {rejectTarget?.name ?? "product"}?</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              Reason (optional, shown to {rejectTarget?.submittedByName ?? "the submitter"})
+              <Input
+                maxLength={300}
+                placeholder="e.g. Already sold under another name"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+            </label>
+            {requestError ? (
+              <p className="text-sm text-destructive">{requestError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRejectTarget(null)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submitReject}
+              disabled={submitting}
+            >
+              {submitting ? "Rejecting..." : "Reject request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={receiveDialogOpen}
         onOpenChange={(open) => {
