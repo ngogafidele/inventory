@@ -3,12 +3,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { ZodError } from "zod"
 import { connectToDatabase } from "@/lib/db/connection"
 import { ProductRequest } from "@/lib/db/models/ProductRequest"
+import { Product } from "@/lib/db/models/Product"
+import { ProductEditSchema, productEditSnapshot, sameProductEdit } from "@/lib/product-edit"
 import { requireAdmin } from "@/lib/auth/middleware"
 import { resolveStoreFromRequest } from "@/lib/auth/session"
 import { CreateProductSchema } from "@/lib/db/validators/product"
 import { syncLowStockAlert } from "@/lib/db/alerts"
 import {
   createProduct,
+  checkPackUnitsAllowed,
+  productNameExists,
   isDuplicateProductNameError,
   ProductInputError,
 } from "@/lib/db/products"
@@ -37,7 +41,7 @@ export async function POST(
     const { id } = await context.params
     // The admin may correct the proposal before approving, so the product is
     // created from what the review form sends, not the stored request.
-    const payload = CreateProductSchema.parse(await request.json())
+    const input = await request.json()
 
     const db = await connectToDatabase()
 
@@ -63,6 +67,24 @@ export async function POST(
           )
         }
 
+        if (claimed.kind === "edit") {
+          const changes = ProductEditSchema.parse(input)
+          checkPackUnitsAllowed(store, changes)
+          const current = await Product.findOne({ _id: claimed.productId, store }).session(dbSession)
+          if (!current) throw new ProductInputError("Product no longer exists.", 404)
+          const original = ProductEditSchema.parse(claimed.original)
+          if (!sameProductEdit(productEditSnapshot(current), original)) {
+            throw new ProductInputError("Product details changed since submission. Reject this request and ask for a new one.", 409)
+          }
+          if (await productNameExists(store, changes.name, current._id.toString())) throw new ProductInputError("A product with this name already exists.", 409)
+          const updated = await Product.findOneAndUpdate(
+            { _id: current._id, store }, { $set: changes },
+            { session: dbSession, returnDocument: "after", runValidators: true }
+          )
+          await ProductRequest.updateOne({ _id: claimed._id }, { $set: { approvedChanges: changes } }, { session: dbSession })
+          return updated
+        }
+        const payload = CreateProductSchema.parse(input)
         const created = await createProduct({
           store,
           input: payload,

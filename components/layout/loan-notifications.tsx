@@ -3,15 +3,50 @@
 // Displays due and overdue loan alerts in the authenticated header.
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Bell, Clock } from "lucide-react"
+import { AlertTriangle, Bell, Clock, ClipboardCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils/format"
 import type { LoanNotification } from "@/types/loan-notification"
+import type { ProductRequestNotification } from "@/types/product-request-notification"
 
-export function LoanNotifications() {
+export function LoanNotifications({ isAdmin = false }: { isAdmin?: boolean }) {
   const [notifications, setNotifications] = useState<LoanNotification[]>([])
+  const [approvals, setApprovals] = useState<ProductRequestNotification[]>([])
+  const [approvalError, setApprovalError] = useState(false)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isAdmin) return
+    let active = true
+    let sequence = 0
+    const refresh = async () => {
+      const requestSequence = ++sequence
+      try {
+        const response = await fetch("/api/product-requests/notifications", { cache: "no-store" })
+        const body = await response.json()
+        if (!active || requestSequence !== sequence) return
+        if (!response.ok || !body?.success) {
+          if (response.status === 401 || response.status === 403) setApprovals([])
+          setApprovalError(true)
+          return
+        }
+        setApprovals(body.data ?? [])
+        setApprovalError(false)
+      } catch {
+        if (active && requestSequence === sequence) setApprovalError(true)
+      }
+    }
+    // Refresh on user activity, not a timer that would keep idle sessions alive.
+    void refresh()
+    window.addEventListener("focus", refresh)
+    window.addEventListener("product-requests:refresh", refresh)
+    return () => {
+      active = false
+      window.removeEventListener("focus", refresh)
+      window.removeEventListener("product-requests:refresh", refresh)
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     let isMounted = true
@@ -70,7 +105,8 @@ export function LoanNotifications() {
     [notifications]
   )
 
-  const totalCount = notifications.length
+  const pendingApprovals = isAdmin ? approvals : []
+  const totalCount = notifications.length + pendingApprovals.length
   const visibleNotifications = notifications.slice(0, 8)
 
   return (
@@ -80,9 +116,12 @@ export function LoanNotifications() {
         variant="outline"
         size="icon-lg"
         className="relative bg-background"
-        aria-label={`${totalCount} loan notifications`}
+        aria-label={`${totalCount} notifications`}
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (!open) window.dispatchEvent(new Event("product-requests:refresh"))
+          setOpen((current) => !current)
+        }}
       >
         <Bell className="size-4" />
         {totalCount > 0 ? (
@@ -97,9 +136,10 @@ export function LoanNotifications() {
           <div className="border-b border-border px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold">Loan notifications</p>
+                <p className="text-sm font-semibold">Notifications</p>
                 <p className="text-xs text-muted-foreground">
                   {counts.overdue} overdue, {counts.due} due today
+                  {isAdmin ? `, ${pendingApprovals.length} awaiting approval` : ""}
                 </p>
               </div>
               <Link
@@ -107,14 +147,43 @@ export function LoanNotifications() {
                 className="text-xs font-semibold text-primary hover:underline"
                 onClick={() => setOpen(false)}
               >
-                View all
+                View loans
               </Link>
             </div>
           </div>
 
-          {totalCount === 0 ? (
+          {isAdmin && approvalError ? (
+            <p role="status" className="px-4 py-2 text-xs text-destructive">
+              Could not refresh approval requests. Reopen notifications to retry.
+            </p>
+          ) : null}
+          {pendingApprovals.length > 0 ? (
+            <section aria-label="Product requests awaiting approval" className="border-b border-border">
+              <div className="flex items-center justify-between px-4 py-2">
+                <p className="text-xs font-semibold">Awaiting approval</p>
+                <a href="/products" className="text-xs font-semibold text-primary hover:underline">View all requests</a>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {pendingApprovals.slice(0, 8).map((item) => (
+                  <a key={item.id} href={`/products?reviewRequest=${encodeURIComponent(item.id)}`}
+                    className="flex gap-3 border-t border-border/70 px-4 py-3 text-sm hover:bg-muted/70"
+                    onClick={() => setOpen(false)}>
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
+                      <ClipboardCheck className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{item.name}</span>
+                      <span className="block text-xs text-muted-foreground">{item.kind === "edit" ? "Product edit" : "New product"} · {item.submittedByName}</span>
+                      <span className="block text-xs text-muted-foreground">{item.createdAtLabel}</span>
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {totalCount === 0 && !approvalError ? (
             <div className="px-4 py-6 text-sm text-muted-foreground">
-              No due or overdue loans.
+              No notifications requiring attention.
             </div>
           ) : (
             <div className="max-h-80 overflow-y-auto">

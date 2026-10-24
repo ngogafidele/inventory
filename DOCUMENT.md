@@ -124,6 +124,31 @@ A request is refused at submission if a product, or another pending request,
 already has the same name in the branch. The name is checked again on
 approval.
 
+#### Product edit approval
+
+Managers and staff use **Request edit** on an existing product in their branch.
+They can propose names, prices, units/package units, cost units, and low-stock
+thresholds. Stock quantity remains in the receipt and adjustment workflows.
+The live product stays unchanged while the request is pending.
+
+The header notification bell shows administrators pending new-product and edit
+requests for the selected branch, alongside loan notifications. Entries identify
+the product, request type, submitter, and submission time; selecting one opens
+its review form. Requests refresh on opening the bell, returning focus to the
+window, and completing request actions. Already-reviewed or withdrawn links
+show an unavailable notice instead of opening an outdated review.
+
+Administrators review edits in the same queue as new-product requests. The
+review shows current and requested values and lets the admin change the proposal
+before choosing **Approve changes**, or reject it with a reason. Submitters can
+withdraw pending requests and see recent rejection reasons.
+
+Approval updates the product and records the reviewer, review date, and final
+approved values in one transaction. Original and requested values are retained.
+If catalog details changed after submission, approval is blocked; reject the
+stale request and submit a fresh one. Stock movement alone does not invalidate
+a request, and approval never overwrites current stock quantities.
+
 Inventory changes occur through:
 
 - Sales, which deduct quantity.

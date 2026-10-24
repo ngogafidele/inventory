@@ -1,4 +1,4 @@
-// Persists products proposed by non-admin users until an admin reviews them.
+// Persists proposed new products and catalog edits until an admin reviews them.
 //
 // Kept apart from Product on purpose: every sale, return, report, and
 // valuation reads the Product collection, so a proposal that never becomes a
@@ -16,6 +16,9 @@ const PackUnitSchema = new Schema(
 
 const ProductRequestSchema = new Schema(
   {
+    kind: { type: String, enum: ["create", "edit"], default: "create" },
+    original: { type: Schema.Types.Mixed },
+    approvedChanges: { type: Schema.Types.Mixed },
     store: {
       type: String,
       enum: ["store1", "store2"],
@@ -44,7 +47,7 @@ const ProductRequestSchema = new Schema(
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     rejectionReason: { type: String, trim: true, default: "" },
-    // The product created on approval.
+    // The target of an edit, or the product created on new-product approval.
     productId: { type: Schema.Types.ObjectId, ref: "Product" },
   },
   { timestamps: true }

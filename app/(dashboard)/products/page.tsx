@@ -29,7 +29,11 @@ type ProductsPageReceipt = {
   receivedAt: Date
 }
 
-export default async function ProductsPage() {
+export default async function ProductsPage({ searchParams }: {
+  searchParams: Promise<{ reviewRequest?: string | string[] }>
+}) {
+  const query = await searchParams
+  const reviewRequestId = typeof query.reviewRequest === "string" ? query.reviewRequest : undefined
   const session = await requireServerSession()
   const store = getCurrentStore(session)
 
@@ -79,6 +83,8 @@ export default async function ProductsPage() {
 
   return (
     <ProductsManager
+      key={`${store}:${reviewRequestId ?? "catalog"}`}
+      initialReviewRequestId={session.isAdmin ? reviewRequestId : undefined}
       initialProducts={serializedProducts}
       initialRequests={requests}
       isAdmin={session.isAdmin}

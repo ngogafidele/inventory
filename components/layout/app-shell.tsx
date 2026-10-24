@@ -45,7 +45,7 @@ export function AppShell({
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
-            <LoanNotifications />
+            <LoanNotifications isAdmin={session.isAdmin} />
             <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 shadow-sm">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <UserRound className="size-4" />

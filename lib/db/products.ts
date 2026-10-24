@@ -61,8 +61,8 @@ export function checkPackUnitsAllowed(
   }
 }
 
-export async function productNameExists(store: StoreKey, name: string) {
-  const existing = await Product.exists({ store, name }).collation(
+export async function productNameExists(store: StoreKey, name: string, excludeId?: string) {
+  const existing = await Product.exists({ store, name, ...(excludeId ? { _id: { $ne: excludeId } } : {}) }).collation(
     CASE_INSENSITIVE_COLLATION
   )
   return Boolean(existing)

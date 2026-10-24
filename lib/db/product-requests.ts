@@ -4,6 +4,7 @@ import { formatInKigali } from "@/lib/utils/time"
 import type { PackUnit } from "@/lib/utils/units"
 import { ProductRequest } from "@/lib/db/models/ProductRequest"
 import { CASE_INSENSITIVE_COLLATION } from "@/lib/db/products"
+import type { ProductEdit } from "@/lib/product-edit"
 
 // Rejected requests stay visible to whoever submitted them for this long, so
 // they can read the reason and resubmit.
@@ -12,6 +13,9 @@ const REJECTED_VISIBLE_DAYS = 30
 export type ProductRequestStatus = "pending" | "approved" | "rejected"
 
 export type ProductRequestClient = {
+  kind: "create" | "edit"
+  productId?: string
+  original?: ProductEdit
   _id: string
   status: ProductRequestStatus
   name: string
@@ -31,6 +35,9 @@ export type ProductRequestClient = {
 }
 
 type ProductRequestRecord = {
+  kind?: "create" | "edit"
+  productId?: { toString(): string } | null
+  original?: ProductEdit
   _id: { toString(): string }
   status: ProductRequestStatus
   name: string
@@ -58,6 +65,9 @@ export function serializeProductRequest(
       ? record.submittedBy.name
       : undefined
   return {
+    kind: record.kind ?? "create",
+    productId: record.productId?.toString(),
+    original: record.original,
     _id: record._id.toString(),
     status: record.status,
     name: record.name,
@@ -98,13 +108,13 @@ export async function loadProductRequests(params: {
     Date.now() - REJECTED_VISIBLE_DAYS * 24 * 60 * 60 * 1000
   )
   const filter = isAdmin
-    ? { store, status: "pending" }
+    ? { store, status: "pending" as const }
     : {
         store,
         submittedBy: userId,
         $or: [
-          { status: "pending" },
-          { status: "rejected", reviewedAt: { $gte: rejectedSince } },
+          { status: "pending" as const },
+          { status: "rejected" as const, reviewedAt: { $gte: rejectedSince } },
         ],
       }
 
@@ -125,6 +135,7 @@ export async function pendingRequestNameExists(
     store,
     status: "pending",
     name,
+    kind: { $ne: "edit" },
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
   }).collation(CASE_INSENSITIVE_COLLATION)
   return Boolean(existing)

@@ -44,3 +44,39 @@ Restricted users see only the approved eight cards, while admin users keep the
 full metric set and the supporting activity tables. Keep the restricted UI in
 step with `app/api/dashboard/stats/route.ts`, which returns only the approved
 dashboard metrics for non-admin sessions.
+### Product Edit Review
+
+File: components/products/products-manager.tsx
+Last updated: 2026-10-24
+
+| Property | Class |
+| --- | --- |
+| Comparison background | `bg-muted/40` |
+| Border | `border border-border/80` |
+| Radius | `rounded-lg` |
+| Spacing | `p-3`, form `gap-3` |
+| Secondary text | `text-xs text-muted-foreground` |
+| Pending notice | `border-warning/30 bg-warning/10 text-warning` |
+| Actions | Existing `Button` outline, primary, and destructive variants |
+
+**Pattern notes:** Reuse the product dialog and Table primitives. Show current
+and requested values above the editable proposal, with an explicit approval
+button. Label queue entries as New product or Product edit. Hide quantity inputs
+for edit requests and show Unchanged in their opening-stock column.
+### Approval Notifications
+
+File: components/layout/loan-notifications.tsx
+Last updated: 2026-10-24
+
+| Property | Class |
+| --- | --- |
+| Panel | `bg-popover text-popover-foreground rounded-xl border border-border shadow-xl` |
+| Entry spacing | `gap-3 px-4 py-3` |
+| Entry hover | `hover:bg-muted/70` |
+| Approval icon | `rounded-lg bg-warning/10 text-warning` |
+| Product name | `text-sm font-semibold` |
+| Request metadata | `text-xs text-muted-foreground` |
+
+**Pattern notes:** Approvals share the header bell and total badge with loans.
+Use a separate Awaiting approval section and retain the existing loan styles.
+Each entry links directly to the review form; View all requests opens Products.

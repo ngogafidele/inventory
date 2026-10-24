@@ -1,6 +1,9 @@
 // Lets any store user propose a new product for an admin to approve.
 import { NextRequest, NextResponse } from "next/server"
-import { ZodError } from "zod"
+import { z, ZodError } from "zod"
+import { Product } from "@/lib/db/models/Product"
+import { ProductEditSchema, productEditSnapshot, sameProductEdit } from "@/lib/product-edit"
+import { objectIdSchema } from "@/lib/db/validators/shared"
 import { connectToDatabase } from "@/lib/db/connection"
 import { ProductRequest } from "@/lib/db/models/ProductRequest"
 import { requireAuth } from "@/lib/auth/middleware"
@@ -69,7 +72,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const payload = CreateProductSchema.parse(await request.json())
+    const input = await request.json()
+    if (input.kind === "edit") {
+      const edit = z.object({ kind: z.literal("edit"), productId: objectIdSchema, original: ProductEditSchema, changes: ProductEditSchema }).strict().parse(input)
+      checkPackUnitsAllowed(store, edit.changes)
+      await connectToDatabase()
+      const product = await Product.findOne({ _id: edit.productId, store })
+      if (!product) throw new ProductInputError("Product not found.", 404)
+      const original = productEditSnapshot(product)
+      if (!sameProductEdit(original, edit.original)) throw new ProductInputError("Product details changed. Reload the page and submit again.", 409)
+      if (sameProductEdit(original, edit.changes)) throw new ProductInputError("Change at least one product detail.", 400)
+      if (await productNameExists(store, edit.changes.name, edit.productId)) throw new ProductInputError("A product with this name already exists.", 409)
+      const created = await ProductRequest.create({ ...edit.changes, kind: "edit", productId: product._id, original, quantity: 0, store, submittedBy: session.userId })
+      return NextResponse.json({ success: true, data: serializeProductRequest(created.toObject(), session.name) }, { status: 201 })
+    }
+    const payload = CreateProductSchema.parse(input)
     const { categoryId: _categoryId, ...requestInput } = payload
     checkPackUnitsAllowed(store, payload)
 

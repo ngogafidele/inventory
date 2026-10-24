@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils/format"
 import { formatKigaliDateInput } from "@/lib/utils/time"
 import { Activity, FileText, PackagePlus } from "lucide-react"
 import type { ProductRequestClient } from "@/lib/db/product-requests"
+import { productEditSnapshot } from "@/lib/product-edit"
 import { Button } from "@/components/ui/button"
 import {
   ProductMonitorDialog,
@@ -74,6 +75,7 @@ export type ProductsManagerProps = {
   // Admins get every pending request to review; other users their own
   // pending and recently rejected ones.
   initialRequests: ProductRequestClient[]
+  initialReviewRequestId?: string
   isAdmin: boolean
   // Whether the active store sells in package units (see PACK_UNIT_STORES).
   packUnitsEnabled: boolean
@@ -141,20 +143,59 @@ function getEmptyReceiveForm(): ReceiveFormState {
   }
 }
 
+function requestFormState(request: ProductRequestClient): FormState {
+  const costUnit = getCostUnit(request)
+  // Stock and threshold reopen in the unit they were counted in when that
+  // divides evenly (240 bottles -> 10 crates), else in the base unit.
+  const inUnit = (baseCount: number, unitName?: string) => {
+    const unit = unitName ? findUnitOption(request, unitName) : costUnit
+    return unit && baseCount > 0 && baseCount % unit.factor === 0
+      ? { unit: unit.name, count: String(baseCount / unit.factor) }
+      : { unit: request.unit, count: String(baseCount) }
+  }
+  const stock = inUnit(request.quantity, request.openingUnit)
+  const threshold = inUnit(request.lowStockThreshold)
+  return {
+    name: request.name,
+    sku: "",
+    unit: request.unit,
+    packUnits: request.packUnits.map((pack) => ({
+      name: pack.name,
+      factor: String(pack.factor),
+      price: String(pack.price),
+    })),
+    costUnit: costUnit.name,
+    stockUnit: stock.unit,
+    quantity: stock.count,
+    thresholdUnit: threshold.unit,
+    lowStockThreshold: threshold.count,
+    costPrice: String(roundMoney(request.costPrice * costUnit.factor)),
+    price: String(request.price),
+    supplierName: request.supplierName ?? "",
+    supplierPhone: request.supplierPhone ?? "",
+  }
+}
+
 const PRODUCTS_PER_PAGE = 20
 
 export function ProductsManager({
   initialProducts,
   initialRequests,
+  initialReviewRequestId,
   isAdmin,
   packUnitsEnabled,
 }: ProductsManagerProps) {
+  const initialReview = isAdmin
+    ? initialRequests.find((request) => request._id === initialReviewRequestId && request.status === "pending")
+    : undefined
   const [products, setProducts] = useState(initialProducts)
   const [requests, setRequests] = useState(initialRequests)
-  const [formState, setFormState] = useState<FormState>(emptyForm)
-  const [activeProductId, setActiveProductId] = useState<string | null>(null)
+  const [formState, setFormState] = useState<FormState>(() => initialReview ? requestFormState(initialReview) : emptyForm)
+  const [activeProductId, setActiveProductId] = useState<string | null>(initialReview?.kind === "edit" ? initialReview.productId ?? null : null)
   // Set while an admin is reviewing a request in the product form.
-  const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
+  const [reviewRequestId, setReviewRequestId] = useState<string | null>(initialReview?._id ?? null)
+  const reviewingRequest = requests.find((request) => request._id === reviewRequestId)
+  const editRequestMode = Boolean((activeProductId && !isAdmin) || reviewingRequest?.kind === "edit")
   const [rejectTarget, setRejectTarget] = useState<ProductRequestClient | null>(
     null
   )
@@ -169,10 +210,12 @@ export function ProductsManager({
     null
   )
   const [monitorOpen, setMonitorOpen] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(Boolean(initialReview))
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    initialReviewRequestId && !initialReview ? "This request is no longer pending or is not available in this branch." : null
+  )
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -318,6 +361,7 @@ export function ProductsManager({
   }
 
   const openEdit = (product: ProductClient) => {
+    setReviewRequestId(null)
     setFormState({
       name: product.name,
       sku: product.sku,
@@ -362,37 +406,8 @@ export function ProductsManager({
   // Opens the request in the product form so the admin can correct it before
   // approving; what the form holds on approval is what gets created.
   const openReview = (request: ProductRequestClient) => {
-    const costUnit = getCostUnit(request)
-    // Stock and threshold reopen in the unit they were counted in when that
-    // divides evenly (240 bottles -> 10 crates), else in the base unit.
-    const inUnit = (baseCount: number, unitName?: string) => {
-      const unit = unitName ? findUnitOption(request, unitName) : costUnit
-      return unit && baseCount > 0 && baseCount % unit.factor === 0
-        ? { unit: unit.name, count: String(baseCount / unit.factor) }
-        : { unit: request.unit, count: String(baseCount) }
-    }
-    const stock = inUnit(request.quantity, request.openingUnit)
-    const threshold = inUnit(request.lowStockThreshold)
-    setFormState({
-      name: request.name,
-      sku: "",
-      unit: request.unit,
-      packUnits: request.packUnits.map((pack) => ({
-        name: pack.name,
-        factor: String(pack.factor),
-        price: String(pack.price),
-      })),
-      costUnit: costUnit.name,
-      stockUnit: stock.unit,
-      quantity: stock.count,
-      thresholdUnit: threshold.unit,
-      lowStockThreshold: threshold.count,
-      costPrice: String(roundMoney(request.costPrice * costUnit.factor)),
-      price: String(request.price),
-      supplierName: request.supplierName ?? "",
-      supplierPhone: request.supplierPhone ?? "",
-    })
-    setActiveProductId(null)
+    setFormState(requestFormState(request))
+    setActiveProductId(request.kind === "edit" ? request.productId ?? null : null)
     setReviewRequestId(request._id)
     setError(null)
     setDialogOpen(true)
@@ -421,6 +436,7 @@ export function ProductsManager({
       setRequests((current) =>
         current.filter((request) => request._id !== rejectTarget._id)
       )
+      window.dispatchEvent(new Event("product-requests:refresh"))
       // Rejecting from the review form closes it too.
       if (reviewRequestId === rejectTarget._id) {
         setDialogOpen(false)
@@ -451,6 +467,7 @@ export function ProductsManager({
       }
 
       setRequests((current) => current.filter((item) => item._id !== request._id))
+      window.dispatchEvent(new Event("product-requests:refresh"))
     } catch {
       setError("Failed to withdraw request.")
     } finally {
@@ -615,7 +632,7 @@ export function ProductsManager({
       getCostUnit({ unit: trimmedUnit, price: 0, packUnits, costUnit: formState.costUnit })
     const baseStock =
       stockCount === 0 ? 0 : toBaseQuantity(stockCount, stockUnitUsed.factor)
-    if (baseStock === null || !Number.isFinite(stockCount) || stockCount < 0) {
+    if (!editRequestMode && (baseStock === null || !Number.isFinite(stockCount) || stockCount < 0)) {
       setError(
         `${formState.quantity} ${stockUnitUsed.name} is not a whole number of ${trimmedUnit}.`
       )
@@ -674,19 +691,27 @@ export function ProductsManager({
 
     // Admins create directly or approve a request; everyone else submits a
     // request that waits for an admin.
-    const endpoint = activeProductId
+    const endpoint = reviewRequestId
+      ? `/api/product-requests/${reviewRequestId}/approve`
+      : activeProductId && !isAdmin
+      ? "/api/product-requests"
+      : activeProductId
       ? `/api/products/${activeProductId}`
-      : reviewRequestId
-        ? `/api/product-requests/${reviewRequestId}/approve`
         : isAdmin
           ? "/api/products"
           : "/api/product-requests"
 
     try {
       const response = await fetch(endpoint, {
-        method: activeProductId ? "PUT" : "POST",
+        method: activeProductId && isAdmin && !reviewRequestId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(editRequestMode
+          ? reviewRequestId
+            ? productEditSnapshot(payload)
+            : { kind: "edit", productId: activeProductId,
+                original: productEditSnapshot(products.find((product) => product._id === activeProductId)!),
+                changes: productEditSnapshot(payload) }
+          : payload),
       })
 
       const body = await response.json()
@@ -695,7 +720,8 @@ export function ProductsManager({
         return
       }
 
-      if (!activeProductId && !reviewRequestId && !isAdmin) {
+      if (!reviewRequestId && !isAdmin) {
+        window.dispatchEvent(new Event("product-requests:refresh"))
         setRequests((current) => [body.data as ProductRequestClient, ...current])
         setDialogOpen(false)
         resetForm()
@@ -703,6 +729,7 @@ export function ProductsManager({
       }
 
       if (reviewRequestId) {
+        window.dispatchEvent(new Event("product-requests:refresh"))
         setRequests((current) =>
           current.filter((request) => request._id !== reviewRequestId)
         )
@@ -722,7 +749,7 @@ export function ProductsManager({
       setProducts((current) => {
         if (activeProductId) {
           return current.map((item) =>
-            item._id === activeProductId ? productForList : item
+            item._id === activeProductId ? { ...item, ...productForList } : item
           )
         }
         return [productForList, ...current]
@@ -841,7 +868,9 @@ export function ProductsManager({
               <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
-                    {activeProductId
+                    {editRequestMode
+                      ? reviewRequestId ? "Review product edit" : "Request product edit"
+                      : activeProductId
                       ? "Edit product"
                       : reviewRequestId
                         ? "Review product request"
@@ -853,13 +882,29 @@ export function ProductsManager({
                 <div className="grid gap-3">
                   {!isAdmin ? (
                     <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-                      An admin will confirm this product before it can be sold.
+                      {activeProductId ? "Your changes take effect only after admin approval. The current product remains available." : "An admin will confirm this product before it can be sold."}
                     </p>
                   ) : reviewRequestId ? (
                     <p className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                      Correct anything that needs it, then approve to add the
-                      product to the catalog.
+                      {editRequestMode ? "Compare the values below. You can change the proposed details in the form before approving. Stock quantity is unchanged." : "Correct anything that needs it, then approve to add the product to the catalog."}
                     </p>
+                  ) : null}
+                  {reviewingRequest?.kind === "edit" ? (
+                    <div className="overflow-x-auto rounded-lg border border-border/80 bg-muted/40 p-3">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>Detail</TableHead><TableHead>Current</TableHead><TableHead>Requested</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {(["name", "unit", "costUnit", "costPrice", "price", "lowStockThreshold", "packUnits"] as const).map((field) => {
+                            const current = products.find((product) => product._id === reviewingRequest.productId)
+                            const labels = { name: "Name", unit: "Base unit", costUnit: "Cost unit", costPrice: "Cost / base unit", price: "Price / base unit", lowStockThreshold: "Low stock / base units", packUnits: "Package units" }
+                            const display = (value: unknown) => Array.isArray(value)
+                              ? (value as PackUnit[]).map((pack) => `${pack.name}: ${pack.factor} base units, ${formatCurrency(pack.price)}`).join("; ") || "None"
+                              : String(value ?? "—")
+                            return <TableRow key={field}><TableCell>{labels[field]}</TableCell><TableCell>{current ? display(productEditSnapshot(current)[field]) : "Product unavailable"}</TableCell><TableCell>{display(reviewingRequest[field])}</TableCell></TableRow>
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
                   ) : null}
                   <label className="grid gap-1 text-sm">
                     Name
@@ -971,7 +1016,7 @@ export function ProductsManager({
                     </div>
                   ) : null}
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-sm">
+                    {!editRequestMode ? <label className="grid gap-1 text-sm">
                       {activeProductId ? "Quantity" : "Opening stock"} (
                       {formStockUnit.name})
                       <div className="flex gap-2 [&>input]:min-w-24 [&>input]:flex-1">
@@ -1041,7 +1086,7 @@ export function ProductsManager({
                             : `= ${formatStock(formStockBase, { unit: formBaseUnit, packUnits: formPackUnits })} (${formStockBase} ${formBaseUnit})`}
                         </span>
                       ) : null}
-                    </label>
+                    </label> : null}
                     <label className="grid gap-1 text-sm">
                       Low Stock Threshold ({formThresholdUnit.name}, optional)
                       <div className="flex gap-2 [&>input]:min-w-24 [&>input]:flex-1">
@@ -1326,6 +1371,8 @@ export function ProductsManager({
                   <Button onClick={submitForm} disabled={submitting}>
                     {submitting
                       ? "Saving..."
+                      : editRequestMode
+                        ? reviewRequestId ? "Approve changes" : "Submit for approval"
                       : activeProductId
                         ? "Save changes"
                         : reviewRequestId
@@ -1350,8 +1397,8 @@ export function ProductsManager({
             </h3>
             <p className="text-xs text-muted-foreground">
               {isAdmin
-                ? "Submitted by staff. Nothing here can be sold until you approve it."
-                : "These products can be sold once an admin approves them."}
+                ? "Review new products and proposed edits before they take effect."
+                : "New products and edits take effect after admin approval."}
             </p>
           </div>
           <Table>
@@ -1371,8 +1418,8 @@ export function ProductsManager({
                 const costUnit = getCostUnit(request)
                 return (
                   <TableRow key={request._id}>
-                    <TableCell>{request.name}</TableCell>
-                    <TableCell>{formatStock(request.quantity, request)}</TableCell>
+                    <TableCell>{request.name}<span className="block text-xs text-muted-foreground">{request.kind === "edit" ? "Product edit" : "New product"}</span></TableCell>
+                    <TableCell>{request.kind === "edit" ? "Unchanged" : formatStock(request.quantity, request)}</TableCell>
                     <TableCell>
                       {formatCurrency(request.costPrice * costUnit.factor)}
                       {request.packUnits.length > 0 ? (
@@ -1689,14 +1736,14 @@ export function ProductsManager({
             <TableHead>Selling Price</TableHead>
             <TableHead>Last Restock</TableHead>
             <TableHead>Supplier</TableHead>
-            {isAdmin ? <TableHead className="text-right">Actions</TableHead> : null}
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {paginatedProducts.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isAdmin ? 10 : 9}
+                colSpan={10}
                 className="text-muted-foreground"
               >
                 No products found.
@@ -1807,7 +1854,7 @@ export function ProductsManager({
                       </Button>
                     </div>
                   </TableCell>
-                ) : null}
+                ) : <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => openEdit(product)} disabled={submitting}>Request edit</Button></TableCell>}
               </TableRow>
             ))
           )}
